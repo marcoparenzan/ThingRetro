@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.1.31903.286
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fake64", "Fake64\Fake64.csproj", "{DCE6A813-A273-4F49-8903-E0B09376DDCC}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Fake64", "Fake64\Fake64.csproj", "{DCE6A813-A273-4F49-8903-E0B09376DDCC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

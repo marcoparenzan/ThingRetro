@@ -17,6 +17,9 @@ namespace Fake64
             //_ => Chips.ram[addr >> 13][addr & 0x1FFF] // depends on 0x0001 address on 6510 chip
         };
 
+        public static byte Ram(int addr) => Chips.ram[addr >> 13][addr & 0x1FFF];
+
+
         public static byte Address(int addr, byte value) => Chips.ram[addr >> 13][addr & 0x1FFF] = value;
     }
 }
