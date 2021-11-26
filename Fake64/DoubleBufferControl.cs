@@ -5,17 +5,13 @@ using System.Windows.Forms;
 
 namespace Fake64
 {
-    public partial class DoubleBufferForm : Form
+    public partial class DoubleBufferControl : UserControl
     {
-        public DoubleBufferForm()
+        public DoubleBufferControl()
         {
             this.DoubleBuffered = true;
             this.SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
-            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(403, 284);
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
-            this.StartPosition = FormStartPosition.CenterScreen;
             Cursor.Hide();
         }
 
@@ -27,10 +23,8 @@ namespace Fake64
 
         Bitmap bitmap;
 
-        protected override void OnResizeEnd(EventArgs e)
+        protected override void OnResize(EventArgs e)
         {
-            base.OnResizeEnd(e);
-
             if (this.bufferedGraphics != null)
             {
                 this.Suspended = true;

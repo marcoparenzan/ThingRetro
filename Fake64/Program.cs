@@ -89,7 +89,7 @@ namespace Fake64
                 color = (byte) ((color + 1) & 0xf);
             }
 
-            var form = new DoubleBufferForm();
+            var form = new Fake64Form();
             form.KeyDown += (s, e) => {
 
                 switch (e.KeyCode)
