@@ -73,25 +73,20 @@ namespace Fake64
 
             POKE(0xD020, 13);
             POKE(0xD021, 14);
-            //var i = 0;
-            //for (ushort addr = 0x0400; addr < 0x0400+1000; addr++)
-            //{
-            //    POKE(addr, screen_ram[i++]);
-            //}
-            //i = 0;
-            //// nibbles
-            //for (ushort addr = 0xD800; addr < 0xD800+500; addr++)
-            //{
-            //    POKE(addr, colour_ram[i++]);
-            //}
-            for (ushort addr = 0x0400; addr < 0x0400 + 1000; addr++)
+            for (ushort addr = 0x0400; addr < 0x0400 + 0x3E8 ; addr++)
             {
                 POKE(addr, 32);
             }
             var i = 0;
-            for (ushort addr = 0x0400; addr < 0x0400 + 256; addr++)
+            for (ushort addr = 0x0400; addr < 0x0400 + 0x100; addr++)
             {
                 POKE(addr, (byte) i++);
+            }
+            byte color = 0;
+            for (ushort addr = 0xD800; addr < 0xD800 + 0x3E8; addr++)
+            {
+                POKE(addr, color);
+                color = (byte) ((color + 1) & 0xf);
             }
 
             var form = new DoubleBufferForm();

@@ -104,7 +104,7 @@ namespace Fake64
                     for (var p = 0; p < 8; p++)
                     {
                         var colorAddress = (Board.Ram(0xD021) << 2);
-                        if ((chBits & mask)>0) colorAddress = (Board.Ram(0xD020) << 2);
+                        if ((chBits & mask)>0) colorAddress = (Board.Ram(0xD800 + (y >> 3) * 25 + (x >> 3)) << 2);
                         mask >>= 1;
 
                         scan0[0] = palette[colorAddress++]; // blueComponent;
