@@ -1,10 +1,9 @@
-﻿namespace Chips;
-
-public class Ram8KbChip
+﻿namespace Fake64;
+public class ColorRamChip
 {
     Board board;
 
-    public Ram8KbChip(Board board)
+    public ColorRamChip(Board board)
     {
         this.board = board;
         Reset();
@@ -18,7 +17,7 @@ public class Ram8KbChip
     {
     }
 
-    byte[] bytes = new byte[0x2000];
+    byte[] bytes = new byte[0x0400];
 
     public byte Address(ushort addr)
     {

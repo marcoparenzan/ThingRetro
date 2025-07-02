@@ -1,4 +1,4 @@
-﻿namespace Chips;
+﻿namespace Fake64;
 
 public partial class MOS6510
 {

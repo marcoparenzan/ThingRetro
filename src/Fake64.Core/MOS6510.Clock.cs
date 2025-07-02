@@ -1,4 +1,4 @@
-﻿namespace Chips;
+﻿namespace Fake64;
 
 public partial class MOS6510
 {
@@ -26,7 +26,7 @@ public partial class MOS6510
         byte opcode = ReadByte(PC++);
         if (loggingEnabled)
         {
-            LogState(opcode);
+            //LogState(opcode);
         }
 
         ushort addr;
@@ -850,6 +850,4 @@ public partial class MOS6510
             throw; // Rilancia l'eccezione per ulteriori gestioni
         }
     }
-
-
 }

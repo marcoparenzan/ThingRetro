@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Chips;
+namespace Fake64;
 
 public partial class MOS6510
 {

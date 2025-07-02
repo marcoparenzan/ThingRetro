@@ -3,11 +3,15 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36203.30
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Chips", "Chips\Chips.csproj", "{D6FBD679-659F-4D64-86C3-137E55DD6196}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fake64.Core", "Fake64.Core\Fake64.Core.csproj", "{D6FBD679-659F-4D64-86C3-137E55DD6196}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fake64", "Fake64\Fake64.csproj", "{35C96A19-4C73-6A15-3BF7-6515DC644DDD}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FakeConsole64", "FakeConsole64\FakeConsole64.csproj", "{2A44A001-57E8-4632-A8C1-68441B80C4A6}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Lib", "Lib", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Apps", "Apps", "{A49F7DA1-0AB5-4F41-A02F-9A74F8F035E2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -30,6 +34,11 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{D6FBD679-659F-4D64-86C3-137E55DD6196} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{35C96A19-4C73-6A15-3BF7-6515DC644DDD} = {A49F7DA1-0AB5-4F41-A02F-9A74F8F035E2}
+		{2A44A001-57E8-4632-A8C1-68441B80C4A6} = {A49F7DA1-0AB5-4F41-A02F-9A74F8F035E2}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {EE0BD219-9366-4AC5-A913-2BDB0E75BF13}
