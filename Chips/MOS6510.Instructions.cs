@@ -188,4 +188,54 @@ public partial class MOS6510
         Status |= FLAG_I;      // Set Interrupt Disable flag
         PC = ReadWord(0xFFFE); // Jump to interrupt vector
     }
+    /// <summary>
+    /// RRA - Illegal opcode that performs ROR followed by ADC on the same memory location
+    /// </summary>
+    /// <param name="address">The memory address to operate on</param>
+    private void RRA(ushort address)
+    {
+        // Read the value from memory
+        byte value = ReadByte(address);
+
+        // Perform ROR (Rotate Right)
+        byte rotatedValue = ROR(value);
+
+        // Write the rotated value back to memory
+        WriteByte(address, rotatedValue);
+
+        // Perform ADC with the rotated value
+        A = ADC(rotatedValue);
+    }
+
+    /// <summary>
+    /// LAX - Illegal opcode that loads a value into both the Accumulator and X register
+    /// </summary>
+    /// <param name="value">The value to load</param>
+    /// <returns>The loaded value</returns>
+    private byte LAX(byte value)
+    {
+        // Set the zero and negative flags based on the value
+        SetZN(value);
+
+        // Return the value (which will be assigned to both A and X)
+        return value;
+    }
+    /// <summary>
+    /// DCP - Illegal opcode that performs DEC followed by CMP at the same memory location
+    /// </summary>
+    /// <param name="address">The memory address to operate on</param>
+    private void DCP(ushort address)
+    {
+        // Read the value from memory
+        byte value = ReadByte(address);
+
+        // Decrement the value
+        value--;
+
+        // Write the decremented value back to memory
+        WriteByte(address, value);
+
+        // Compare the accumulator with the decremented value
+        Compare(A, value);
+    }
 }

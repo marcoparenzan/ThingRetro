@@ -1,7 +1,3 @@
-using System;
-using System.Drawing;
-using System.Drawing.Imaging;
-using System.Windows.Forms;
 using Chips;
 
 namespace Fake64
@@ -57,31 +53,39 @@ namespace Fake64
             form.Show();
 
             var refrate = 50;
+            var totalRenderedFrames = 0;
+            var totalRenderingTime = 0.0;
+            var stay = true;
+            _ = Task.Factory.StartNew(() => {
+                var timer = new PeriodicTimer(TimeSpan.FromMilliseconds((int)Math.Round(1000.0 / refrate, 0)));
+                try
+                {
+                    while (stay)
+                    {
+                        form.Invoke(() =>
+                        {
+                            var start = DateTime.Now;
+                            form.Render((bitmap, cr) => {
 
-            var j = 0;
-            var total = 0.0;
-            var timer = new System.Windows.Forms.Timer();
-            timer.Interval = (int)Math.Round(1000.0 / refrate, 0);
-            timer.Tick += (s, e) =>
-            {
-                var start = DateTime.Now;
+                                board.Raster(bitmap, cr);
 
-                form.Render((bitmap, cr) => {
+                            });
 
-                    board.Raster(bitmap, cr);
-                
-                });
-
-                // do something
-
-                var stop = DateTime.Now;
-                var elapsed = (stop - start).TotalMilliseconds;
-                total += elapsed;
-                j++;
-                var frameRate = (int)Math.Round(1000.0 / elapsed, 0);
-                form.Text = $"{Math.Round(total/j,2)}";
-            };
-            timer.Start();
+                            var stop = DateTime.Now;
+                            var elapsed = (stop - start).TotalMilliseconds;
+                            totalRenderingTime += elapsed;
+                            totalRenderedFrames++;
+                            var frameRate = (int)Math.Round(1000.0 / elapsed, 0);
+                            var msg = $"{totalRenderedFrames}/{Math.Round(totalRenderingTime / totalRenderedFrames, 2)}";
+                            form.Text = msg;
+                        });
+                    }
+                }
+                catch(Exception ex)
+                {
+                    // handling disposing
+                }   
+            });
 
             Application.Run(form);
         }

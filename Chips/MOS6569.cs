@@ -2,93 +2,132 @@ using Chips;
 using System.Drawing;
 using System.Drawing.Imaging;
 
-public class MOS6569(Board board)
+public class MOS6569
 {
-    object bus_lock = new();
+    Board board;
+
+    public MOS6569(Board board)
+    {
+        this.board = board;
+        Reset();
+    }
+
+    public void Reset()
+    {
+    }
+
+    public void Clock()
+    {
+    }
+
     byte[] bytes = new byte[0x0400];
 
     public byte Address(ushort addr)
     {
-        lock (bus_lock)
-        {
-            return bytes[addr];
-        }
+        return bytes[addr];
     }
 
     public void Address(ushort addr, byte value)
     {
-        lock (bus_lock)
-        {
-            bytes[addr] = value;
-        }
+        bytes[addr] = value;
     }
 
     // https://lospec.com/palette-list/commodore64
-    unsafe public void Raster(Bitmap bitmap, Rectangle clientRectangle)
+    unsafe public void Mode0(Bitmap bitmap, Rectangle clientRectangle)
     {
         var bitmapData = bitmap.LockBits(clientRectangle, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
 
         byte* scan0 = (byte*)bitmapData.Scan0.ToPointer();
 
+        //var borderColorAddress = (ushort)(board.Address(0xD020) << 2);
+        //var foregroundColorAddress = (ushort)(board.Address(0xD021) << 2);
+        // access registers directly
+        var borderColorAddress = (ushort)(bytes[0x20] << 2);
+        var foregroundColorAddress = (ushort)(bytes[0x21] << 2);
+
         for (var y = 0; y < 42; y++)
         {
             for (var x = 0; x < 403; x++)
             {
-                var colorAddress = (ushort)(board.Address(0xD020) << 2);
-                p(ref scan0, colorAddress);
+                var colorAddress = borderColorAddress;
+                scan0[0] = palette[colorAddress++]; // blueComponent;
+                scan0++;
+                scan0[0] = palette[colorAddress++]; // greenComponent;
+                scan0++;
+                scan0[0] = palette[colorAddress++]; // redComponent;
+                scan0++;
+                scan0[0] = palette[colorAddress++]; // transparency;
+                scan0++;
             }
         }
         for (var y = 0; y < 200; y++)
         {
             for (var x = 0; x < 42; x++)
             {
-                var colorAddress = (ushort)(board.Address(0xD020) << 2);
-                p(ref scan0, colorAddress);
+                var colorAddress = borderColorAddress;
+                scan0[0] = palette[colorAddress++]; // blueComponent;
+                scan0++;
+                scan0[0] = palette[colorAddress++]; // greenComponent;
+                scan0++;
+                scan0[0] = palette[colorAddress++]; // redComponent;
+                scan0++;
+                scan0[0] = palette[colorAddress++]; // transparency;
+                scan0++;
             }
             for (var x = 0; x < 320; x += 8)
             {
-                var ch = board.Address((ushort)(0x400 + (y >> 3) * 25 + (x >> 3)));
+                var offset = (y >> 3) * 25 + (x >> 3);
+                var ch = board.Address((ushort)(0x400 + offset));
                 var chBits = board.Chargen((ushort)((ch << 3) + (y & 0b00000111)));
-
+                var baseColorAddress = (ushort)(board.Address((ushort)(0xD800 + offset)) << 2);
                 var mask = 0b10000000;
-                var baseColorAddress = (ushort)(board.Address((ushort)(0xD800 + (y >> 3) * 25 + (x >> 3))) << 2);
-                for (var pp = 0; pp < 8; pp++)
+                while (mask>0)
                 {
-                    ushort colorAddress = baseColorAddress;
-                    if ((chBits & mask) == 0) 
-                        colorAddress = (ushort)(board.Address(0xD021) << 2);
+                    var colorAddress = baseColorAddress;
+                    if ((chBits & mask) == 0)
+                        colorAddress = foregroundColorAddress;
+                    scan0[0] = palette[colorAddress++]; // blueComponent;
+                    scan0++;
+                    scan0[0] = palette[colorAddress++]; // greenComponent;
+                    scan0++;
+                    scan0[0] = palette[colorAddress++]; // redComponent;
+                    scan0++;
+                    scan0[0] = palette[colorAddress++]; // transparency;
+                    scan0++;
+
                     mask >>= 1;
-                    p(ref scan0, colorAddress);
                 }
             }
             for (var x = 0; x < 41; x++)
             {
-                var colorAddress = (ushort)(board.Address(0xD020) << 2);
-                p(ref scan0, colorAddress);
+                var colorAddress = borderColorAddress;
+                scan0[0] = palette[colorAddress++]; // blueComponent;
+                scan0++;
+                scan0[0] = palette[colorAddress++]; // greenComponent;
+                scan0++;
+                scan0[0] = palette[colorAddress++]; // redComponent;
+                scan0++;
+                scan0[0] = palette[colorAddress++]; // transparency;
+                scan0++;
             }
         }
         for (var y = 0; y < 42; y++)
         {
             for (var x = 0; x < 403; x++)
             {
-                var colorAddress = (ushort)(board.Address(0xD020) << 2);
-                p(ref scan0, colorAddress);
+                var colorAddress = borderColorAddress;
+                scan0[0] = palette[colorAddress++]; // blueComponent;
+                scan0++;
+                scan0[0] = palette[colorAddress++]; // greenComponent;
+                scan0++;
+                scan0[0] = palette[colorAddress++]; // redComponent;
+                scan0++;
+                scan0[0] = palette[colorAddress++]; // transparency;
+                scan0++;
             }
         }
 
         bitmap.UnlockBits(bitmapData);
-
-        void p(ref byte* scan0, ushort colorAddress)
-        {
-            scan0[0] = palette[colorAddress++]; // blueComponent;
-            scan0++;
-            scan0[0] = palette[colorAddress++]; // greenComponent;
-            scan0++;
-            scan0[0] = palette[colorAddress++]; // redComponent;
-            scan0++;
-            scan0[0] = palette[colorAddress++]; // transparency;
-            scan0++;
-        }
     }
 
     static byte[] palette = new[] {

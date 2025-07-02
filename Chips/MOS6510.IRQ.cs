@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace Chips;
+﻿namespace Chips;
 
 public partial class MOS6510
 {

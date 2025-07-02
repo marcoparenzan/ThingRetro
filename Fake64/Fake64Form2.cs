@@ -58,6 +58,8 @@ public partial class Fake64Form2 : Form
     }
     unsafe internal void Render(Action<Bitmap, Rectangle> ab)
     {
+        if (bitmap is null) return;
+
         ab(bitmap, this.ClientRectangle);
 
         g.DrawImage(bitmap, 0, 0);

@@ -2,25 +2,33 @@ using Chips;
 using System.Drawing;
 using System.Drawing.Imaging;
 
-public class MOS6526(Board board)
+public class MOS6526
 {
-    object bus_lock = new();
+    Board board;
+
+    public MOS6526(Board board)
+    {
+        this.board = board;
+        Reset();
+    }
+    public void Reset()
+    {
+    }
+
+    public void Clock()
+    {
+    }
+
     byte[] bytes = new byte[0x0100];
 
     public byte Address(ushort addr)
     {
-        lock (bus_lock)
-        {
-            return bytes[addr];
-        }
+        return bytes[addr];
     }
 
     public void Address(ushort addr, byte value)
     {
-        lock (bus_lock)
-        {
-            bytes[addr] = value;
-        }
+        bytes[addr] = value;
     }
 
     // https://lospec.com/palette-list/commodore64

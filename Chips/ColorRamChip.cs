@@ -1,26 +1,31 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Chips;
-public class ColorRamChip(Board board)
+﻿namespace Chips;
+public class ColorRamChip
 {
-    object bus_lock = new();
+    Board board;
+
+    public ColorRamChip(Board board)
+    {
+        this.board = board;
+        Reset();
+    }
+
+    public void Reset()
+    {
+    }
+
+    public void Clock()
+    {
+    }
+
     byte[] bytes = new byte[0x0400];
 
     public byte Address(ushort addr)
     {
-        lock (bus_lock)
-        {
-            return bytes[addr];
-        }
+        return bytes[addr];
     }
 
     public void Address(ushort addr, byte value)
     {
-        lock (bus_lock)
-        {
-            bytes[addr] = value;
-        }
+        bytes[addr] = value;
     }
 }

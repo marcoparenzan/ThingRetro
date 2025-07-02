@@ -1,26 +1,32 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿namespace Chips;
 
-namespace Chips;
 public class Ram8KbChip
 {
-    object bus_lock = new();
+    Board board;
+
+    public Ram8KbChip(Board board)
+    {
+        this.board = board;
+        Reset();
+    }
+
+    public void Reset()
+    {
+    }
+
+    public void Clock()
+    {
+    }
+
     byte[] bytes = new byte[0x2000];
 
     public byte Address(ushort addr)
     {
-        lock (bus_lock)
-        {
-            return bytes[addr];
-        }
+        return bytes[addr];
     }
 
     public void Address(ushort addr, byte value)
     {
-        lock (bus_lock)
-        {
-            bytes[addr] = value;
-        }
+        bytes[addr] = value;
     }
 }

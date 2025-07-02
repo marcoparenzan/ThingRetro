@@ -1,51 +1,63 @@
-﻿using System;
-using System.Collections.Generic;
+﻿namespace Chips;
 
-namespace Chips;
-
-public partial class MOS6510(Board board)
+public partial class MOS6510
 {
-    object bus_lock = new();
-    byte[] bytes = new byte[0x0002];
+    Board board;
+
+    public MOS6510(Board board)
+    {
+        this.board = board;
+        Reset();
+    }
+    public void Reset()
+    {
+        PC = ReadWord(0xFFFC);
+        SP = 0xFD;
+        Status = 0x34; // or 0x20?
+        ioRegister0 = 0x2F;
+        ioRegister1 = 0x37;
+    }
 
     public byte Address(ushort addr)
     {
-        lock (bus_lock)
+        switch(addr)
         {
-            return bytes[addr];
+            case 0x0000: return ioRegister0;
+            case 0x0001: return ioRegister1;
+            default:
+                throw new InvalidOperationException();
         }
     }
 
     public void Address(ushort addr, byte value)
     {
-        lock (bus_lock)
+        switch (addr)
         {
-            bytes[addr] = value;
+            case 0x0000: 
+                ioRegister0 = value;
+                break;
+            case 0x0001: 
+                ioRegister1 = value;
+                break;
+            default:
+                throw new InvalidOperationException();
         }
     }
 
     byte A, X, Y, SP;
     ushort PC;
     byte Status;
+    byte ioRegister0;
+    byte ioRegister1;
 
     const byte FLAG_C = 1 << 0;
     const byte FLAG_Z = 1 << 1;
     const byte FLAG_I = 1 << 2;
     const byte FLAG_D = 1 << 3;
     const byte FLAG_B = 1 << 4;
-    const byte FLAG_U = 1 << 5;
+    const byte FLAG_U = 1 << 5; // UNUSED
     const byte FLAG_V = 1 << 6;
     const byte FLAG_N = 1 << 7;
-
-    byte ioRegister0 = 0x2F;
-    byte ioRegister1 = 0x37;
-
-    public void Reset()
-    {
-        PC = ReadWord(0xFFFC);
-        SP = 0xFD;
-        Status = 0x20;
-    }
 
     private byte ReadByte(ushort addr)
     {
@@ -64,6 +76,21 @@ public partial class MOS6510(Board board)
         Status = (byte)((Status & ~(FLAG_Z | FLAG_N)) |
                         (val == 0 ? FLAG_Z : 0) |
                         (val & 0x80));
+    }
+
+    private void SetZN(byte value)
+    {
+        // Set Zero flag if value is zero
+        if (value == 0)
+            Status |= FLAG_Z;
+        else
+            Status &= unchecked((byte)~FLAG_Z);
+        
+        // Set Negative flag if bit 7 is set
+        if ((value & 0x80) != 0)
+            Status |= FLAG_N;
+        else
+            Status &= unchecked((byte)~FLAG_N);
     }
 
     private void Branch(bool condition)
@@ -102,4 +129,5 @@ public partial class MOS6510(Board board)
         // Imposta il flag Negative (N) in base al bit più significativo del risultato
         Status = (byte)((Status & ~FLAG_N) | ((result & 0x80) != 0 ? FLAG_N : 0));
     }
+
 }
