@@ -125,8 +125,8 @@ public partial class MOS6510
     private void JSR(ushort addr)
     {
         // Push the return address (PC - 1) onto the stack
-        Push((byte)((PC + 1) >> 8)); // High byte
-        Push((byte)(PC + 1));        // Low byte
+        Push((byte)((PC + 2) >> 8)); // High byte
+        Push((byte)(PC + 2));        // Low byte
         PC = addr;
     }
 
