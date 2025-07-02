@@ -35,6 +35,7 @@ public partial class Board
         sid = new MOS6581(this);
         vicii = new MOS6569(this);
         cpu = new MOS6510(this);
+        MemoryMap();
 
         Reset();
 
@@ -77,7 +78,6 @@ public partial class Board
         sid.Reset();
         vicii.Reset();
         cpu.Reset();
-        MemoryMap();
     }
 
     public byte Chargen(ushort addr) => chargen[addr];

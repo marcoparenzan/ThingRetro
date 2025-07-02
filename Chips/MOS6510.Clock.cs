@@ -21,8 +21,14 @@ public partial class MOS6510
             return; // Interrompe l'esecuzione
         }
 
+
         breakpointHit = false; // Resetta il flag se non ci sono breakpoint
         byte opcode = ReadByte(PC++);
+        if (loggingEnabled)
+        {
+            LogState(opcode);
+        }
+
         ushort addr;
         byte val;
         bool branchTaken;
@@ -834,11 +840,6 @@ public partial class MOS6510
                 default:
                     // Istruzione sconosciuta
                     throw new UnknownOpcodeException(opcode, (ushort)(PC - 1));
-            }
-
-            if (loggingEnabled)
-            {
-                LogState(opcode);
             }
         }
         catch (UnknownOpcodeException ex)

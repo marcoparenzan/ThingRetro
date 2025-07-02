@@ -7,15 +7,15 @@ public partial class MOS6510
     public MOS6510(Board board)
     {
         this.board = board;
-        Reset();
+        ioRegister0 = 0x2F;
+        ioRegister1 = 0x37;
     }
+
     public void Reset()
     {
         PC = ReadWord(0xFFFC);
         SP = 0xFD;
         Status = 0x34; // or 0x20?
-        ioRegister0 = 0x2F;
-        ioRegister1 = 0x37;
     }
 
     public byte Address(ushort addr)
