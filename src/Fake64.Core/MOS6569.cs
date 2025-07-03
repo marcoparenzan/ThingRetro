@@ -119,6 +119,7 @@ public class MOS6569
                 if ((registers[REG_INTERRUPT_ENABLE] & 0x01) != 0)
                 {
                     // TODO: Trigger IRQ on CPU
+                    board.TriggerIRQ();
                 }
             }
 
@@ -167,13 +168,21 @@ public class MOS6569
         }
     }
 
-    // https://lospec.com/palette-list/commodore64
-    unsafe public void TextMode(Bitmap bitmap, Rectangle clientRectangle)
+    unsafe public void Invalidate(Bitmap bitmap, Rectangle clientRectangle)
     {
         var bitmapData = bitmap.LockBits(clientRectangle, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
 
         byte* scan0 = (byte*)bitmapData.Scan0.ToPointer();
 
+        TextMode(scan0);
+
+        bitmap.UnlockBits(bitmapData);
+
+    }
+
+    // https://lospec.com/palette-list/commodore64
+    unsafe void TextMode(byte* scan0)
+    {
         var borderColorAddress = (ushort)(registers[REG_BORDER_COLOR] << 2);
         var backgroundColorAddress = (ushort)(registers[REG_BACKGROUND_COLOR] << 2);
 
@@ -258,8 +267,6 @@ public class MOS6569
                 scan0++;
             }
         }
-
-        bitmap.UnlockBits(bitmapData);
     }
 
     public void RenderScreen(Bitmap bitmap, Rectangle clientRectangle)
@@ -270,19 +277,19 @@ public class MOS6569
         switch (displayMode)
         {
             case 0: // Standard character mode
-                TextMode(bitmap, clientRectangle);
+                Invalidate(bitmap, clientRectangle);
                 break;
             case 1: // Multicolor character mode
                 // TODO: Implement multicolor text mode
-                TextMode(bitmap, clientRectangle); // Fallback to text mode for now
+                Invalidate(bitmap, clientRectangle); // Fallback to text mode for now
                 break;
             case 2: // Standard bitmap mode
                 // TODO: Implement bitmap mode
-                TextMode(bitmap, clientRectangle); // Fallback to text mode for now
+                Invalidate(bitmap, clientRectangle); // Fallback to text mode for now
                 break;
             case 3: // Multicolor bitmap mode
                 // TODO: Implement multicolor bitmap mode
-                TextMode(bitmap, clientRectangle); // Fallback to text mode for now
+                Invalidate(bitmap, clientRectangle); // Fallback to text mode for now
                 break;
         }
 

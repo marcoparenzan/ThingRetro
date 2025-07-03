@@ -260,9 +260,14 @@ public partial class Board
         ram64.Address(addr, value);
     }
 
-    public void Raster(Bitmap bitmap, Rectangle cr)
+    public void Invalidate(Bitmap bitmap, Rectangle cr)
     {
-        vicii.TextMode(bitmap, cr);
+        vicii.Invalidate(bitmap, cr);
+    }
+
+    internal void TriggerIRQ()
+    {
+        cpu.TriggerIRQ();
     }
 
     const ushort kernal_base = 0xE000;

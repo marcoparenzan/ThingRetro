@@ -67,7 +67,7 @@ namespace Fake64
                             var start = DateTime.Now;
                             form.Render((bitmap, cr) => {
 
-                                board.Raster(bitmap, cr);
+                                board.Invalidate(bitmap, cr);
 
                             });
 
