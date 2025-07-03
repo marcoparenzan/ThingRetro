@@ -40,7 +40,8 @@ public partial class Board
         Reset();
 
         var f = 0.9852;
-        var microseconds = (long)(1_000_000 / f); // 1.02 MHz
+        //var microseconds = (long)(1_000_000 / f); // 1.02 MHz
+        var microseconds = (long)(1_000 / f); // 1.02 MHz
         var targetTicks = Stopwatch.Frequency / microseconds;
         clock = Task.Factory.StartNew(async () =>
         {
@@ -261,7 +262,7 @@ public partial class Board
 
     public void Raster(Bitmap bitmap, Rectangle cr)
     {
-        vicii.Mode0(bitmap, cr);
+        vicii.TextMode(bitmap, cr);
     }
 
     const ushort kernal_base = 0xE000;

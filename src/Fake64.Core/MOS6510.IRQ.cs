@@ -3,6 +3,7 @@
 public partial class MOS6510
 {
     bool irqPending = false; // Indica se un IRQ è in sospeso
+    bool nmiPending = false; // Indica se un NMI è in sospeso
 
     public void TriggerIRQ()
     {
@@ -11,7 +12,7 @@ public partial class MOS6510
 
     public void TriggerNMI()
     {
-        HandleNMI(); // Gli NMI sono immediati e non mascherabili
+        nmiPending = true;
     }
 
     private void HandleIRQ()
@@ -33,6 +34,5 @@ public partial class MOS6510
         Status |= FLAG_I;      // Imposta il flag Interrupt Disable
         PC = ReadWord(0xFFFA); // Salta al vettore NMI
     }
-
 
 }

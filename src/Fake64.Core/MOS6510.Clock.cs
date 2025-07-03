@@ -14,6 +14,13 @@ public partial class MOS6510
             cycleCount += 7; // Interrupt handling cycles
         }
 
+        if (nmiPending)
+        {
+            HandleNMI();
+            nmiPending = false;
+            cycleCount += 7; // NMI handling cycles
+        }
+
         ushort addr;
         byte val;
         bool branchTaken;
