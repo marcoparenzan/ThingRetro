@@ -22,11 +22,11 @@ public partial class Board
 
     byte[] Rom(string name) => File.ReadAllBytes(Path.Combine("roms", name));
 
-    public Board()
+    public Board(string kernalName = null, string chargenName = null, string basicName = null)
     {
-        kernal = Rom(nameof(kernal));
-        chargen = Rom(nameof(chargen));
-        basic = Rom(nameof(basic));
+        kernal = Rom(kernalName ?? nameof(kernal));
+        chargen = Rom(chargenName ?? nameof(chargen));
+        basic = Rom(basicName ?? nameof(basic));
         ram = [new(this), new(this), new(this), new(this), new(this), new(this), new(this), new(this)];
         ram64 = new(this);
         colorRam = new ColorRamChip(this);
