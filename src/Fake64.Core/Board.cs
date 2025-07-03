@@ -41,7 +41,7 @@ public partial class Board
 
         var f = 0.9852;
         var microseconds = (long)(1_000_000 / f); // 1.02 MHz
-        var targetTicks = microseconds * Stopwatch.Frequency / 1_000_000;
+        var targetTicks = Stopwatch.Frequency / 1;
         clock = Task.Factory.StartNew(async () =>
         {
             var sw = Stopwatch.StartNew();
