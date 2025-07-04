@@ -27,6 +27,10 @@ public partial class MOS6510
         ushort instruction_PC = PC;
         string instruction_text = ""; // Variabile per la rappresentazione testuale dell'istruzione
 
+        if (PC == 0xFD52)
+        {
+        }
+
         byte opcode = ReadByte(PC++);
 
         switch (opcode)
@@ -327,6 +331,7 @@ public partial class MOS6510
                 break;
         }
 
-        LogInstructionText(instruction_PC, opcode, instruction_text);
+        
+        //LogInstructionText(instruction_PC, opcode, instruction_text);
     }
 }

@@ -302,8 +302,7 @@ public class MOS6581
 
     public void Address(ushort addr, byte value)
     {
-        int regIndex = addr - 0xD400;
-        registers[regIndex] = value;
+        registers[addr] = value;
     }
 
     // Get audio data for playback

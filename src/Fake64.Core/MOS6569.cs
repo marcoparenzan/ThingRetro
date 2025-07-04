@@ -119,7 +119,7 @@ public class MOS6569
                 if ((registers[REG_INTERRUPT_ENABLE] & 0x01) != 0)
                 {
                     // TODO: Trigger IRQ on CPU
-                    board.TriggerIRQ();
+                    board.CpuTriggerIRQ();
                 }
             }
 
@@ -146,25 +146,22 @@ public class MOS6569
 
     public void Address(ushort addr, byte value)
     {
-        if (addr <= 0x2E)
+        // Special handling for certain registers
+        switch (addr)
         {
-            // Special handling for certain registers
-            switch (addr)
-            {
-                case REG_RASTER:
-                    registers[addr] = value;
-                    break;
-                case REG_CONTROL_1:
-                    registers[addr] = value;
-                    break;
-                case REG_INTERRUPT_STATUS:
-                    // Writing 1s clears the corresponding bits
-                    registers[addr] &= (byte)~value;
-                    break;
-                default:
-                    registers[addr] = value;
-                    break;
-            }
+            case REG_RASTER:
+                registers[addr] = value;
+                break;
+            case REG_CONTROL_1:
+                registers[addr] = value;
+                break;
+            case REG_INTERRUPT_STATUS:
+                // Writing 1s clears the corresponding bits
+                registers[addr] &= (byte)~value;
+                break;
+            default:
+                registers[addr] = value;
+                break;
         }
     }
 

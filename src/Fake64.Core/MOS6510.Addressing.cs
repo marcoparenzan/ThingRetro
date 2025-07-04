@@ -5,6 +5,45 @@ namespace Fake64;
 
 public partial class MOS6510
 {
+    private ushort ZeroPage(byte addr)
+    {
+        return (ushort)(addr & 0xFF);
+    }
+
+    private ushort ZeroPageX(byte addr)
+    {
+        return (ushort)((addr + X) & 0xFF);
+    }
+
+    private ushort ZeroPageY(byte addr)
+    {
+        return (ushort)((addr + Y) & 0xFF);
+    }
+
+    private ushort Absolute(ushort addr)
+    {
+        return addr;
+    }
+
+    private ushort AbsoluteX(ushort addr, out bool pageCrossed)
+    {
+        ushort result = (ushort)(addr + X);
+        pageCrossed = (addr & 0xFF00) != (result & 0xFF00);
+        return result;
+    }
+
+    private ushort AbsoluteY(ushort addr, out bool pageCrossed)
+    {
+        ushort result = (ushort)(addr + Y);
+        pageCrossed = (addr & 0xFF00) != (result & 0xFF00);
+        return result;
+    }
+
+    private ushort Relative(byte offset)
+    {
+        sbyte signedOffset = (sbyte)offset;
+        return (ushort)(PC + signedOffset);
+    }
     private ushort ReadWordIndirect(ushort addr)
     {
         // Handle the 6502's page boundary bug for indirect addressing

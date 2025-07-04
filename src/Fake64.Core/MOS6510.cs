@@ -129,5 +129,4 @@ public partial class MOS6510
         // Imposta il flag Negative (N) in base al bit più significativo del risultato
         Status = (byte)((Status & ~FLAG_N) | ((result & 0x80) != 0 ? FLAG_N : 0));
     }
-
 }

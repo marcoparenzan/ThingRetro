@@ -17,7 +17,6 @@ public partial class Board
     const byte addr_shift = 13;
     const ushort addr_mask = 0x1fff;
 
-    Ram8KbChip[] ram;
     Ram64KbChip ram64;
 
     byte[] Rom(string name) => File.ReadAllBytes(Path.Combine("roms", name));
@@ -27,7 +26,6 @@ public partial class Board
         kernal = Rom(kernalName ?? nameof(kernal));
         chargen = Rom(chargenName ?? nameof(chargen));
         basic = Rom(basicName ?? nameof(basic));
-        ram = [new(this), new(this), new(this), new(this), new(this), new(this), new(this), new(this)];
         ram64 = new(this);
         colorRam = new ColorRamChip(this);
         cia2 = new MOS6526(this);
@@ -41,7 +39,7 @@ public partial class Board
 
         var f = 0.9852;
         //var microseconds = (long)(1_000_000 / f); // 1.02 MHz
-        var microseconds = (long)(1_000 / f); // 1.02 MHz
+        var microseconds = (long)(1_000_000 / f); // 1.02 MHz
         var targetTicks = Stopwatch.Frequency / microseconds;
         clock = Task.Factory.StartNew(async () =>
         {
@@ -59,7 +57,6 @@ public partial class Board
 
     void Clock()
     {
-        foreach (var r in ram) r.Clock();
         ram64.Clock();
         colorRam.Clock();
         cia2.Clock();
@@ -71,7 +68,6 @@ public partial class Board
 
     public void Reset()
     {
-        foreach(var r in ram) r.Reset();
         ram64.Reset();
         colorRam.Reset();
         cia2.Reset();
@@ -79,6 +75,16 @@ public partial class Board
         sid.Reset();
         vicii.Reset();
         cpu.Reset();
+    }
+
+    public void Invalidate(Bitmap bitmap, Rectangle cr)
+    {
+        vicii.Invalidate(bitmap, cr);
+    }
+
+    internal void CpuTriggerIRQ()
+    {
+        cpu.TriggerIRQ();
     }
 
     public byte Chargen(ushort addr) => chargen[addr];
@@ -113,6 +119,10 @@ public partial class Board
 
     public byte Address(ushort addr)
     {
+        if (addr == 0xE473)
+        { 
+        }
+        
         if (addr >= kernal_base)
         {
             if (kernalVisible)
@@ -246,6 +256,9 @@ public partial class Board
         {
 
         }
+        else if (addr >= 0x0400 && addr<0x0500)
+        {
+        }
         else if (addr <= 0x0001)
         {
             cpu.Address(addr, value);
@@ -256,18 +269,7 @@ public partial class Board
         {
         }
 
-        //ram[addr >> addr_shift].Address((ushort)(addr & addr_mask), value);
         ram64.Address(addr, value);
-    }
-
-    public void Invalidate(Bitmap bitmap, Rectangle cr)
-    {
-        vicii.Invalidate(bitmap, cr);
-    }
-
-    internal void TriggerIRQ()
-    {
-        cpu.TriggerIRQ();
     }
 
     const ushort kernal_base = 0xE000;
