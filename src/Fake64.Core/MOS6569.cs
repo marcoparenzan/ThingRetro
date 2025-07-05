@@ -1,15 +1,20 @@
 using Fake64;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Drawing.Imaging;
+using System.Diagnostics;
+using System.Threading.Channels;
 
 public class MOS6569
 {
     private Board board;
+    Channel<int> channel = Channel.CreateUnbounded<int>();
+
     private int rasterLine;
-    private int cycle;
+    private int currentCycle;
     private bool badLine;
+    private bool rasterIrqPending;
+    private bool spriteSpriteCollisionPending;
+    private bool spriteBackgroundCollisionPending;
+    private bool frameComplete;
+    private bool lineComplete;
 
     // VIC-II has 47 registers (0x00-0x2E)
     private byte[] registers = new byte[0x2F];
@@ -69,9 +74,15 @@ public class MOS6569
     const ushort VISIBLE_SCREEN_WIDTH = 320;
     const ushort VISIBLE_SCREEN_HEIGHT = 200;
 
+    // Memory pointers
+    private ushort videoMatrixBase;
+    private ushort charGenBase;
+    private ushort bitmapBase;
+
     public MOS6569(Board board)
     {
         this.board = board;
+        this.channel = channel; 
         Reset();
     }
 
@@ -88,52 +99,138 @@ public class MOS6569
         registers[REG_BACKGROUND_COLOR] = 6;  // Blue background
 
         rasterLine = 0;
-        cycle = 0;
+        currentCycle = 0;
         badLine = false;
+        rasterIrqPending = false;
+        spriteSpriteCollisionPending = false;
+        spriteBackgroundCollisionPending = false;
+        frameComplete = false;
+        lineComplete = false;
+        
+        // Initialize memory pointers
+        UpdateMemoryPointers();
     }
 
-    public void Clock()
+
+    // Process VIC-II signals for the current cycle
+    internal void ProcessSignals(int currentCycle)
     {
-        // VIC-II runs at 1MHz (on PAL C64)
-        cycle++;
-
-        if (cycle >= CYCLES_PER_LINE)
+        this.currentCycle = currentCycle;
+        
+        // Check if we're about to reach the end of the line
+        lineComplete = (currentCycle == CYCLES_PER_LINE - 1);
+        
+        // At the end of a line, check if we'll reach a raster interrupt in the next line
+        if (lineComplete)
         {
-            cycle = 0;
-            rasterLine++;
+            int nextRasterLine = (rasterLine + 1) % TOTAL_RASTER_LINES;
+            int targetRaster = ((registers[REG_CONTROL_1] & 0x80) << 1) | registers[REG_RASTER];
+            
+            // Will we hit the raster interrupt on the next line?
+            rasterIrqPending = (nextRasterLine == targetRaster);
+            
+            // Calculate if the next line will be a bad line
+            // Bad lines occur between raster lines 48-247 when the 3 LSBs of the raster line 
+            // match the scroll value in Control Register 1
+            bool nextLineBadLine = (nextRasterLine >= 0x30 && nextRasterLine <= 0xF7) &&
+                                  ((nextRasterLine & 0x07) == (registers[REG_CONTROL_1] & 0x07));
+            
+            // Will we transition to a new frame in the next cycle?
+            frameComplete = (nextRasterLine == 0);
+        }
+        
+        // Check for sprite collisions - simplified for this example
+        // In a real implementation, you would check all sprite positions and background data
+        if (registers[REG_SPRITE_ENABLE] != 0)
+        {
+            // Simulate sprite-sprite collision detection
+            if ((registers[REG_SPRITE_ENABLE] & (registers[REG_SPRITE_ENABLE] - 1)) != 0)
+            {
+                // If more than one sprite is enabled, collision is possible
+                spriteSpriteCollisionPending = true;
+            }
+            
+            // Simulate sprite-background collision detection
+            // This would need actual sprite position and background data checking
+            spriteBackgroundCollisionPending = (registers[REG_SPRITE_ENABLE] != 0);
+        }
+    }
 
-            // Update raster register (with 8-bit overflow)
+    // Handle end-of-line processing
+    internal void EndLine(int currentLine)
+    {
+        if (lineComplete)
+        {
+            // Update the raster line counter
+            rasterLine = (rasterLine + 1) % TOTAL_RASTER_LINES;
+            
+            // Update the raster register (with 8-bit overflow)
             registers[REG_RASTER] = (byte)(rasterLine & 0xFF);
-
+            
             // Set/clear the 9th bit of the raster line in control register 1
             if ((rasterLine & 0x100) != 0)
                 registers[REG_CONTROL_1] |= 0x80;
             else
                 registers[REG_CONTROL_1] &= 0x7F;
-
-            // Check for raster interrupt
-            if (rasterLine == ((registers[REG_CONTROL_1] & 0x80) << 1 | registers[REG_RASTER]))
+            
+            // Check for raster interrupt that we identified in ProcessSignals
+            if (rasterIrqPending)
             {
                 // Set raster interrupt flag
                 registers[REG_INTERRUPT_STATUS] |= 0x01;
-
+                
                 // If raster interrupts are enabled, signal IRQ
                 if ((registers[REG_INTERRUPT_ENABLE] & 0x01) != 0)
                 {
-                    // TODO: Trigger IRQ on CPU
                     board.CpuTriggerIRQ();
                 }
+                
+                rasterIrqPending = false;
             }
-
-            // Calculate bad line condition (for text mode timing)
+            
+            // Calculate bad line condition for current line
             badLine = (rasterLine >= 0x30 && rasterLine <= 0xF7) &&
                      ((rasterLine & 0x07) == (registers[REG_CONTROL_1] & 0x07));
-
-            if (rasterLine >= TOTAL_RASTER_LINES)
+            
+            // If this is a bad line, CPU will be stalled for character data fetches
+            // This affects overall system timing and would need to be communicated to the CPU
+            
+            // Handle frame boundary
+            if (frameComplete)
             {
-                rasterLine = 0;
-                // Start of new frame
+                // Signal frame completion (for synchronization)
+                channel.Writer.TryWrite(channel.Reader.Count);
+                frameComplete = false;
             }
+            
+            lineComplete = false;
+        }
+        
+        // Handle collisions detected in ProcessSignals
+        if (spriteSpriteCollisionPending)
+        {
+            registers[REG_SPRITE_SPRITE_COLL] |= registers[REG_SPRITE_ENABLE];
+            registers[REG_INTERRUPT_STATUS] |= 0x04; // Set sprite-sprite collision interrupt
+            CheckInterrupts();
+            spriteSpriteCollisionPending = false;
+        }
+        
+        if (spriteBackgroundCollisionPending)
+        {
+            registers[REG_SPRITE_DATA_COLL] |= registers[REG_SPRITE_ENABLE];
+            registers[REG_INTERRUPT_STATUS] |= 0x02; // Set sprite-background collision interrupt
+            CheckInterrupts();
+            spriteBackgroundCollisionPending = false;
+        }
+    }
+
+    // Check and trigger interrupts if enabled
+    private void CheckInterrupts()
+    {
+        if ((registers[REG_INTERRUPT_STATUS] & registers[REG_INTERRUPT_ENABLE] & 0x0F) != 0)
+        {
+            registers[REG_INTERRUPT_STATUS] |= 0x80; // Set IRQ flag
+            board.CpuTriggerIRQ();
         }
     }
 
@@ -167,16 +264,58 @@ public class MOS6569
         }
     }
 
-    unsafe public void Invalidate(Bitmap bitmap, Rectangle clientRectangle)
+    // Update memory pointers based on register settings
+    private void UpdateMemoryPointers()
     {
-        var bitmapData = bitmap.LockBits(clientRectangle, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+        // Extract memory pointers from register 0x18 (Memory Pointers)
+        videoMatrixBase = (ushort)((registers[REG_MEMORY_POINTERS] & 0xF0) << 6); // $0400, $0800, $0C00, etc.
+        charGenBase = (ushort)((registers[REG_MEMORY_POINTERS] & 0x0E) << 10);    // $1000, $1800, etc.
+        bitmapBase = (ushort)((registers[REG_MEMORY_POINTERS] & 0x08) << 10);     // $0000 or $2000
+    }
 
-        byte* scan0 = (byte*)bitmapData.Scan0.ToPointer();
+    public void Clock(long ticks)
+    {
+        // This is now a single-cycle implementation
+        // Each call to Clock processes exactly one cycle's worth of operations
+        
+        // Most of the cycle-specific operations are now handled in ProcessSignals and EndLine
+        
+        // Fetch data on cycle 1-5 of a bad line (simplification)
+        if (badLine && currentCycle >= 1 && currentCycle <= 5)
+        {
+            // Perform character data fetch - this would stall the CPU
+            // This is a simplification; real VIC-II has more complex BA signal timing
+        }
+        
+        // Sprite data fetch cycles
+        if (currentCycle >= 15 && currentCycle <= 54)
+        {
+            // Fetch sprite data if relevant sprites are enabled
+            // Again, this is a simplification
+        }
+    }
 
-        TextMode(scan0);
+    public ValueTask<bool> WaitForRetraceAsync()=> channel.Reader.WaitToReadAsync();
 
-        bitmap.UnlockBits(bitmapData);
+    public bool TryRead(out int value) => channel.Reader.TryRead(out value);
 
+    unsafe public void Render(byte* scan0)
+    {
+        // Determine which display mode to use based on control registers
+        byte displayMode = (byte)((registers[REG_CONTROL_1] & 0x60) >> 5);
+
+        switch (displayMode)
+        {
+            case 0: // Standard character mode
+                TextMode(scan0);
+                break;
+            case 1: // Multicolor character mode
+                break;
+            case 2: // Standard bitmap mode
+                break;
+            case 3: // Multicolor bitmap mode
+                break;
+        }
     }
 
     // https://lospec.com/palette-list/commodore64
@@ -268,33 +407,6 @@ public class MOS6569
         }
     }
 
-    public void RenderScreen(Bitmap bitmap, Rectangle clientRectangle)
-    {
-        // Determine which display mode to use based on control registers
-        byte displayMode = (byte)((registers[REG_CONTROL_1] & 0x60) >> 5);
-
-        switch (displayMode)
-        {
-            case 0: // Standard character mode
-                Invalidate(bitmap, clientRectangle);
-                break;
-            case 1: // Multicolor character mode
-                // TODO: Implement multicolor text mode
-                Invalidate(bitmap, clientRectangle); // Fallback to text mode for now
-                break;
-            case 2: // Standard bitmap mode
-                // TODO: Implement bitmap mode
-                Invalidate(bitmap, clientRectangle); // Fallback to text mode for now
-                break;
-            case 3: // Multicolor bitmap mode
-                // TODO: Implement multicolor bitmap mode
-                Invalidate(bitmap, clientRectangle); // Fallback to text mode for now
-                break;
-        }
-
-        // TODO: Render sprites on top
-    }
-
     // http://unusedino.de/ec64/technical/misc/vic656x/colors/
     static byte[] palette = new byte[] {
         (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0xFF,  // 0 - Black
@@ -314,5 +426,4 @@ public class MOS6569
         (byte) 0xB5, (byte) 0x5E, (byte) 0x6C, (byte) 0xFF,  // E - Light Blue
         (byte) 0x95, (byte) 0x95, (byte) 0x95, (byte) 0xFF   // F - Light Grey
     };
-
 }

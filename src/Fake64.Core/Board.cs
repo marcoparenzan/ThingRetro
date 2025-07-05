@@ -1,11 +1,15 @@
-﻿using System.Diagnostics;
+﻿using Fake64.Core;
+using System.Diagnostics;
 using System.Drawing;
+using System.Threading.Channels;
 
 namespace Fake64;
 
 public partial class Board
 {
     Task clock;
+
+    Keyboard keyboard;
 
     MOS6510 cpu;
     MOS6569 vicii;
@@ -21,8 +25,24 @@ public partial class Board
 
     byte[] Rom(string name) => File.ReadAllBytes(Path.Combine("roms", name));
 
+    public MOS6569 VICII => vicii;
+
+    // Cycle constants for PAL C64
+    private const long MASTER_CLOCK_HZ = 985248; // PAL master clock frequency in Hz
+    private const long CYCLES_PER_FRAME = 19656; // PAL: 312 lines × 63 cycles
+    private const long CYCLES_PER_LINE = 63;     // Cycles per raster line
+    private const long CYCLES_PER_SECOND = 50;   // PAL refresh rate in Hz
+
+    // Timing trackers
+    private long totalCycles;
+    private long frameStartCycle;
+    private long lineStartCycle;
+    private int currentLine;
+    private int currentCycle;
+
     public Board(string kernalName = null, string chargenName = null, string basicName = null)
     {
+        keyboard = new Keyboard(this);
         kernal = Rom(kernalName ?? nameof(kernal));
         chargen = Rom(chargenName ?? nameof(chargen));
         basic = Rom(basicName ?? nameof(basic));
@@ -37,45 +57,123 @@ public partial class Board
 
         Reset();
 
-        var f = 0.9852;
-        //var microseconds = (long)(1_000_000 / f); // 1.02 MHz
-        var microseconds = (long)(1_000_000 / f); // 1.02 MHz
-        var targetTicks = Stopwatch.Frequency / microseconds;
+        // Calculate timing constants for the Stopwatch
+        // Stopwatch.Frequency gives ticks per second
+        // We need to convert our master clock to Stopwatch ticks
+        var ticksPerCycle = Stopwatch.Frequency / MASTER_CLOCK_HZ;
+
         clock = Task.Factory.StartNew(async () =>
         {
             var sw = Stopwatch.StartNew();
-            sw.Stop();
-            while (true)
+            long lastTicks = 0;
+
+            try
             {
-                sw.Restart();
-                Clock();
-                while (sw.ElapsedTicks < targetTicks) { }
-                sw.Stop();
+
+                while (true)
+                {
+                    long currentTicks = sw.ElapsedTicks;
+                    long targetCycles = currentTicks / ticksPerCycle;
+
+                    // Run as many cycles as needed to catch up to wall clock
+                    while (totalCycles < targetCycles)
+                    {
+                        // Run one machine cycle
+                        ExecuteCycle();
+
+                        // Throttle if we're getting too far ahead
+                        if (totalCycles % 1000 == 0 && totalCycles > targetCycles + 10000)
+                        {
+                            await Task.Delay(1);
+                        }
+                    }
+                }
+            }
+            catch(Exception ex)
+            {
+                Debug.WriteLine($"Clock task error: {ex.Message}");
             }
         });
     }
 
-    int audioFrameCounter = 0;
-    const int audioFrameRate = 50; // Example frame rate for audio processing
-
-    public void Clock()
+    // Perform a single machine cycle
+    private void ExecuteCycle()
     {
-        ram64.Clock();
-        colorRam.Clock();
-        cia2.Clock();
-        cia1.Clock();
-        sid.Clock();
-        vicii.Clock();
-        cpu.Clock();
+        // Phase 1: Process all signals and state changes for this cycle
+        ProcessSignals();
 
-        // Process SID audio output periodically
-        audioFrameCounter++;
-        if (audioFrameCounter >= audioFrameRate)
+        // Phase 2: Clock all components for this cycle
+        ClockComponents();
+
+        // Update cycle counters
+        totalCycles++;
+        currentCycle++;
+
+        // Check for line boundary
+        if (currentCycle >= CYCLES_PER_LINE)
         {
-            audioFrameCounter = 0;
-            ProcessAudio();
+            currentCycle = 0;
+            currentLine++;
+
+            // Check for frame boundary
+            if (currentLine >= 312) // PAL has 312 lines
+            {
+                currentLine = 0;
+                frameStartCycle = totalCycles;
+
+                // Process frame completion events
+                ProcessFrame();
+            }
+
+            lineStartCycle = totalCycles;
+
+            // Process line completion events
+            ProcessLine();
         }
     }
+
+    // Process all signals and pending states
+    private void ProcessSignals()
+    {
+        // Process interrupts and other signals between components
+        // This is where components indicate their need to interact with others
+        keyboard.ProcessSignals(currentCycle);
+        cia1.ProcessSignals(currentCycle);
+        cia2.ProcessSignals(currentCycle);
+        vicii.ProcessSignals(currentCycle);
+        sid.ProcessSignals(currentCycle);
+        cpu.ProcessSignals(currentCycle);
+    }
+
+    // Clock all components for this cycle
+    private void ClockComponents()
+    {
+        // Each component gets exactly one cycle's worth of processing
+        // The order should match the C64 architecture's priority
+        vicii.Clock(totalCycles);  // VIC-II has priority for memory access
+        sid.Clock(totalCycles);    // SID processes audio
+        cia1.Clock(totalCycles);   // CIA chips handle I/O and timers
+        cia2.Clock(totalCycles);
+        cpu.Clock(totalCycles);    // CPU executes instructions
+        keyboard.Clock();          // Poll keyboard state
+    }
+
+    // Process end-of-line events
+    private void ProcessLine()
+    {
+        // Handle VIC-II raster interrupts and bad lines
+        vicii.EndLine(currentLine);
+    }
+
+    // Process end-of-frame events
+    private void ProcessFrame()
+    {
+        // Process frame-level events like screen rendering
+        ProcessAudio();
+    }
+
+    int audioFrameCounter = 0;
+    const int audioFrameRate = 50; // PAL refresh rate (50Hz)
 
     private void ProcessAudio()
     {
@@ -94,11 +192,12 @@ public partial class Board
         sid.Reset();
         vicii.Reset();
         cpu.Reset();
-    }
 
-    public void Invalidate(Bitmap bitmap, Rectangle cr)
-    {
-        vicii.Invalidate(bitmap, cr);
+        totalCycles = 0;
+        currentLine = 0;
+        currentCycle = 0;
+        frameStartCycle = 0;
+        lineStartCycle = 0;
     }
 
     internal void CpuTriggerIRQ()
@@ -310,176 +409,6 @@ public partial class Board
     const ushort basic_base = 0xA000;
     byte[] basic;
 
-    private byte[] keyboardMatrix = new byte[8] { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-
-    // Rest of the existing code...
-
-    // Method to get keyboard matrix state for CIA1
-    public byte GetKeyboardState(byte rowSelectionMask)
-    {
-        // Return keyboard matrix columns based on rows selected by CIA1 Port A
-        byte result = 0xFF;
-        for (int row = 0; row < 8; row++)
-        {
-            // When a bit in rowSelectionMask is 0, that row is selected
-            if ((rowSelectionMask & (1 << row)) == 0)
-            {
-                result &= keyboardMatrix[row];
-            }
-        }
-        return result;
-    }
-
-    // Methods for keyboard input
-    public void KeyDown(byte row, byte col)
-    {
-        if (row >= 0 && row < 8 && col >= 0 && col < 8)
-        {
-            // Clear the bit (0 = pressed)
-            keyboardMatrix[row] &= (byte)~(1 << col);
-        }
-        // No need to explicitly update CIA ports here
-        // CIA1 will read from the matrix when the CPU accesses Port B
-    }
-
-    public void KeyUp(byte row, byte col)
-    {
-        if (row >= 0 && row < 8 && col >= 0 && col < 8)
-        {
-            // Set the bit (1 = released)
-            keyboardMatrix[row] |= (byte)(1 << col);
-        }
-        // No need to explicitly update CIA ports here
-    }
-
-    // Helper method to simulate pressing a key by its name/symbol
-    public void PressKey(char keyName)
-    {
-        // Map common key names to row/column positions
-        // This mapping should match the C64 keyboard matrix
-        KeyPosition pos = GetKeyPosition(keyName);
-        if (pos.IsValid)
-        {
-            KeyDown((byte)pos.Row, (byte)pos.Col);
-        }
-    }
-
-    // Helper method to simulate releasing a key by its name/symbol
-    public void ReleaseKey(char keyName)
-    {
-        KeyPosition pos = GetKeyPosition(keyName);
-        if (pos.IsValid)
-        {
-            KeyUp((byte)pos.Row, (byte)pos.Col);
-        }
-    }
-
-    private struct KeyPosition
-    {
-        public int Row { get; set; }
-        public int Col { get; set; }
-        public bool IsValid { get; set; }
-
-        public static KeyPosition Invalid => new KeyPosition { IsValid = false };
-    }
-
-    private KeyPosition GetKeyPosition(char keyName)
-    {
-        // C64 keyboard matrix mapping
-        // This is a simplified example - extend with the full C64 keyboard layout
-        switch (keyName)
-        {
-            // Row 0
-            //case 'DELETE': case 'BACK': case 'DEL': return new KeyPosition { Row = 0, Col = 0, IsValid = true };
-            //case 'RETURN': case 'ENTER': return new KeyPosition { Row = 0, Col = 1, IsValid = true };
-            //case 'CURSOR_RIGHT': case 'RIGHT': return new KeyPosition { Row = 0, Col = 2, IsValid = true };
-            //case 'F7': return new KeyPosition { Row = 0, Col = 3, IsValid = true };
-            //case 'F1': return new KeyPosition { Row = 0, Col = 4, IsValid = true };
-            //case 'F3': return new KeyPosition { Row = 0, Col = 5, IsValid = true };
-            //case 'F5': return new KeyPosition { Row = 0, Col = 6, IsValid = true };
-            //case 'CURSOR_DOWN': case 'DOWN': return new KeyPosition { Row = 0, Col = 7, IsValid = true };
-
-            // Row 1
-            case '3': return new KeyPosition { Row = 1, Col = 0, IsValid = true };
-            case 'W': return new KeyPosition { Row = 1, Col = 1, IsValid = true };
-            case 'A': return new KeyPosition { Row = 1, Col = 2, IsValid = true };
-            case '4': return new KeyPosition { Row = 1, Col = 3, IsValid = true };
-            case 'Z': return new KeyPosition { Row = 1, Col = 4, IsValid = true };
-            case 'S': return new KeyPosition { Row = 1, Col = 5, IsValid = true };
-            case 'E': return new KeyPosition { Row = 1, Col = 6, IsValid = true };
-            //case 'CURSOR_LEFT': case 'LEFT': return new KeyPosition { Row = 1, Col = 7, IsValid = true };
-
-            // Row 2
-            case '5': return new KeyPosition { Row = 2, Col = 0, IsValid = true };
-            case 'R': return new KeyPosition { Row = 2, Col = 1, IsValid = true };
-            case 'D': return new KeyPosition { Row = 2, Col = 2, IsValid = true };
-            case '6': return new KeyPosition { Row = 2, Col = 3, IsValid = true };
-            case 'C': return new KeyPosition { Row = 2, Col = 4, IsValid = true };
-            case 'F': return new KeyPosition { Row = 2, Col = 5, IsValid = true };
-            case 'T': return new KeyPosition { Row = 2, Col = 6, IsValid = true };
-            case 'X': return new KeyPosition { Row = 2, Col = 7, IsValid = true };
-
-            // Row 3
-            case '7': return new KeyPosition { Row = 3, Col = 0, IsValid = true };
-            case 'Y': return new KeyPosition { Row = 3, Col = 1, IsValid = true };
-            case 'G': return new KeyPosition { Row = 3, Col = 2, IsValid = true };
-            case '8': return new KeyPosition { Row = 3, Col = 3, IsValid = true };
-            case 'B': return new KeyPosition { Row = 3, Col = 4, IsValid = true };
-            case 'H': return new KeyPosition { Row = 3, Col = 5, IsValid = true };
-            case 'U': return new KeyPosition { Row = 3, Col = 6, IsValid = true };
-            case 'V': return new KeyPosition { Row = 3, Col = 7, IsValid = true };
-
-            // Row 4
-            case '9': return new KeyPosition { Row = 4, Col = 0, IsValid = true };
-            case 'I': return new KeyPosition { Row = 4, Col = 1, IsValid = true };
-            case 'J': return new KeyPosition { Row = 4, Col = 2, IsValid = true };
-            case '0': return new KeyPosition { Row = 4, Col = 3, IsValid = true };
-            case 'M': return new KeyPosition { Row = 4, Col = 4, IsValid = true };
-            case 'K': return new KeyPosition { Row = 4, Col = 5, IsValid = true };
-            case 'O': return new KeyPosition { Row = 4, Col = 6, IsValid = true };
-            case 'N': return new KeyPosition { Row = 4, Col = 7, IsValid = true };
-
-            // Row 5
-            case '+': return new KeyPosition { Row = 5, Col = 0, IsValid = true };
-            case 'P': return new KeyPosition { Row = 5, Col = 1, IsValid = true };
-            case 'L': return new KeyPosition { Row = 5, Col = 2, IsValid = true };
-            case '-': return new KeyPosition { Row = 5, Col = 3, IsValid = true };
-            case '.': return new KeyPosition { Row = 5, Col = 4, IsValid = true };
-            case ':': return new KeyPosition { Row = 5, Col = 5, IsValid = true };
-            case '@': return new KeyPosition { Row = 5, Col = 6, IsValid = true };
-            case ',': return new KeyPosition { Row = 5, Col = 7, IsValid = true };
-
-            // Row 6
-            //case 'POUND': case '£': return new KeyPosition { Row = 6, Col = 0, IsValid = true };
-            case '*': return new KeyPosition { Row = 6, Col = 1, IsValid = true };
-            case ';': return new KeyPosition { Row = 6, Col = 2, IsValid = true };
-            //case 'HOME': case 'CLR': return new KeyPosition { Row = 6, Col = 3, IsValid = true };
-            //case 'UP': return new KeyPosition { Row = 6, Col = 4, IsValid = true };
-            case '=': return new KeyPosition { Row = 6, Col = 5, IsValid = true };
-            case '^': return new KeyPosition { Row = 6, Col = 6, IsValid = true };
-            //case 'ARROW_UP': return new KeyPosition { Row = 6, Col = 6, IsValid = true };
-            case '/': return new KeyPosition { Row = 6, Col = 7, IsValid = true };
-
-            // Row 7
-            case '1': return new KeyPosition { Row = 7, Col = 0, IsValid = true };
-            //case 'ARROW_LEFT': case '←': return new KeyPosition { Row = 7, Col = 1, IsValid = true };
-            //case 'CTRL': case 'CONTROL': return new KeyPosition { Row = 7, Col = 2, IsValid = true };
-            case '2': return new KeyPosition { Row = 7, Col = 3, IsValid = true };
-            case ' ': return new KeyPosition { Row = 7, Col = 4, IsValid = true };
-            //case 'COMMODORE': case 'C=': return new KeyPosition { Row = 7, Col = 5, IsValid = true };
-            case 'Q': return new KeyPosition { Row = 7, Col = 6, IsValid = true };
-            //case 'RUN': case 'STOP': case 'RUN/STOP': return new KeyPosition { Row = 7, Col = 7, IsValid = true };
-
-            // Function key combinations (these would need special handling)
-            //case 'F2': return new KeyPosition { Row = 0, Col = 4, IsValid = true }; // F1 + SHIFT
-            //case 'F4': return new KeyPosition { Row = 0, Col = 5, IsValid = true }; // F3 + SHIFT
-            //case 'F6': return new KeyPosition { Row = 0, Col = 6, IsValid = true }; // F5 + SHIFT
-            //case 'F8': return new KeyPosition { Row = 0, Col = 3, IsValid = true }; // F7 + SHIFT
-
-            default: return KeyPosition.Invalid;
-        }
-    }
-
     byte port1A;
     byte port1B;
     byte port2A;
@@ -496,7 +425,7 @@ public partial class Board
             else if (port == 'B')
             {
                 //return port1B;
-                return GetKeyboardState(port1A);
+                return keyboard.GetKeyboardState(port1A);
             }
         }
         else if (id == 2)
@@ -537,5 +466,15 @@ public partial class Board
                 port2B = value;
             }
         }
+    }
+
+    internal unsafe byte* BeginScreen()
+    {
+        throw new NotImplementedException();
+    }
+
+    internal void EndScreen()
+    {
+        throw new NotImplementedException();
     }
 }

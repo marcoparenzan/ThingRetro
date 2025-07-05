@@ -13,7 +13,7 @@ public class ColorRamChip
     {
     }
 
-    public void Clock()
+    public void Clock(long ticks)
     {
     }
 

@@ -50,17 +50,33 @@ public class MOS6581
         public int EnvelopeValue;  // Current ADSR envelope value (0-255)
         public int EnvelopeState;  // 0=release, 1=attack, 2=decay, 3=sustain
         public int EnvelopeCounter; // Counter for envelope timing
+
+        // For cycle-exact processing
+        public bool GateTransitionPending;   // Gate bit is changing
+        public bool ControlChangePending;    // Control register changed
+        public bool FrequencyChangePending;  // Frequency value changed
+        public bool PulseWidthChangePending; // Pulse width changed
+        public bool EnvelopeChangePending;   // ADSR settings changed
     }
 
     private Voice[] voices = new Voice[3];
     private byte[] registers = new byte[REG_COUNT];
     private int cycleCount;
 
+    // Cycle-exact timing constants
+    private const int SID_CLOCK_DIVIDER = 16; // SID runs at ~1MHz (PAL C64 clock / 16)
+    private int sidCycleCounter;
+
     // Audio output values
     private int[] outputBuffer;
     private int outputIndex;
     private int sampleRate;
     private int cyclesPerSample;
+
+    // Register change tracking
+    private bool[] registerChanged = new bool[REG_COUNT];
+    private bool filterChangePending;
+    private bool volumeChangePending;
 
     public MOS6581(Board board)
     {
@@ -84,6 +100,7 @@ public class MOS6581
     {
         // Clear all registers
         Array.Clear(registers, 0, registers.Length);
+        Array.Clear(registerChanged, 0, registerChanged.Length);
 
         // Reset voice states
         for (int i = 0; i < 3; i++)
@@ -97,60 +114,163 @@ public class MOS6581
             voices[i].EnvelopeValue = 0;
             voices[i].EnvelopeState = 0;
             voices[i].EnvelopeCounter = 0;
+            voices[i].GateTransitionPending = false;
+            voices[i].ControlChangePending = false;
+            voices[i].FrequencyChangePending = false;
+            voices[i].PulseWidthChangePending = false;
+            voices[i].EnvelopeChangePending = false;
         }
 
         cycleCount = 0;
+        sidCycleCounter = 0;
         outputIndex = 0;
+        filterChangePending = false;
+        volumeChangePending = false;
     }
 
-    public void Clock()
+    // Process signals for upcoming cycle changes
+    internal void ProcessSignals(int currentCycle)
     {
-        cycleCount++;
+        // SID is clocked at 1MHz (every 16th cycle in PAL C64's ~16MHz system)
+        // We'll only process on every 16th cycle
+        if ((currentCycle % SID_CLOCK_DIVIDER) != 0)
+            return;
 
-        // Update voices every cycle
-        UpdateVoices();
-
-        // Generate audio sample every N cycles
-        if (cycleCount >= cyclesPerSample)
-        {
-            cycleCount = 0;
-            GenerateSample();
-        }
-    }
-
-    private void UpdateVoices()
-    {
+        // Check for register changes that need to be processed in the next cycle
         for (int v = 0; v < 3; v++)
         {
             Voice voice = voices[v];
-
-            // Update frequency
             int offset = v * VOICE_OFFSET;
-            int freq = registers[offset + FREQ_LO] | (registers[offset + FREQ_HI] << 8);
-            voice.PhaseIncrement = freq;
 
-            // Update pulse width
-            voice.PulseWidth = (registers[offset + PW_LO] | ((registers[offset + PW_HI] & 0x0F) << 8)) << 12;
-
-            // Update control register and check for GATE bit changes
-            byte newControl = registers[offset + CONTROL];
-            bool gateOn = (newControl & GATE) != 0;
-            bool oldGateOn = (voice.Control & GATE) != 0;
-
-            if (gateOn && !oldGateOn)
+            // Check for frequency changes
+            if (registerChanged[offset + FREQ_LO] || registerChanged[offset + FREQ_HI])
             {
-                // Gate turned on - start attack
-                voice.EnvelopeState = 1; // Attack
-            }
-            else if (!gateOn && oldGateOn)
-            {
-                // Gate turned off - start release
-                voice.EnvelopeState = 0; // Release
+                voice.FrequencyChangePending = true;
+                registerChanged[offset + FREQ_LO] = false;
+                registerChanged[offset + FREQ_HI] = false;
             }
 
-            voice.Control = newControl;
-            voice.AttackDecay = registers[offset + ATTACK_DECAY];
-            voice.SustainRelease = registers[offset + SUSTAIN_RELEASE];
+            // Check for pulse width changes
+            if (registerChanged[offset + PW_LO] || registerChanged[offset + PW_HI])
+            {
+                voice.PulseWidthChangePending = true;
+                registerChanged[offset + PW_LO] = false;
+                registerChanged[offset + PW_HI] = false;
+            }
+
+            // Check for control register changes
+            if (registerChanged[offset + CONTROL])
+            {
+                voice.ControlChangePending = true;
+
+                // Check specifically for GATE bit transitions
+                byte newControl = registers[offset + CONTROL];
+                bool newGate = (newControl & GATE) != 0;
+                bool oldGate = (voice.Control & GATE) != 0;
+
+                if (newGate != oldGate)
+                {
+                    voice.GateTransitionPending = true;
+                }
+
+                registerChanged[offset + CONTROL] = false;
+            }
+
+            // Check for envelope parameter changes
+            if (registerChanged[offset + ATTACK_DECAY] || registerChanged[offset + SUSTAIN_RELEASE])
+            {
+                voice.EnvelopeChangePending = true;
+                registerChanged[offset + ATTACK_DECAY] = false;
+                registerChanged[offset + SUSTAIN_RELEASE] = false;
+            }
+        }
+
+        // Check for filter changes
+        if (registerChanged[FILTER_FC_LO] || registerChanged[FILTER_FC_HI] || registerChanged[FILTER_RES_FILT])
+        {
+            filterChangePending = true;
+            registerChanged[FILTER_FC_LO] = false;
+            registerChanged[FILTER_FC_HI] = false;
+            registerChanged[FILTER_RES_FILT] = false;
+        }
+
+        // Check for volume changes
+        if (registerChanged[FILTER_MODE_VOL])
+        {
+            volumeChangePending = true;
+            registerChanged[FILTER_MODE_VOL] = false;
+        }
+
+        // Check if we need to generate a sample in the next cycle
+        cycleCount++;
+        if (cycleCount >= cyclesPerSample - 1)
+        {
+            // Next cycle will generate a sample
+        }
+    }
+
+    public void Clock(long ticks)
+    {
+        // Only process on every 16th cycle (1MHz for SID)
+        sidCycleCounter++;
+        if (sidCycleCounter < SID_CLOCK_DIVIDER)
+            return;
+
+        sidCycleCounter = 0;
+
+        // Handle voices
+        for (int v = 0; v < 3; v++)
+        {
+            Voice voice = voices[v];
+            int offset = v * VOICE_OFFSET;
+
+            // Apply pending changes
+            if (voice.FrequencyChangePending)
+            {
+                int freq = registers[offset + FREQ_LO] | (registers[offset + FREQ_HI] << 8);
+                voice.PhaseIncrement = freq;
+                voice.FrequencyChangePending = false;
+            }
+
+            if (voice.PulseWidthChangePending)
+            {
+                voice.PulseWidth = (registers[offset + PW_LO] | ((registers[offset + PW_HI] & 0x0F) << 8)) << 12;
+                voice.PulseWidthChangePending = false;
+            }
+
+            if (voice.ControlChangePending)
+            {
+                byte newControl = registers[offset + CONTROL];
+
+                // Handle gate transition
+                if (voice.GateTransitionPending)
+                {
+                    bool gateOn = (newControl & GATE) != 0;
+
+                    if (gateOn && (voice.Control & GATE) == 0)
+                    {
+                        // Gate turning on - start attack
+                        voice.EnvelopeState = 1; // Attack
+                    }
+                    else if (!gateOn && (voice.Control & GATE) != 0)
+                    {
+                        // Gate turning off - start release
+                        voice.EnvelopeState = 0; // Release
+                    }
+
+                    voice.GateTransitionPending = false;
+                }
+
+                voice.Control = newControl;
+                voice.ControlChangePending = false;
+            }
+
+            if (voice.EnvelopeChangePending)
+            {
+                voice.AttackDecay = registers[offset + ATTACK_DECAY];
+                voice.SustainRelease = registers[offset + SUSTAIN_RELEASE];
+                voice.EnvelopeChangePending = false;
+            }
 
             // Update oscillator phase
             voice.Phase = (voice.Phase + voice.PhaseIncrement) & 0xFFFFFF;
@@ -158,8 +278,32 @@ public class MOS6581
             // Update envelope
             UpdateEnvelope(voice);
         }
+
+        // Apply filter changes
+        if (filterChangePending)
+        {
+            // Update filter parameters
+            // (In a full implementation, you would update your filter algorithm here)
+            filterChangePending = false;
+        }
+
+        // Apply volume changes
+        if (volumeChangePending)
+        {
+            // Volume is applied during sample generation
+            volumeChangePending = false;
+        }
+
+        // Generate audio sample when needed
+        if (cycleCount >= cyclesPerSample)
+        {
+            cycleCount = 0;
+            GenerateSample();
+        }
     }
 
+
+    // Rest of the methods remain unchanged
     private void UpdateEnvelope(Voice voice)
     {
         // Simple ADSR envelope processing
@@ -290,6 +434,8 @@ public class MOS6581
     // Original memory access functions
     byte[] bytes = new byte[0x0400];
 
+
+      // Read register value - unchanged from original
     public byte Address(ushort addr)
     {
         // Handle special read registers (random values for oscillators, etc.)
@@ -300,10 +446,16 @@ public class MOS6581
         return registers[addr];
     }
 
+    // Update the register value and mark it as changed for the next cycle
     public void Address(ushort addr, byte value)
     {
-        registers[addr] = value;
+        if (addr < REG_COUNT)
+        {
+            registers[addr] = value;
+            registerChanged[addr] = true;
+        }
     }
+
 
     // Get audio data for playback
     public int[] GetAudioData()

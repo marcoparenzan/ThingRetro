@@ -38,6 +38,14 @@ public class MOS6526
     private bool serialRunning;
     private byte interruptStatus; // Internal interrupt status
 
+    // Cycle-exact signal tracking
+    private bool pendingTimerAUnderflow;
+    private bool pendingTimerBUnderflow;
+    private bool pendingTodAlarm;
+    private byte pendingInterrupts;
+    private int todCycleDivider;
+    private const int TOD_CYCLE_INTERVAL = 19656; // PAL cycles for 1/10 second (50Hz system)
+
     public MOS6526(Board board, byte id)
     {
         this.board = board;
@@ -63,15 +71,97 @@ public class MOS6526
         timerARunning = timerBRunning = false;
         todRunning = true; // TOD clock starts running
         serialRunning = false;
+
+        // Reset cycle-exact tracking
+        pendingTimerAUnderflow = false;
+        pendingTimerBUnderflow = false;
+        pendingTodAlarm = false;
+        pendingInterrupts = 0;
+        todCycleDivider = 0;
+
+        // If this is CIA1, configure it for system timing
+        if (id == 1)
+        {
+            // Set Timer A for ~60Hz jiffy interrupt
+            // 985248 Hz (PAL clock) / 60 Hz ? 16421
+            timerALatch = 16421; // Use 16421 for PAL, 17045 for NTSC
+            timerA = timerALatch;
+
+            // Start Timer A in continuous mode and generate interrupts
+            controlRegA = 0x01; // Bit 0: Start timer
+            interruptControl = 0x81; // Bit 0: Enable Timer A interrupts, Bit 7: Set mask bit
+            timerARunning = true;
+        }
     }
 
-    public void Clock()
+    internal void ProcessSignals(int currentCycle)
+    {
+        // Process Timer A
+        if (timerARunning)
+        {
+            // Will timer A underflow in the next cycle?
+            if (timerA == 1)
+            {
+                pendingTimerAUnderflow = true;
+            }
+        }
+
+        // Process Timer B
+        bool timerBClockByUnderflow = (controlRegB & 0x40) != 0;
+        if (timerBRunning && (!timerBClockByUnderflow || pendingTimerAUnderflow))
+        {
+            // Will timer B underflow in the next cycle?
+            if ((timerBClockByUnderflow && pendingTimerAUnderflow && timerB == 1) ||
+                (!timerBClockByUnderflow && timerB == 1))
+            {
+                pendingTimerBUnderflow = true;
+            }
+        }
+
+        // Process TOD clock - only increment at 1/10 second intervals
+        todCycleDivider++;
+        if (todCycleDivider >= TOD_CYCLE_INTERVAL)
+        {
+            todCycleDivider = 0;
+
+            // Will TOD match alarm in the next cycle?
+            byte next10th = (byte)((tod10thsec + 1) % 10);
+            if (todRunning &&
+                next10th == todAlarm10thsec &&
+                todSec == todAlarmSec &&
+                todMin == todAlarmMin &&
+                todHr == todAlarmHr)
+            {
+                pendingTodAlarm = true;
+            }
+        }
+
+        // Process serial port - simplified, would need more for real serial I/O
+        // Handle keyboard/joystick inputs for CIA 1
+        if (id == 1)
+        {
+            // Keyboard matrix is handled via GetCIAPort in the Board class
+        }
+
+        // Prepare pending interrupts
+        if (pendingTimerAUnderflow && (interruptControl & 0x01) != 0)
+            pendingInterrupts |= 0x01;
+
+        if (pendingTimerBUnderflow && (interruptControl & 0x02) != 0)
+            pendingInterrupts |= 0x02;
+
+        if (pendingTodAlarm && (interruptControl & 0x04) != 0)
+            pendingInterrupts |= 0x04;
+    }
+
+    public void Clock(long ticks)
     {
         // Handle Timer A
         if (timerARunning)
         {
             timerA--;
-            if (timerA == 0)
+
+            if (pendingTimerAUnderflow)
             {
                 // Timer A underflow
                 if ((controlRegA & 0x08) == 0) // One-shot mode?
@@ -85,82 +175,81 @@ public class MOS6526
 
                 // Set interrupt flag
                 interruptStatus |= 0x01;
-                CheckInterrupts();
 
-                // Handle Timer B if it's counting Timer A underflows
-                if (timerBRunning && (controlRegB & 0x40) != 0)
-                {
-                    timerB--;
-                    if (timerB == 0)
-                    {
-                        HandleTimerBUnderflow();
-                    }
-                }
+                // Clear pending signal
+                pendingTimerAUnderflow = false;
             }
         }
 
-        // Handle Timer B - only if it's not counting Timer A underflows
-        if (timerBRunning && (controlRegB & 0x40) == 0)
+        // Handle Timer B
+        if (timerBRunning)
         {
-            timerB--;
-            if (timerB == 0)
+            bool timerBClockByUnderflow = (controlRegB & 0x40) != 0;
+
+            // Only decrement if we're not counting underflows, or if we had an underflow
+            if (!timerBClockByUnderflow || pendingTimerAUnderflow)
             {
-                HandleTimerBUnderflow();
+                timerB--;
+            }
+
+            if (pendingTimerBUnderflow)
+            {
+                // Timer B underflow handling
+                if ((controlRegB & 0x08) == 0) // One-shot mode?
+                {
+                    timerBRunning = false;
+                    controlRegB &= 0xFE; // Clear bit 0
+                }
+
+                // Reload from latch
+                timerB = timerBLatch;
+
+                // Set interrupt flag
+                interruptStatus |= 0x02;
+
+                // Clear pending signal
+                pendingTimerBUnderflow = false;
             }
         }
 
-        // Update TOD clock (should be at 1/10 second rate, but simplified here)
-        if (todRunning)
+        // Handle TOD clock update
+        if (todCycleDivider == 0 && todRunning)
         {
-            tod10thsec++;
-            if (tod10thsec >= 10)
+            // Update TOD clock registers
+            tod10thsec = (byte)((tod10thsec + 1) % 10);
+
+            if (tod10thsec == 0)
             {
-                tod10thsec = 0;
-                todSec++;
-                if (todSec >= 60)
+                todSec = (byte)((todSec + 1) % 60);
+
+                if (todSec == 0)
                 {
-                    todSec = 0;
-                    todMin++;
-                    if (todMin >= 60)
+                    todMin = (byte)((todMin + 1) % 60);
+
+                    if (todMin == 0)
                     {
-                        todMin = 0;
-                        todHr++;
-                        if (todHr >= 24)
-                        {
-                            todHr = 0;
-                        }
+                        todHr = (byte)((todHr + 1) % 24);
                     }
                 }
             }
 
-            // Check TOD alarm
-            if (tod10thsec == todAlarm10thsec &&
-                todSec == todAlarmSec &&
-                todMin == todAlarmMin &&
-                todHr == todAlarmHr)
+            if (pendingTodAlarm)
             {
                 // Set alarm interrupt
                 interruptStatus |= 0x04;
-                CheckInterrupts();
+                pendingTodAlarm = false;
             }
         }
-    }
 
-    private void HandleTimerBUnderflow()
-    {
-        // Timer B underflow handling
-        if ((controlRegB & 0x08) == 0) // One-shot mode?
+        // Process any pending interrupts
+        if (pendingInterrupts != 0)
         {
-            timerBRunning = false;
-            controlRegB &= 0xFE; // Clear bit 0
+            // Update internal interrupt status
+            interruptStatus |= pendingInterrupts;
+            pendingInterrupts = 0;
+
+            CheckInterrupts();
         }
-
-        // Reload from latch
-        timerB = timerBLatch;
-
-        // Set interrupt flag
-        interruptStatus |= 0x02;
-        CheckInterrupts();
     }
 
     private void CheckInterrupts()
@@ -171,9 +260,7 @@ public class MOS6526
             // Set the IRQ flag
             interruptStatus |= 0x80;
 
-            // Signal interrupt to CPU if needed
-            // This depends on how your system handles interrupts
-            // board.SignalInterrupt();
+            // Signal interrupt to CPU
             board.CIATriggerInterrupt(id);
         }
     }
@@ -185,8 +272,6 @@ public class MOS6526
 
         switch (register)
         {
-            //case 0x00: return (byte)(dataPortA & ~dataDirectionA); // Port A
-            //case 0x01: return (byte)(dataPortB & ~dataDirectionB); // Port B
             case 0x00: return (byte)(board.GetCIAPort(id, 'A') & ~dataDirectionA); // Port A
             case 0x01: return (byte)(board.GetCIAPort(id, 'B') & ~dataDirectionB); // Port B
             case 0x02: return dataDirectionA; // DDRA
@@ -255,7 +340,7 @@ public class MOS6526
                 if ((controlRegB & 0x80) != 0)
                     todAlarm10thsec = (byte)(value & 0x0F);
                 else
-                    tod10thsec = (byte) (value & 0x0F);
+                    tod10thsec = (byte)(value & 0x0F);
                 break;
             case 0x09: // TOD seconds or Alarm seconds
                 if ((controlRegB & 0x80) != 0)

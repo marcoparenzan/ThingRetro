@@ -10,7 +10,7 @@ public partial class MOS6510
     Dictionary<ushort, string> rom_debugging;
 
 
-    public void LogInstructionText(ushort instruction_PC, byte opcode, string instruction_text)
+    public void LogInstructionText(ushort instruction_PC, byte opcode, string instruction_text, byte cyclesCount)
     {
         if (rom_debugging is null)
         {
@@ -42,7 +42,7 @@ public partial class MOS6510
                 rom_debugging.Add(pc.Value, sb.ToString());
             }
         }
-        Console.WriteLine($"[{instruction_PC:X4}] {opcode:x2} {instruction_text} | A={A:X2}, X={X:X2}, Y={Y:X2}, SP={SP:X2}, PC={PC:X4}, Status={Status:X2} | Cycles: {cycleCount}");
+        Console.WriteLine($"[{instruction_PC:X4}] {opcode:x2} {instruction_text} | A={A:X2}, X={X:X2}, Y={Y:X2}, SP={SP:X2}, PC={PC:X4}, Status={Status:X2} | Cycles: {cyclesCount}");
         if (rom_debugging.TryGetValue(instruction_PC, out var value))
         {
             Console.WriteLine(value);

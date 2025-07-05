@@ -13,7 +13,7 @@ public class Ram64KbChip
     {
     }
 
-    public void Clock()
+    public void Clock(long ticks)
     {
     }
 
