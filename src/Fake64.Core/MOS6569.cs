@@ -1,4 +1,6 @@
 using Fake64;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Imaging;
 
@@ -214,7 +216,7 @@ public class MOS6569
             }
             for (var x = 0; x < 320; x += 8)
             {
-                var offset = (y >> 3) * 25 + (x >> 3);
+                var offset = (y >> 3) * 40 + (x >> 3);
                 var ch = board.Address((ushort)(0x400 + offset));
                 var chBits = board.Chargen((ushort)((ch << 3) + (y & 0b00000111)));
                 var foregroundColorAddress = (ushort)(board.Address((ushort)(0xD800 + offset)) << 2);
@@ -293,22 +295,24 @@ public class MOS6569
         // TODO: Render sprites on top
     }
 
-    static byte[] palette = new[] {
-        (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0xFF,
-        (byte) 0x62, (byte) 0x62, (byte) 0x62, (byte) 0xFF,
-        (byte) 0x89, (byte) 0x89, (byte) 0x89, (byte) 0xFF,
-        (byte) 0xad, (byte) 0xad, (byte) 0xad, (byte) 0xFF,
-        (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xFF,
-        (byte) 0x44, (byte) 0x4e, (byte) 0x9f, (byte) 0xFF,
-        (byte) 0x75, (byte) 0x7e, (byte) 0xcb, (byte) 0xFF,
-        (byte) 0x12, (byte) 0x54, (byte) 0x6d, (byte) 0xFF,
-        (byte) 0x3c, (byte) 0x68, (byte) 0xa1, (byte) 0xFF,
-        (byte) 0x87, (byte) 0xd4, (byte) 0xc9, (byte) 0xFF,
-        (byte) 0x9b, (byte) 0xe2, (byte) 0x9a, (byte) 0xFF,
-        (byte) 0x5e, (byte) 0xab, (byte) 0x5c, (byte) 0xFF,
-        (byte) 0xc6, (byte) 0xbf, (byte) 0x6a, (byte) 0xFF,
-        (byte) 0xcb, (byte) 0x7e, (byte) 0x88, (byte) 0xFF,
-        (byte) 0x9b, (byte) 0x45, (byte) 0x50, (byte) 0xFF,
-        (byte) 0xa3, (byte) 0x57, (byte) 0xa0, (byte) 0xFF
+    // http://unusedino.de/ec64/technical/misc/vic656x/colors/
+    static byte[] palette = new byte[] {
+        (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0xFF,  // 0 - Black
+        (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,  // 1 - White
+        (byte) 0x2B, (byte) 0x37, (byte) 0x68, (byte) 0xFF,  // 2 - Red
+        (byte) 0xB2, (byte) 0xA4, (byte) 0x70, (byte) 0xFF,  // 3 - Cyan
+        (byte) 0x86, (byte) 0x3D, (byte) 0x6F, (byte) 0xFF,  // 4 - Purple
+        (byte) 0x43, (byte) 0x8D, (byte) 0x58, (byte) 0xFF,  // 5 - Green
+        (byte) 0x79, (byte) 0x28, (byte) 0x35, (byte) 0xFF,  // 6 - Blue
+        (byte) 0x6F, (byte) 0xC7, (byte) 0xB8, (byte) 0xFF,  // 7 - Yellow
+        (byte) 0x25, (byte) 0x4F, (byte) 0x6F, (byte) 0xFF,  // 8 - Orange
+        (byte) 0x00, (byte) 0x39, (byte) 0x43, (byte) 0xFF,  // 9 - Brown
+        (byte) 0x59, (byte) 0x67, (byte) 0x9A, (byte) 0xFF,  // A - Light Red
+        (byte) 0x44, (byte) 0x44, (byte) 0x44, (byte) 0xFF,  // B - Dark Grey
+        (byte) 0x6C, (byte) 0x6C, (byte) 0x6C, (byte) 0xFF,  // C - Grey
+        (byte) 0x84, (byte) 0xD2, (byte) 0x9A, (byte) 0xFF,  // D - Light Green
+        (byte) 0xB5, (byte) 0x5E, (byte) 0x6C, (byte) 0xFF,  // E - Light Blue
+        (byte) 0x95, (byte) 0x95, (byte) 0x95, (byte) 0xFF   // F - Light Grey
     };
+
 }

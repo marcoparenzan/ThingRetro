@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Update="Fake64Form2.cs">
+    <Compile Update="Fake64Form.cs">
       <SubType>Form</SubType>
     </Compile>
   </ItemGroup>

@@ -3,9 +3,9 @@ using System.Drawing;
 
 namespace Fake64;
 
-public partial class Fake64Form2 : Form
+public partial class Fake64Form : Form
 {
-    public Fake64Form2(int w = 403, int h = 284)
+    public Fake64Form(int w = 403, int h = 284)
     {
         this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
         this.StartPosition = FormStartPosition.CenterScreen;

@@ -332,6 +332,6 @@ public partial class MOS6510
         }
 
         
-        //LogInstructionText(instruction_PC, opcode, instruction_text);
+        LogInstructionText(instruction_PC, opcode, instruction_text);
     }
 }

@@ -3,6 +3,7 @@ using Fake64;
 public class MOS6526
 {
     Board board;
+    private byte id;
 
     // Registers
     private byte dataPortA; // $DC00/DD00
@@ -37,9 +38,10 @@ public class MOS6526
     private bool serialRunning;
     private byte interruptStatus; // Internal interrupt status
 
-    public MOS6526(Board board)
+    public MOS6526(Board board, byte id)
     {
         this.board = board;
+        this.id = id;
         Reset();
     }
 
@@ -172,6 +174,7 @@ public class MOS6526
             // Signal interrupt to CPU if needed
             // This depends on how your system handles interrupts
             // board.SignalInterrupt();
+            board.CIATriggerInterrupt(id);
         }
     }
 
@@ -182,8 +185,10 @@ public class MOS6526
 
         switch (register)
         {
-            case 0x00: return (byte)(dataPortA & ~dataDirectionA); // Port A
-            case 0x01: return (byte)(dataPortB & ~dataDirectionB); // Port B
+            //case 0x00: return (byte)(dataPortA & ~dataDirectionA); // Port A
+            //case 0x01: return (byte)(dataPortB & ~dataDirectionB); // Port B
+            case 0x00: return (byte)(board.GetCIAPort(id, 'A') & ~dataDirectionA); // Port A
+            case 0x01: return (byte)(board.GetCIAPort(id, 'B') & ~dataDirectionB); // Port B
             case 0x02: return dataDirectionA; // DDRA
             case 0x03: return dataDirectionB; // DDRB
             case 0x04: return (byte)(timerA & 0xFF); // Timer A low
@@ -214,9 +219,11 @@ public class MOS6526
         {
             case 0x00: // Port A
                 dataPortA = value;
+                board.SetCIAPort(id, 'A', value);
                 break;
             case 0x01: // Port B
                 dataPortB = value;
+                board.SetCIAPort(id, 'B', value);
                 break;
             case 0x02: // DDRA
                 dataDirectionA = value;

@@ -1,4 +1,5 @@
 using Fake64;
+using Microsoft.VisualBasic.Devices;
 
 namespace Fake64
 {
@@ -12,56 +13,49 @@ namespace Fake64
             Application.SetCompatibleTextRenderingDefault(false);
 
             var board = new Board();
+            //var board = new Board(kernalName: "kernal-901227-02.bin", chargenName: "chargen-901225-01.bin", basicName: "basic-901226-01.bin");
 
-            board.Address(0xD020, 13);
-            board.Address(0xD021, 14);
-            for (ushort addr = 0x0400; addr < 0x0400 + 0x3E8; addr++)
-            {
-                board.Address(addr, 32);
-            }
-            var i = 0;
-            for (ushort addr = 0x0400; addr < 0x0400 + 0x100; addr++)
-            {
-                board.Address(addr, (byte)i++);
-            }
-            byte color = 0;
-            for (ushort addr = 0xD800; addr < 0xD800 + 0x3E8; addr++)
-            {
-                board.Address(addr, color);
-                color = (byte)((color + 1) & 0xf);
-            }
+            //board.Address(0xD020, 14);
+            //board.Address(0xD021, 6);
+            //for (ushort addr = 0x0400; addr < 0x0400 + 0x3E8; addr++)
+            //{
+            //    board.Address(addr, 32);
+            //}
+            //var i = 0;
+            //for (ushort addr = 0x0400; addr < 0x0400 + 0x100; addr++)
+            //{
+            //    board.Address(addr, (byte)i++);
+            //}
+            //byte color = 0;
+            //for (ushort addr = 0xD800; addr < 0xD800 + 0x3E8; addr++)
+            //{
+            //    board.Address(addr, color);
+            //    color = (byte)((color + 1) & 0xf);
+            //}
 
-            var form = new Fake64Form2();
+            var form = new Fake64Form();
             form.KeyDown += (s, e) => {
 
-                switch (e.KeyCode)
-                {
-                    default:
-                        break;
-                }
-            
+                board.PressKey((char) e.KeyValue);
+
             };
             form.KeyUp += (s, e) => {
-
-                switch (e.KeyCode)
-                {
-                    default:
-                        break;
-                }
-
+                board.ReleaseKey((char)e.KeyValue);
             };
+
             form.Show();
 
             var refrate = 50;
             var totalRenderedFrames = 0;
             var totalRenderingTime = 0.0;
             var stay = true;
-            _ = Task.Factory.StartNew(() => {
+            _ = Task.Factory.StartNew(async () => {
                 var timer = new PeriodicTimer(TimeSpan.FromMilliseconds((int)Math.Round(1000.0 / refrate, 0)));
                 try
                 {
                     while (stay)
                     {
+                        await timer.WaitForNextTickAsync();
                         form.Invoke(() =>
                         {
                             var start = DateTime.Now;
