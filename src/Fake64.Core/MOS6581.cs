@@ -1,13 +1,9 @@
-using Fake64;
-using System;
-using System.Drawing;
-using System.Drawing.Imaging;
+namespace Fake64;
 
 public class MOS6581
 {
     Board board;
 
-    // SID registers (25 bytes total)
     private const int REG_COUNT = 0x1F;
 
     // Voice registers for 3 voices (0, 1, 2)

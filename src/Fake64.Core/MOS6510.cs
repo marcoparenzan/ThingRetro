@@ -44,9 +44,10 @@ public partial class MOS6510
         }
     }
 
-    byte A, X, Y, SP;
-    ushort PC;
-    byte Status;
+    // internal per permettere ai test di preparare e verificare lo stato della CPU
+    internal byte A, X, Y, SP;
+    internal ushort PC;
+    internal byte Status;
     byte ioRegister0;
     byte ioRegister1;
 
@@ -98,7 +99,9 @@ public partial class MOS6510
         if (condition)
         {
             sbyte offset = (sbyte)ReadByte(PC++);
-            PC = (ushort)(PC + offset);
+            ushort target = (ushort)(PC + offset);
+            pageCrossed = (PC & 0xFF00) != (target & 0xFF00);
+            PC = target;
         }
         else
         {

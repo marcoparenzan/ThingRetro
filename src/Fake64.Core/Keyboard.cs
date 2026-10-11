@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace Fake64.Core;
+namespace Fake64;
 
 public class Keyboard(Board board)
 {
@@ -13,6 +13,7 @@ public class Keyboard(Board board)
     private bool pendingShiftKeyState = false;
     private bool keyPollingNeeded = false;
     private int keyScanCycleCounter = 0;
+    private const int KEY_SCAN_INTERVAL_CYCLES = 19656; // PAL: 312 linee x 63 cicli = 1 frame
 
     // Method to get keyboard matrix state for CIA1
     public byte GetKeyboardState(byte rowSelectionMask)
@@ -27,26 +28,21 @@ public class Keyboard(Board board)
                 result &= keyboardMatrix[row];
             }
         }
+        if (result != 0xff)
+        { 
+        }
         return result;
     }
 
     // Methods for keyboard input
     public void KeyDown(byte row, byte col)
     {
-        if (row >= 0 && row < 8 && col >= 0 && col < 8)
-        {
-            // Clear the bit (0 = pressed)
-            keyboardMatrix[row] &= (byte)~(1 << col);
-        }
+        keyboardMatrix[row] &= (byte)~(1 << col);
     }
 
     public void KeyUp(byte row, byte col)
     {
-        if (row >= 0 && row < 8 && col >= 0 && col < 8)
-        {
-            // Set the bit (1 = released)
-            keyboardMatrix[row] |= (byte)(1 << col);
-        }
+        keyboardMatrix[row] |= (byte)(1 << col);
     }
 
     // Dictionary to track key states
@@ -116,7 +112,7 @@ public class Keyboard(Board board)
         // Arrow keys
         { 37, (0, 2) },     // Left
         { 38, (6, 4) },     // Up 
-        { 39, (0, 2) },     // Right
+        { 39, (6, 7) },     // Right (corrected from 0,2)
         { 40, (0, 7) },     // Down
         
         // Punctuation
@@ -149,10 +145,10 @@ public class Keyboard(Board board)
     // Process keyboard signals for the upcoming cycle
     internal void ProcessSignals(int currentCycle)
     {
-        // In a cycle-exact emulation, we would check keyboard state at specific intervals
-        // For example, every 10 cycles to avoid polling Windows keyboard APIs too frequently
+        // Lo stato dei tasti del PC viene letto una volta per frame (50 Hz): interrogare
+        // GetAsyncKeyState per ogni tasto ogni pochi cicli rallentava l'emulazione di oltre 10 volte
         keyScanCycleCounter++;
-        if (keyScanCycleCounter >= 10)
+        if (keyScanCycleCounter >= KEY_SCAN_INTERVAL_CYCLES)
         {
             keyScanCycleCounter = 0;
             keyPollingNeeded = true;

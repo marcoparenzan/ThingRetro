@@ -1,7 +1,4 @@
-﻿using Fake64.Core;
-using System.Diagnostics;
-using System.Drawing;
-using System.Threading.Channels;
+﻿using System.Diagnostics;
 
 namespace Fake64;
 
@@ -9,6 +6,7 @@ public partial class Board
 {
     Task clock;
 
+    IScreen screen;
     Keyboard keyboard;
 
     MOS6510 cpu;
@@ -23,9 +21,18 @@ public partial class Board
 
     Ram64KbChip ram64;
 
-    byte[] Rom(string name) => File.ReadAllBytes(Path.Combine("roms", name));
+    byte[] Rom(string name) => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "roms", name));
 
     public MOS6569 VICII => vicii;
+
+    // Accesso ai chip per i test (InternalsVisibleTo Fake64.Tests)
+    internal MOS6510 Cpu => cpu;
+    internal MOS6526 Cia1 => cia1;
+    internal MOS6526 Cia2 => cia2;
+    internal long TotalCycles => totalCycles;
+
+    // Cicli in cui la CPU è stata fermata dal VIC-II (bad line)
+    internal long StolenCycles { get; private set; }
 
     // Cycle constants for PAL C64
     private const long MASTER_CLOCK_HZ = 985248; // PAL master clock frequency in Hz
@@ -40,70 +47,131 @@ public partial class Board
     private int currentLine;
     private int currentCycle;
 
-    public Board(string kernalName = null, string chargenName = null, string basicName = null)
+    public Board(IScreen screen, string kernalName = null, string chargenName = null, string basicName = null, bool startClock = true)
     {
+        this.screen = screen;
         keyboard = new Keyboard(this);
         kernal = Rom(kernalName ?? nameof(kernal));
         chargen = Rom(chargenName ?? nameof(chargen));
         basic = Rom(basicName ?? nameof(basic));
         ram64 = new(this);
         colorRam = new ColorRamChip(this);
-        cia2 = new MOS6526(this, 2);
-        cia1 = new MOS6526(this, 1);
+        // In Board.cs constructor or initialization
+        cia1 = new MOS6526(
+            this,
+            // CIA1 pilota /IRQ: la CPU legge la linea tramite IrqLine
+            null,
+            // Port read handler for CIA1
+            (port) => port == 'A' ? port1A : keyboard.GetKeyboardState(port1A),
+            // Port write handler for CIA1
+            (port, value) => {
+                if (port == 'A') port1A = value;
+                else port1B = value;
+            },
+            // CIA1-specific initialization
+            (cia) => {
+                // Set Timer A for ~60Hz jiffy interrupt
+                cia.TimerALatch = 16421; // Use 16421 for PAL, 17045 for NTSC
+                cia.ControlRegA = 0x01; // Bit 0: Start timer
+                cia.InterruptControl = 0x81; // Bit 0: Enable Timer A interrupts, Bit 7: Set mask bit
+            }
+        );
+
+        cia2 = new MOS6526(
+            this,
+            // CIA2 è collegata a /NMI sul C64
+            () => cpu.TriggerNMI(),
+            // Port read handler for CIA2
+            (port) => port == 'A' ? port2A : port2B,
+            // Port write handler for CIA2
+            (port, value) => {
+                if (port == 'A') port2A = value;
+                else port2B = value;
+            }
+        // No special initialization needed for CIA2
+        );
         sid = new MOS6581(this);
-        vicii = new MOS6569(this);
+        vicii = new MOS6569(this, () => {
+            Render();
+        });
         cpu = new MOS6510(this);
         MemoryMap();
 
         Reset();
 
-        // Calculate timing constants for the Stopwatch
-        // Stopwatch.Frequency gives ticks per second
-        // We need to convert our master clock to Stopwatch ticks
-        var ticksPerCycle = Stopwatch.Frequency / MASTER_CLOCK_HZ;
+        if (startClock) Start();
+    }
+
+    // Avvia l'emulazione in tempo reale su un task separato
+    public void Start()
+    {
+        if (clock is not null) return;
 
         clock = Task.Factory.StartNew(async () =>
         {
             var sw = Stopwatch.StartNew();
-            long lastTicks = 0;
+            long startCycles = totalCycles;
 
-            try
+            while (true)
             {
+                // Converte il tempo trascorso in cicli PAL senza perdere precisione
+                long targetCycles = startCycles + (long)(sw.ElapsedTicks * (double)MASTER_CLOCK_HZ / Stopwatch.Frequency);
 
-                while (true)
+                // Run as many cycles as needed to catch up to wall clock
+                while (totalCycles < targetCycles)
                 {
-                    long currentTicks = sw.ElapsedTicks;
-                    long targetCycles = currentTicks / ticksPerCycle;
+                    // Run one machine cycle
+                    ExecuteCycle();
 
-                    // Run as many cycles as needed to catch up to wall clock
-                    while (totalCycles < targetCycles)
+                    // Throttle if we're getting too far ahead
+                    if (totalCycles % 1000 == 0 && totalCycles > targetCycles + 10000)
                     {
-                        // Run one machine cycle
-                        ExecuteCycle();
-
-                        // Throttle if we're getting too far ahead
-                        if (totalCycles % 1000 == 0 && totalCycles > targetCycles + 10000)
-                        {
-                            await Task.Delay(1);
-                        }
+                        await Task.Delay(1);
                     }
                 }
             }
-            catch(Exception ex)
-            {
-                Debug.WriteLine($"Clock task error: {ex.Message}");
-            }
-        });
+        }).Unwrap();
+    }
+
+    // Esegue un numero fisso di cicli in modo sincrono (usato dai test, con startClock: false)
+    internal void RunCycles(long cycles)
+    {
+        for (long i = 0; i < cycles; i++) ExecuteCycle();
+    }
+
+    // Esegue cicli fino al completamento dell'istruzione corrente e all'inizio della successiva
+    internal void StepInstruction()
+    {
+        long start = cpu.InstructionCount;
+        do ExecuteCycle(); while (cpu.InstructionCount == start || !cpu.IsInstructionBoundary);
     }
 
     // Perform a single machine cycle
-    private void ExecuteCycle()
+    unsafe private void ExecuteCycle()
     {
         // Phase 1: Process all signals and state changes for this cycle
-        ProcessSignals();
+        // Process interrupts and other signals between components
+        // This is where components indicate their need to interact with others
+        keyboard.ProcessSignals(currentCycle);
+        cia1.ProcessSignals(currentCycle);
+        cia2.ProcessSignals(currentCycle);
+        vicii.ProcessSignals(currentCycle);
+        sid.ProcessSignals(currentCycle);
+
+        // Nelle bad line il VIC-II tiene BA basso e la CPU resta ferma per 40 cicli
+        bool cpuStalled = vicii.CpuStalled;
+        if (!cpuStalled) cpu.ProcessSignals(currentCycle);
 
         // Phase 2: Clock all components for this cycle
-        ClockComponents();
+        // Each component gets exactly one cycle's worth of processing
+        // The order should match the C64 architecture's priority
+        vicii.Clock(totalCycles);  // VIC-II has priority for memory access
+        sid.Clock(totalCycles);    // SID processes audio
+        cia1.Clock(totalCycles);   // CIA chips handle I/O and timers
+        cia2.Clock(totalCycles);
+        if (cpuStalled) StolenCycles++;
+        else cpu.Clock(totalCycles);    // CPU executes instructions
+        keyboard.Clock();          // Poll keyboard state
 
         // Update cycle counters
         totalCycles++;
@@ -122,65 +190,29 @@ public partial class Board
                 frameStartCycle = totalCycles;
 
                 // Process frame completion events
-                ProcessFrame();
+                // Process frame-level events like screen rendering
+                Render();
+
+                // Get audio samples from SID and send to audio system
+                int[] samples = sid.GetAudioData();
+                // Send to audio output system
+                // ...
             }
 
             lineStartCycle = totalCycles;
 
             // Process line completion events
-            ProcessLine();
+            // Handle VIC-II raster interrupts and bad lines
+            vicii.EndLine(currentLine);
         }
     }
 
-    // Process all signals and pending states
-    private void ProcessSignals()
+    unsafe void Render()
     {
-        // Process interrupts and other signals between components
-        // This is where components indicate their need to interact with others
-        keyboard.ProcessSignals(currentCycle);
-        cia1.ProcessSignals(currentCycle);
-        cia2.ProcessSignals(currentCycle);
-        vicii.ProcessSignals(currentCycle);
-        sid.ProcessSignals(currentCycle);
-        cpu.ProcessSignals(currentCycle);
-    }
-
-    // Clock all components for this cycle
-    private void ClockComponents()
-    {
-        // Each component gets exactly one cycle's worth of processing
-        // The order should match the C64 architecture's priority
-        vicii.Clock(totalCycles);  // VIC-II has priority for memory access
-        sid.Clock(totalCycles);    // SID processes audio
-        cia1.Clock(totalCycles);   // CIA chips handle I/O and timers
-        cia2.Clock(totalCycles);
-        cpu.Clock(totalCycles);    // CPU executes instructions
-        keyboard.Clock();          // Poll keyboard state
-    }
-
-    // Process end-of-line events
-    private void ProcessLine()
-    {
-        // Handle VIC-II raster interrupts and bad lines
-        vicii.EndLine(currentLine);
-    }
-
-    // Process end-of-frame events
-    private void ProcessFrame()
-    {
-        // Process frame-level events like screen rendering
-        ProcessAudio();
-    }
-
-    int audioFrameCounter = 0;
-    const int audioFrameRate = 50; // PAL refresh rate (50Hz)
-
-    private void ProcessAudio()
-    {
-        // Get audio samples from SID and send to audio system
-        int[] samples = sid.GetAudioData();
-        // Send to audio output system
-        // ...
+        if (screen is null) return;
+        var scan0 = screen.BeginRender();
+        vicii.Render(scan0);
+        screen.EndRender();
     }
 
     public void Reset()
@@ -200,22 +232,8 @@ public partial class Board
         lineStartCycle = 0;
     }
 
-    internal void CpuTriggerIRQ()
-    {
-        cpu.TriggerIRQ();
-    }
-
-    internal void CIATriggerInterrupt(int ciaId)
-    {
-        if (ciaId == 1)
-        {
-            cpu.TriggerIRQ();
-        }
-        else if (ciaId == 2)
-        {
-            cpu.TriggerNMI();
-        }
-    }
+    // Linea /IRQ condivisa (wired-OR): attiva finché almeno una sorgente la tiene bassa
+    internal bool IrqLine => cia1.IrqAsserted || vicii.IrqAsserted;
 
     public byte Chargen(ushort addr) => chargen[addr];
 
@@ -249,8 +267,8 @@ public partial class Board
 
     public byte Address(ushort addr)
     {
-        if (addr == 0xE473)
-        { 
+        if (addr == 0xea1e)
+        {
         }
         
         if (addr >= kernal_base)
@@ -329,13 +347,21 @@ public partial class Board
 
     public void Address(ushort addr, byte value)
     {
+        if (addr == 0xea1e)
+        {
+        }
+
         if (addr >= kernal_base)
         {
+            // Writing to KERNAL ROM space falls through to RAM
+            ram64.Address(addr, value);
         }
         else if (addr >= chargen_base)
         {
             if (chargenVisible)
             {
+                // Character ROM is read-only, writes fall through to RAM
+                ram64.Address(addr, value);
             }
             else if (ioAreaVisible)
             {
@@ -345,9 +371,13 @@ public partial class Board
                 }
                 else if (addr >= 0xdf00) // I/O 2
                 {
+                    // I/O expansion area 2, typically empty
+                    ram64.Address(addr, value);
                 }
                 else if (addr >= 0xde00) // I/O 1
                 {
+                    // I/O expansion area 1, typically empty
+                    ram64.Address(addr, value);
                 }
                 else if (addr >= 0xdd00) // CIA 2
                 {
@@ -377,17 +407,24 @@ public partial class Board
             }
             else
             {
+                // RAM underneath when I/O and CHARGEN aren't visible
+                ram64.Address(addr, value);
             }
         }
         else if (addr >= 0xc000)
         {
+            // RAM area between BASIC ROM and CHARGEN
+            ram64.Address(addr, value);
         }
         else if (addr >= basic_base)
         {
-
+            // BASIC ROM area - writes go to RAM underneath
+            ram64.Address(addr, value);
         }
         else if (addr >= 0x0400 && addr<0x0500)
         {
+            // Screen memory - special handling if needed
+            ram64.Address(addr, value);
         }
         else if (addr <= 0x0001)
         {
@@ -397,9 +434,9 @@ public partial class Board
         }
         else
         {
+            // All other areas are normal RAM
+            ram64.Address(addr, value);
         }
-
-        ram64.Address(addr, value);
     }
 
     const ushort kernal_base = 0xE000;
@@ -413,68 +450,4 @@ public partial class Board
     byte port1B;
     byte port2A;
     byte port2B;
-
-    public byte GetCIAPort(byte id, char port)
-    {
-        if (id == 1)
-        {
-            if (port == 'A')
-            {
-                return port1A;
-            }
-            else if (port == 'B')
-            {
-                //return port1B;
-                return keyboard.GetKeyboardState(port1A);
-            }
-        }
-        else if (id == 2)
-        {
-            if (port == 'A')
-            {
-                return port2A;
-            }
-            else if (port == 'B')
-            {
-                return port2B;
-            }
-        }
-        return 0xff;
-    }
-
-    public void SetCIAPort(byte id, char port, byte value)
-    {
-        if (id == 1)
-        {
-            if (port == 'A')
-            {
-                port1A = value;
-            }
-            else if (port == 'B')
-            {
-                port1B = value;
-            }
-        }
-        else if (id == 2)
-        {
-            if (port == 'A')
-            {
-                port2A = value;
-            }
-            else if (port == 'B')
-            {
-                port2B = value;
-            }
-        }
-    }
-
-    internal unsafe byte* BeginScreen()
-    {
-        throw new NotImplementedException();
-    }
-
-    internal void EndScreen()
-    {
-        throw new NotImplementedException();
-    }
 }

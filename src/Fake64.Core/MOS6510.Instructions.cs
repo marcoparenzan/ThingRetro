@@ -57,6 +57,8 @@ public partial class MOS6510
 
     private byte ADC(byte val)
     {
+        if ((Status & FLAG_D) != 0) return ADCDecimal(val);
+
         int result = A + val + ((Status & FLAG_C) != 0 ? 1 : 0);
         Status = (byte)((Status & ~(FLAG_C | FLAG_V)) |
                         (result > 0xFF ? FLAG_C : 0) |
@@ -68,7 +70,55 @@ public partial class MOS6510
 
     private byte SBC(byte val)
     {
+        if ((Status & FLAG_D) != 0) return SBCDecimal(val);
+
         return ADC((byte)(~val));
+    }
+
+    // Decimal mode del 6510 NMOS (stesso algoritmo di VICE): Z viene dal risultato binario,
+    // N e V dal valore intermedio prima della correzione della cifra alta
+    private byte ADCDecimal(byte val)
+    {
+        int carry = (Status & FLAG_C) != 0 ? 1 : 0;
+        int tmp = (A & 0x0F) + (val & 0x0F) + carry;
+        if (tmp > 0x09) tmp += 0x06;
+        tmp = tmp <= 0x0F
+            ? (tmp & 0x0F) + (A & 0xF0) + (val & 0xF0)
+            : (tmp & 0x0F) + (A & 0xF0) + (val & 0xF0) + 0x10;
+
+        byte flags = (byte)(Status & ~(FLAG_C | FLAG_Z | FLAG_V | FLAG_N));
+        if (((A + val + carry) & 0xFF) == 0) flags |= FLAG_Z;
+        if ((tmp & 0x80) != 0) flags |= FLAG_N;
+        if (((A ^ tmp) & 0x80) != 0 && ((A ^ val) & 0x80) == 0) flags |= FLAG_V;
+        if ((tmp & 0x1F0) > 0x90) tmp += 0x60;
+        if ((tmp & 0xFF0) > 0xF0) flags |= FLAG_C;
+
+        Status = flags;
+        A = (byte)tmp;
+        return A;
+    }
+
+    // In SBC decimale tutti i flag vengono dal risultato binario, solo A è corretto in BCD
+    private byte SBCDecimal(byte val)
+    {
+        int borrow = (Status & FLAG_C) != 0 ? 0 : 1;
+        int binary = A - val - borrow;
+
+        int tmp = (A & 0x0F) - (val & 0x0F) - borrow;
+        tmp = (tmp & 0x10) != 0
+            ? ((tmp - 6) & 0x0F) | ((A & 0xF0) - (val & 0xF0) - 0x10)
+            : (tmp & 0x0F) | ((A & 0xF0) - (val & 0xF0));
+        if ((tmp & 0x100) != 0) tmp -= 0x60;
+
+        byte flags = (byte)(Status & ~(FLAG_C | FLAG_Z | FLAG_V | FLAG_N));
+        if (binary >= 0) flags |= FLAG_C;
+        if ((binary & 0xFF) == 0) flags |= FLAG_Z;
+        if ((binary & 0x80) != 0) flags |= FLAG_N;
+        if (((A ^ binary) & 0x80) != 0 && ((A ^ val) & 0x80) != 0) flags |= FLAG_V;
+
+        Status = flags;
+        A = (byte)tmp;
+        return A;
     }
 
     private byte AND(byte val)
@@ -124,23 +174,25 @@ public partial class MOS6510
 
     private void JSR(ushort addr)
     {
-        // Push the return address (PC - 1) onto the stack
-        Push((byte)((PC + 2) >> 8)); // High byte
-        Push((byte)(PC + 2));        // Low byte
+        // PC punta al primo byte dell'operando: si salva l'indirizzo dell'ultimo byte di JSR
+        // (indirizzo di ritorno - 1), come fa il 6502 reale
+        ushort returnAddress = (ushort)(PC + 1);
+        Push((byte)(returnAddress >> 8)); // High byte
+        Push((byte)returnAddress);        // Low byte
         PC = addr;
     }
 
     private ushort RTS()
     {
-        // Pull the return address from the stack
+        // Pull the return address from the stack: RTS salta all'indirizzo letto + 1
         byte low = Pop();
         byte high = Pop();
-        return (ushort)((high << 8) | low);
+        return (ushort)(((high << 8) | low) + 1);
     }
 
     private void RTI()
     {
-        Status = (byte)(Pop() & ~FLAG_B);
+        Status = (byte)((Pop() & ~FLAG_B) | FLAG_U);
         byte low = Pop();
         byte high = Pop();
         PC = (ushort)((high << 8) | low);
@@ -181,10 +233,11 @@ public partial class MOS6510
 
     private void BRK()
     {
-        // Simulate BRK instruction behavior
+        // BRK occupa due byte (opcode + byte di padding): si salva l'indirizzo dopo il padding
+        PC++;
         Push((byte)(PC >> 8)); // Push high byte of PC
         Push((byte)PC);        // Push low byte of PC
-        Push((byte)(Status | FLAG_B)); // Push status register with Break flag set
+        Push((byte)(Status | FLAG_B | FLAG_U)); // Push status register with Break flag set
         Status |= FLAG_I;      // Set Interrupt Disable flag
         PC = ReadWord(0xFFFE); // Jump to interrupt vector
     }

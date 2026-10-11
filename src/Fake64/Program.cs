@@ -1,8 +1,3 @@
-using Fake64;
-using Microsoft.VisualBasic.Devices;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-
 namespace Fake64
 {
     static class Program
@@ -10,14 +5,14 @@ namespace Fake64
         [STAThread]
         static void Main()
         {
-            var board = new Board();
-            //var board = new Board(kernalName: "kernal-901227-02.bin", chargenName: "chargen-901225-01.bin", basicName: "basic-901226-01.bin");
 
             Application.SetHighDpiMode(HighDpiMode.SystemAware);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            var form = new Fake64Form(board.VICII);
+            var form = new Fake64Form();
+
+            var board = new Board(form);
 
             //board.Address(0xD020, 14);
             //board.Address(0xD021, 6);

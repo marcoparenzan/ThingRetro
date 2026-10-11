@@ -1,13 +1,22 @@
-using Fake64;
+namespace Fake64;
 
-public class MOS6526
+public partial class MOS6526
 {
-    Board board;
-    private byte id;
+    // Delegate types for CIA functionality that varies by position
+    public delegate byte PortReadHandler(char port);
+    public delegate void PortWriteHandler(char port, byte value);
+
+    private Board board;
+
+    // External behavior handlers
+    private InterruptHandler interruptHandler;
+    private PortReadHandler portReadHandler;
+    private PortWriteHandler portWriteHandler;
+    private Action<MOS6526> initializationHandler; // For system-specific initialization
 
     // Registers
-    private byte dataPortA; // $DC00/DD00
-    private byte dataPortB; // $DC01/DD01
+    // $DC00/DD00
+    // $DC01/DD01
     private byte dataDirectionA; // $DC02/DD02
     private byte dataDirectionB; // $DC03/DD03
     private ushort timerA; // $DC04-$DC05/DD04-DD05
@@ -46,17 +55,24 @@ public class MOS6526
     private int todCycleDivider;
     private const int TOD_CYCLE_INTERVAL = 19656; // PAL cycles for 1/10 second (50Hz system)
 
-    public MOS6526(Board board, byte id)
+    public MOS6526(Board board,
+                   InterruptHandler interruptHandler = null,
+                   PortReadHandler portReadHandler = null, 
+                   PortWriteHandler portWriteHandler = null,
+                   Action<MOS6526> initializationHandler = null)
     {
         this.board = board;
-        this.id = id;
+        this.interruptHandler = interruptHandler;
+        this.portReadHandler = portReadHandler;
+        this.portWriteHandler = portWriteHandler;
+        this.initializationHandler = initializationHandler;
         Reset();
     }
 
     public void Reset()
     {
         // Clear all registers
-        dataPortA = dataPortB = 0;
+        //dataPortA = dataPortB = 0;
         dataDirectionA = dataDirectionB = 0;
         timerA = timerB = 0;
         timerALatch = timerBLatch = 0;
@@ -79,190 +95,8 @@ public class MOS6526
         pendingInterrupts = 0;
         todCycleDivider = 0;
 
-        // If this is CIA1, configure it for system timing
-        if (id == 1)
-        {
-            // Set Timer A for ~60Hz jiffy interrupt
-            // 985248 Hz (PAL clock) / 60 Hz ? 16421
-            timerALatch = 16421; // Use 16421 for PAL, 17045 for NTSC
-            timerA = timerALatch;
-
-            // Start Timer A in continuous mode and generate interrupts
-            controlRegA = 0x01; // Bit 0: Start timer
-            interruptControl = 0x81; // Bit 0: Enable Timer A interrupts, Bit 7: Set mask bit
-            timerARunning = true;
-        }
-    }
-
-    internal void ProcessSignals(int currentCycle)
-    {
-        // Process Timer A
-        if (timerARunning)
-        {
-            // Will timer A underflow in the next cycle?
-            if (timerA == 1)
-            {
-                pendingTimerAUnderflow = true;
-            }
-        }
-
-        // Process Timer B
-        bool timerBClockByUnderflow = (controlRegB & 0x40) != 0;
-        if (timerBRunning && (!timerBClockByUnderflow || pendingTimerAUnderflow))
-        {
-            // Will timer B underflow in the next cycle?
-            if ((timerBClockByUnderflow && pendingTimerAUnderflow && timerB == 1) ||
-                (!timerBClockByUnderflow && timerB == 1))
-            {
-                pendingTimerBUnderflow = true;
-            }
-        }
-
-        // Process TOD clock - only increment at 1/10 second intervals
-        todCycleDivider++;
-        if (todCycleDivider >= TOD_CYCLE_INTERVAL)
-        {
-            todCycleDivider = 0;
-
-            // Will TOD match alarm in the next cycle?
-            byte next10th = (byte)((tod10thsec + 1) % 10);
-            if (todRunning &&
-                next10th == todAlarm10thsec &&
-                todSec == todAlarmSec &&
-                todMin == todAlarmMin &&
-                todHr == todAlarmHr)
-            {
-                pendingTodAlarm = true;
-            }
-        }
-
-        // Process serial port - simplified, would need more for real serial I/O
-        // Handle keyboard/joystick inputs for CIA 1
-        if (id == 1)
-        {
-            // Keyboard matrix is handled via GetCIAPort in the Board class
-        }
-
-        // Prepare pending interrupts
-        if (pendingTimerAUnderflow && (interruptControl & 0x01) != 0)
-            pendingInterrupts |= 0x01;
-
-        if (pendingTimerBUnderflow && (interruptControl & 0x02) != 0)
-            pendingInterrupts |= 0x02;
-
-        if (pendingTodAlarm && (interruptControl & 0x04) != 0)
-            pendingInterrupts |= 0x04;
-    }
-
-    public void Clock(long ticks)
-    {
-        // Handle Timer A
-        if (timerARunning)
-        {
-            timerA--;
-
-            if (pendingTimerAUnderflow)
-            {
-                // Timer A underflow
-                if ((controlRegA & 0x08) == 0) // One-shot mode?
-                {
-                    timerARunning = false;
-                    controlRegA &= 0xFE; // Clear bit 0
-                }
-
-                // Reload from latch
-                timerA = timerALatch;
-
-                // Set interrupt flag
-                interruptStatus |= 0x01;
-
-                // Clear pending signal
-                pendingTimerAUnderflow = false;
-            }
-        }
-
-        // Handle Timer B
-        if (timerBRunning)
-        {
-            bool timerBClockByUnderflow = (controlRegB & 0x40) != 0;
-
-            // Only decrement if we're not counting underflows, or if we had an underflow
-            if (!timerBClockByUnderflow || pendingTimerAUnderflow)
-            {
-                timerB--;
-            }
-
-            if (pendingTimerBUnderflow)
-            {
-                // Timer B underflow handling
-                if ((controlRegB & 0x08) == 0) // One-shot mode?
-                {
-                    timerBRunning = false;
-                    controlRegB &= 0xFE; // Clear bit 0
-                }
-
-                // Reload from latch
-                timerB = timerBLatch;
-
-                // Set interrupt flag
-                interruptStatus |= 0x02;
-
-                // Clear pending signal
-                pendingTimerBUnderflow = false;
-            }
-        }
-
-        // Handle TOD clock update
-        if (todCycleDivider == 0 && todRunning)
-        {
-            // Update TOD clock registers
-            tod10thsec = (byte)((tod10thsec + 1) % 10);
-
-            if (tod10thsec == 0)
-            {
-                todSec = (byte)((todSec + 1) % 60);
-
-                if (todSec == 0)
-                {
-                    todMin = (byte)((todMin + 1) % 60);
-
-                    if (todMin == 0)
-                    {
-                        todHr = (byte)((todHr + 1) % 24);
-                    }
-                }
-            }
-
-            if (pendingTodAlarm)
-            {
-                // Set alarm interrupt
-                interruptStatus |= 0x04;
-                pendingTodAlarm = false;
-            }
-        }
-
-        // Process any pending interrupts
-        if (pendingInterrupts != 0)
-        {
-            // Update internal interrupt status
-            interruptStatus |= pendingInterrupts;
-            pendingInterrupts = 0;
-
-            CheckInterrupts();
-        }
-    }
-
-    private void CheckInterrupts()
-    {
-        // Check if any enabled interrupt has occurred
-        if ((interruptStatus & interruptControl & 0x1F) != 0)
-        {
-            // Set the IRQ flag
-            interruptStatus |= 0x80;
-
-            // Signal interrupt to CPU
-            board.CIATriggerInterrupt(id);
-        }
+        // Apply system-specific initialization if provided
+        initializationHandler?.Invoke(this);
     }
 
     public byte Address(ushort addr)
@@ -272,8 +106,11 @@ public class MOS6526
 
         switch (register)
         {
-            case 0x00: return (byte)(board.GetCIAPort(id, 'A') & ~dataDirectionA); // Port A
-            case 0x01: return (byte)(board.GetCIAPort(id, 'B') & ~dataDirectionB); // Port B
+            case 0x00:
+                // Use the delegate for port reading
+                return (byte)(portReadHandler('A') & ~dataDirectionA);
+            case 0x01:
+                return (byte)(portReadHandler('B') & ~dataDirectionB);
             case 0x02: return dataDirectionA; // DDRA
             case 0x03: return dataDirectionB; // DDRB
             case 0x04: return (byte)(timerA & 0xFF); // Timer A low
@@ -287,7 +124,7 @@ public class MOS6526
             case 0x0C: return serialShift; // Serial port
             case 0x0D: // Interrupt Control Register (ICR)
                 byte temp = interruptStatus;
-                interruptStatus &= 0x7F; // Clear bit 7
+                interruptStatus = 0; // La lettura azzera tutti i flag e rilascia la linea IRQ
                 return temp;
             case 0x0E: return controlRegA; // Control register A
             case 0x0F: return controlRegB; // Control register B
@@ -303,12 +140,10 @@ public class MOS6526
         switch (register)
         {
             case 0x00: // Port A
-                dataPortA = value;
-                board.SetCIAPort(id, 'A', value);
+                portWriteHandler('A', value);
                 break;
             case 0x01: // Port B
-                dataPortB = value;
-                board.SetCIAPort(id, 'B', value);
+                portWriteHandler('B', value);
                 break;
             case 0x02: // DDRA
                 dataDirectionA = value;
@@ -377,36 +212,22 @@ public class MOS6526
                     // Clear bits
                     interruptControl &= (byte)~value;
                 }
-                CheckInterrupts();
+                this.CheckInterrupts();
                 break;
             case 0x0E: // Control register A
-                controlRegA = value;
-                if ((value & 0x01) != 0) // Start bit set
+                controlRegA = (byte)(value & ~0x10); // Il bit 4 (force load) è uno strobe, non viene memorizzato
+                timerARunning = (value & 0x01) != 0; // Start bit
+                if ((value & 0x10) != 0) // Force load: carica il latch anche a timer fermo
                 {
-                    timerARunning = true;
-                    if ((value & 0x10) != 0) // Force load bit set
-                    {
-                        timerA = timerALatch;
-                    }
-                }
-                else
-                {
-                    timerARunning = false;
+                    timerA = timerALatch;
                 }
                 break;
             case 0x0F: // Control register B
-                controlRegB = value;
-                if ((value & 0x01) != 0) // Start bit set
+                controlRegB = (byte)(value & ~0x10); // Il bit 4 (force load) è uno strobe, non viene memorizzato
+                timerBRunning = (value & 0x01) != 0; // Start bit
+                if ((value & 0x10) != 0) // Force load: carica il latch anche a timer fermo
                 {
-                    timerBRunning = true;
-                    if ((value & 0x10) != 0) // Force load bit set
-                    {
-                        timerB = timerBLatch;
-                    }
-                }
-                else
-                {
-                    timerBRunning = false;
+                    timerB = timerBLatch;
                 }
                 break;
         }

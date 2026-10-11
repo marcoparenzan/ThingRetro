@@ -2,34 +2,50 @@
 
 public partial class MOS6510
 {
+    // Cicli ancora da attendere prima di iniziare la prossima istruzione
+    int cyclesRemaining;
+
+    // Impostato da AddX/AddY/IndirectIndexedY/Branch quando l'indirizzo effettivo cambia pagina
+    bool pageCrossed;
+
+    internal bool IsInstructionBoundary => cyclesRemaining == 0;
+    internal long InstructionCount { get; private set; }
+
     internal void ProcessSignals(int currentCycle)
     {
-        // Gestione degli interrupt
-        if (irqPending)
-        {
-            HandleIRQ();
-            irqPending = false; // Resetta il flag IRQ
-            currentCycle += 7; // Interrupt handling cycles
-        }
+        // Gli interrupt vengono riconosciuti solo al confine tra due istruzioni
+        if (cyclesRemaining > 0) return;
 
         if (nmiPending)
         {
             HandleNMI();
             nmiPending = false;
-            currentCycle += 7; // NMI handling cycles
+            cyclesRemaining = 7; // NMI handling cycles
+        }
+        else if (IrqLine && (Status & FLAG_I) == 0)
+        {
+            HandleIRQ();
+            cyclesRemaining = 7; // Interrupt handling cycles
         }
     }
 
     public byte Clock(long ticks)
     {
-        byte cyclesCount = 0; // Contatore totale dei cicli
+        // L'istruzione è già stata eseguita nel suo primo ciclo: qui si consumano i cicli restanti
+        if (cyclesRemaining > 0)
+        {
+            cyclesRemaining--;
+            return 0;
+        }
 
         ushort addr;
         byte val;
         bool branchTaken;
         ushort instruction_PC = PC;
         string instruction_text = ""; // Variabile per la rappresentazione testuale dell'istruzione
-
+        byte cyclesCount = 0; // Contatore totale dei cicli
+        pageCrossed = false;
+        InstructionCount++;
         byte opcode = ReadByte(PC++);
 
         switch (opcode)
@@ -167,6 +183,13 @@ public partial class MOS6510
             case 0xF6: addr = (ushort)((ReadByte(PC) + X) & 0xFF); val = ReadByte(addr); WriteByte(addr, INC(val)); instruction_text = $"INC ${ReadByte(PC):X2},X"; PC++; cyclesCount += 6; break;
             case 0xF7: addr = (ushort)((ReadByte(PC) + X) & 0xFF); ISC(addr); instruction_text = $"ISC ${ReadByte(PC):X2},X"; PC++; cyclesCount += 6; break;
 
+            // *** ZERO PAGE INDEXED (Y) ***
+            // Istruzioni che usano indirizzamento a pagina zero indicizzato con Y
+            case 0x96: addr = ZeroPageY(ReadByte(PC)); WriteByte(addr, X); instruction_text = $"STX ${ReadByte(PC):X2},Y"; PC++; cyclesCount += 4; break;
+            case 0x97: addr = ZeroPageY(ReadByte(PC)); WriteByte(addr, (byte)(A & X)); instruction_text = $"SAX ${ReadByte(PC):X2},Y"; PC++; cyclesCount += 4; break;
+            case 0xB6: addr = ZeroPageY(ReadByte(PC)); X = LDX(ReadByte(addr)); instruction_text = $"LDX ${ReadByte(PC):X2},Y"; PC++; cyclesCount += 4; break;
+            case 0xB7: addr = ZeroPageY(ReadByte(PC)); A = X = LAX(ReadByte(addr)); instruction_text = $"LAX ${ReadByte(PC):X2},Y"; PC++; cyclesCount += 4; break;
+
             // *** ABSOLUTE ***
             // Istruzioni che usano indirizzamento assoluto
             case 0x0C: addr = ReadWord(PC); instruction_text = $"NOP ${addr:X4}"; PC += 2; cyclesCount += 4; break;
@@ -182,7 +205,7 @@ public partial class MOS6510
             case 0x4D: addr = ReadWord(PC); A = EOR(ReadByte(addr)); instruction_text = $"EOR ${addr:X4}"; PC += 2; cyclesCount += 4; break;
             case 0x4E: addr = ReadWord(PC); val = ReadByte(addr); WriteByte(addr, LSR(val)); instruction_text = $"LSR ${addr:X4}"; PC += 2; cyclesCount += 6; break;
             case 0x4F: addr = ReadWord(PC); SRE(addr); instruction_text = $"SRE ${addr:X4}"; PC += 2; cyclesCount += 6; break;
-            case 0x6C: addr = ReadWord(PC); instruction_text = $"JMP (${addr:X4})"; PC = ReadWord(addr); cyclesCount += 5; break;
+            case 0x6C: addr = ReadWord(PC); instruction_text = $"JMP (${addr:X4})"; PC = ReadWordIndirect(addr); cyclesCount += 5; break;
             case 0x6D: addr = ReadWord(PC); A = ADC(ReadByte(addr)); instruction_text = $"ADC ${addr:X4}"; PC += 2; cyclesCount += 4; break;
             case 0x6E: addr = ReadWord(PC); val = ReadByte(addr); WriteByte(addr, ROR(val)); instruction_text = $"ROR ${addr:X4}"; PC += 2; cyclesCount += 6; break;
             case 0x6F: addr = ReadWord(PC); RRA(addr); instruction_text = $"RRA ${addr:X4}"; PC += 2; cyclesCount += 6; break;
@@ -206,56 +229,56 @@ public partial class MOS6510
             // *** ABSOLUTE INDEXED (X) ***
             // Istruzioni che usano indirizzamento assoluto indicizzato con X
             case 0x1C: addr = ReadWord(PC); instruction_text = $"NOP ${addr:X4},X"; PC += 2; cyclesCount += 4; break;
-            case 0x1D: addr = ReadWord(PC); ushort opAddr1D = addr; addr = (ushort)(addr + X); A = ORA(ReadByte(addr)); instruction_text = $"ORA ${opAddr1D:X4},X"; PC += 2; cyclesCount += 4; break;
-            case 0x1E: addr = ReadWord(PC); ushort opAddr1E = addr; addr = (ushort)(addr + X); val = ReadByte(addr); WriteByte(addr, ASL(val)); instruction_text = $"ASL ${opAddr1E:X4},X"; PC += 2; cyclesCount += 7; break;
-            case 0x1F: addr = ReadWord(PC); ushort opAddr1F = addr; addr = (ushort)(addr + X); SLO(addr); instruction_text = $"SLO ${opAddr1F:X4},X"; PC += 2; cyclesCount += 7; break;
+            case 0x1D: addr = ReadWord(PC); ushort opAddr1D = addr; addr = AddX(addr); A = ORA(ReadByte(addr)); instruction_text = $"ORA ${opAddr1D:X4},X"; PC += 2; cyclesCount += 4; break;
+            case 0x1E: addr = ReadWord(PC); ushort opAddr1E = addr; addr = AddX(addr); val = ReadByte(addr); WriteByte(addr, ASL(val)); instruction_text = $"ASL ${opAddr1E:X4},X"; PC += 2; cyclesCount += 7; break;
+            case 0x1F: addr = ReadWord(PC); ushort opAddr1F = addr; addr = AddX(addr); SLO(addr); instruction_text = $"SLO ${opAddr1F:X4},X"; PC += 2; cyclesCount += 7; break;
             case 0x3C: addr = ReadWord(PC); instruction_text = $"NOP ${addr:X4},X"; PC += 2; cyclesCount += 4; break;
-            case 0x3D: addr = ReadWord(PC); ushort opAddr3D = addr; addr = (ushort)(addr + X); A = AND(ReadByte(addr)); instruction_text = $"AND ${opAddr3D:X4},X"; PC += 2; cyclesCount += 4; break;
-            case 0x3E: addr = ReadWord(PC); ushort opAddr3E = addr; addr = (ushort)(addr + X); val = ReadByte(addr); WriteByte(addr, ROL(val)); instruction_text = $"ROL ${opAddr3E:X4},X"; PC += 2; cyclesCount += 7; break;
-            case 0x3F: addr = ReadWord(PC); ushort opAddr3F = addr; addr = (ushort)(addr + X); RLA(addr); instruction_text = $"RLA ${opAddr3F:X4},X"; PC += 2; cyclesCount += 7; break;
+            case 0x3D: addr = ReadWord(PC); ushort opAddr3D = addr; addr = AddX(addr); A = AND(ReadByte(addr)); instruction_text = $"AND ${opAddr3D:X4},X"; PC += 2; cyclesCount += 4; break;
+            case 0x3E: addr = ReadWord(PC); ushort opAddr3E = addr; addr = AddX(addr); val = ReadByte(addr); WriteByte(addr, ROL(val)); instruction_text = $"ROL ${opAddr3E:X4},X"; PC += 2; cyclesCount += 7; break;
+            case 0x3F: addr = ReadWord(PC); ushort opAddr3F = addr; addr = AddX(addr); RLA(addr); instruction_text = $"RLA ${opAddr3F:X4},X"; PC += 2; cyclesCount += 7; break;
             case 0x5C: addr = ReadWord(PC); instruction_text = $"NOP ${addr:X4},X"; PC += 2; cyclesCount += 4; break;
-            case 0x5D: addr = ReadWord(PC); ushort opAddr5D = addr; addr = (ushort)(addr + X); A = EOR(ReadByte(addr)); instruction_text = $"EOR ${opAddr5D:X4},X"; PC += 2; cyclesCount += 4; break;
-            case 0x5E: addr = ReadWord(PC); ushort opAddr5E = addr; addr = (ushort)(addr + X); val = ReadByte(addr); WriteByte(addr, LSR(val)); instruction_text = $"LSR ${opAddr5E:X4},X"; PC += 2; cyclesCount += 7; break;
-            case 0x5F: addr = ReadWord(PC); ushort opAddr5F = addr; addr = (ushort)(addr + X); SRE(addr); instruction_text = $"SRE ${opAddr5F:X4},X"; PC += 2; cyclesCount += 7; break;
+            case 0x5D: addr = ReadWord(PC); ushort opAddr5D = addr; addr = AddX(addr); A = EOR(ReadByte(addr)); instruction_text = $"EOR ${opAddr5D:X4},X"; PC += 2; cyclesCount += 4; break;
+            case 0x5E: addr = ReadWord(PC); ushort opAddr5E = addr; addr = AddX(addr); val = ReadByte(addr); WriteByte(addr, LSR(val)); instruction_text = $"LSR ${opAddr5E:X4},X"; PC += 2; cyclesCount += 7; break;
+            case 0x5F: addr = ReadWord(PC); ushort opAddr5F = addr; addr = AddX(addr); SRE(addr); instruction_text = $"SRE ${opAddr5F:X4},X"; PC += 2; cyclesCount += 7; break;
             case 0x7C: addr = ReadWord(PC); instruction_text = $"NOP ${addr:X4},X"; PC += 2; cyclesCount += 4; break;
-            case 0x7D: addr = ReadWord(PC); ushort opAddr7D = addr; addr = (ushort)(addr + X); A = ADC(ReadByte(addr)); instruction_text = $"ADC ${opAddr7D:X4},X"; PC += 2; cyclesCount += 4; break;
-            case 0x7E: addr = ReadWord(PC); ushort opAddr7E = addr; addr = (ushort)(addr + X); val = ReadByte(addr); WriteByte(addr, ROR(val)); instruction_text = $"ROR ${opAddr7E:X4},X"; PC += 2; cyclesCount += 7; break;
-            case 0x7F: addr = ReadWord(PC); ushort opAddr7F = addr; addr = (ushort)(addr + X); RRA(addr); instruction_text = $"RRA ${opAddr7F:X4},X"; PC += 2; cyclesCount += 7; break;
-            case 0x9C: addr = ReadWord(PC); ushort opAddr9C = addr; addr = (ushort)(addr + X); WriteByte(addr, (byte)(Y & ((addr >> 8) + 1))); instruction_text = $"SHY ${opAddr9C:X4},X"; PC += 2; cyclesCount += 5; break;
-            case 0x9D: addr = ReadWord(PC); ushort opAddr9D = addr; addr = (ushort)(addr + X); WriteByte(addr, A); instruction_text = $"STA ${opAddr9D:X4},X"; PC += 2; cyclesCount += 5; break;
-            case 0xBC: addr = ReadWord(PC); ushort opAddrBC = addr; addr = (ushort)(addr + X); Y = LDY(ReadByte(addr)); instruction_text = $"LDY ${opAddrBC:X4},X"; PC += 2; cyclesCount += 4; break;
-            case 0xBD: addr = ReadWord(PC); ushort opAddrBD = addr; addr = (ushort)(addr + X); A = LDA(ReadByte(addr)); instruction_text = $"LDA ${opAddrBD:X4},X"; PC += 2; cyclesCount += 4; break;
+            case 0x7D: addr = ReadWord(PC); ushort opAddr7D = addr; addr = AddX(addr); A = ADC(ReadByte(addr)); instruction_text = $"ADC ${opAddr7D:X4},X"; PC += 2; cyclesCount += 4; break;
+            case 0x7E: addr = ReadWord(PC); ushort opAddr7E = addr; addr = AddX(addr); val = ReadByte(addr); WriteByte(addr, ROR(val)); instruction_text = $"ROR ${opAddr7E:X4},X"; PC += 2; cyclesCount += 7; break;
+            case 0x7F: addr = ReadWord(PC); ushort opAddr7F = addr; addr = AddX(addr); RRA(addr); instruction_text = $"RRA ${opAddr7F:X4},X"; PC += 2; cyclesCount += 7; break;
+            case 0x9C: addr = ReadWord(PC); ushort opAddr9C = addr; addr = AddX(addr); WriteByte(addr, (byte)(Y & ((addr >> 8) + 1))); instruction_text = $"SHY ${opAddr9C:X4},X"; PC += 2; cyclesCount += 5; break;
+            case 0x9D: addr = ReadWord(PC); ushort opAddr9D = addr; addr = AddX(addr); WriteByte(addr, A); instruction_text = $"STA ${opAddr9D:X4},X"; PC += 2; cyclesCount += 5; break;
+            case 0xBC: addr = ReadWord(PC); ushort opAddrBC = addr; addr = AddX(addr); Y = LDY(ReadByte(addr)); instruction_text = $"LDY ${opAddrBC:X4},X"; PC += 2; cyclesCount += 4; break;
+            case 0xBD: addr = ReadWord(PC); ushort opAddrBD = addr; addr = AddX(addr); A = LDA(ReadByte(addr)); instruction_text = $"LDA ${opAddrBD:X4},X"; PC += 2; cyclesCount += 4; break;
             case 0xDC: addr = ReadWord(PC); instruction_text = $"NOP ${addr:X4},X"; PC += 2; cyclesCount += 4; break;
-            case 0xDD: addr = ReadWord(PC); ushort opAddrDD = addr; addr = (ushort)(addr + X); Compare(A, ReadByte(addr)); instruction_text = $"CMP ${opAddrDD:X4},X"; PC += 2; cyclesCount += 4; break;
-            case 0xDE: addr = ReadWord(PC); ushort opAddrDE = addr; addr = (ushort)(addr + X); val = ReadByte(addr); WriteByte(addr, DEC(val)); instruction_text = $"DEC ${opAddrDE:X4},X"; PC += 2; cyclesCount += 7; break;
-            case 0xDF: addr = ReadWord(PC); ushort opAddrDF = addr; addr = (ushort)(addr + X); DCP(addr); instruction_text = $"DCP ${opAddrDF:X4},X"; PC += 2; cyclesCount += 7; break;
+            case 0xDD: addr = ReadWord(PC); ushort opAddrDD = addr; addr = AddX(addr); Compare(A, ReadByte(addr)); instruction_text = $"CMP ${opAddrDD:X4},X"; PC += 2; cyclesCount += 4; break;
+            case 0xDE: addr = ReadWord(PC); ushort opAddrDE = addr; addr = AddX(addr); val = ReadByte(addr); WriteByte(addr, DEC(val)); instruction_text = $"DEC ${opAddrDE:X4},X"; PC += 2; cyclesCount += 7; break;
+            case 0xDF: addr = ReadWord(PC); ushort opAddrDF = addr; addr = AddX(addr); DCP(addr); instruction_text = $"DCP ${opAddrDF:X4},X"; PC += 2; cyclesCount += 7; break;
             case 0xFC: addr = ReadWord(PC); instruction_text = $"NOP ${addr:X4},X"; PC += 2; cyclesCount += 4; break;
-            case 0xFD: addr = ReadWord(PC); ushort opAddrFD = addr; addr = (ushort)(addr + X); A = SBC(ReadByte(addr)); instruction_text = $"SBC ${opAddrFD:X4},X"; PC += 2; cyclesCount += 4; break;
-            case 0xFE: addr = ReadWord(PC); ushort opAddrFE = addr; addr = (ushort)(addr + X); val = ReadByte(addr); WriteByte(addr, INC(val)); instruction_text = $"INC ${opAddrFE:X4},X"; PC += 2; cyclesCount += 7; break;
-            case 0xFF: addr = ReadWord(PC); ushort opAddrFF = addr; addr = (ushort)(addr + X); ISC(addr); instruction_text = $"ISC ${opAddrFF:X4},X"; PC += 2; cyclesCount += 7; break;
+            case 0xFD: addr = ReadWord(PC); ushort opAddrFD = addr; addr = AddX(addr); A = SBC(ReadByte(addr)); instruction_text = $"SBC ${opAddrFD:X4},X"; PC += 2; cyclesCount += 4; break;
+            case 0xFE: addr = ReadWord(PC); ushort opAddrFE = addr; addr = AddX(addr); val = ReadByte(addr); WriteByte(addr, INC(val)); instruction_text = $"INC ${opAddrFE:X4},X"; PC += 2; cyclesCount += 7; break;
+            case 0xFF: addr = ReadWord(PC); ushort opAddrFF = addr; addr = AddX(addr); ISC(addr); instruction_text = $"ISC ${opAddrFF:X4},X"; PC += 2; cyclesCount += 7; break;
 
             // *** ABSOLUTE INDEXED (Y) ***
             // Istruzioni che usano indirizzamento assoluto indicizzato con Y
-            case 0x19: addr = ReadWord(PC); ushort opAddr19 = addr; addr = (ushort)(addr + Y); A = ORA(ReadByte(addr)); instruction_text = $"ORA ${opAddr19:X4},Y"; PC += 2; cyclesCount += 4; break;
-            case 0x1B: addr = ReadWord(PC); ushort opAddr1B = addr; addr = (ushort)(addr + Y); SLO(addr); instruction_text = $"SLO ${opAddr1B:X4},Y"; PC += 2; cyclesCount += 7; break;
-            case 0x39: addr = ReadWord(PC); ushort opAddr39 = addr; addr = (ushort)(addr + Y); A = AND(ReadByte(addr)); instruction_text = $"AND ${opAddr39:X4},Y"; PC += 2; cyclesCount += 4; break;
-            case 0x3B: addr = ReadWord(PC); ushort opAddr3B = addr; addr = (ushort)(addr + Y); RLA(addr); instruction_text = $"RLA ${opAddr3B:X4},Y"; PC += 2; cyclesCount += 7; break;
-            case 0x59: addr = ReadWord(PC); ushort opAddr59 = addr; addr = (ushort)(addr + Y); A = EOR(ReadByte(addr)); instruction_text = $"EOR ${opAddr59:X4},Y"; PC += 2; cyclesCount += 4; break;
-            case 0x5B: addr = ReadWord(PC); ushort opAddr5B = addr; addr = (ushort)(addr + Y); SRE(addr); instruction_text = $"SRE ${opAddr5B:X4},Y"; PC += 2; cyclesCount += 7; break;
-            case 0x79: addr = ReadWord(PC); ushort opAddr79 = addr; addr = (ushort)(addr + Y); A = ADC(ReadByte(addr)); instruction_text = $"ADC ${opAddr79:X4},Y"; PC += 2; cyclesCount += 4; break;
-            case 0x7B: addr = ReadWord(PC); ushort opAddr7B = addr; addr = (ushort)(addr + Y); RRA(addr); instruction_text = $"RRA ${opAddr7B:X4},Y"; PC += 2; cyclesCount += 7; break;
-            case 0x99: addr = ReadWord(PC); ushort opAddr99 = addr; addr = (ushort)(addr + Y); WriteByte(addr, A); instruction_text = $"STA ${opAddr99:X4},Y"; PC += 2; cyclesCount += 5; break;
-            case 0x9B: addr = ReadWord(PC); ushort opAddr9B = addr; addr = (ushort)(addr + Y); SP = (byte)(A & X); WriteByte(addr, (byte)(SP & ((addr >> 8) + 1))); instruction_text = $"TAS ${opAddr9B:X4},Y"; PC += 2; cyclesCount += 5; break;
-            case 0x9E: addr = ReadWord(PC); ushort opAddr9E = addr; addr = (ushort)(addr + Y); WriteByte(addr, (byte)(X & ((addr >> 8) + 1))); instruction_text = $"SHX ${opAddr9E:X4},Y"; PC += 2; cyclesCount += 5; break;
-            case 0x9F: addr = ReadWord(PC); ushort opAddr9F = addr; addr = (ushort)(addr + Y); WriteByte(addr, (byte)(A & X & ((addr >> 8) + 1))); instruction_text = $"AHX ${opAddr9F:X4},Y"; PC += 2; cyclesCount += 5; break;
-            case 0xB9: addr = ReadWord(PC); ushort opAddrB9 = addr; addr = (ushort)(addr + Y); A = LDA(ReadByte(addr)); instruction_text = $"LDA ${opAddrB9:X4},Y"; PC += 2; cyclesCount += 4; break;
-            case 0xBB: addr = ReadWord(PC); ushort opAddrBB = addr; addr = (ushort)(addr + Y); A = X = SP = (byte)(ReadByte(addr) & SP); SetZN(A); instruction_text = $"LAS ${opAddrBB:X4},Y"; PC += 2; cyclesCount += 4; break;
-            case 0xBE: addr = ReadWord(PC); ushort opAddrBE = addr; addr = (ushort)(addr + Y); X = LDX(ReadByte(addr)); instruction_text = $"LDX ${opAddrBE:X4},Y"; PC += 2; cyclesCount += 4; break;
-            case 0xBF: addr = ReadWord(PC); ushort opAddrBF = addr; addr = (ushort)(addr + Y); A = X = LAX(ReadByte(addr)); instruction_text = $"LAX ${opAddrBF:X4},Y"; PC += 2; cyclesCount += 4; break;
-            case 0xD9: addr = ReadWord(PC); ushort opAddrD9 = addr; addr = (ushort)(addr + Y); Compare(A, ReadByte(addr)); instruction_text = $"CMP ${opAddrD9:X4},Y"; PC += 2; cyclesCount += 4; break;
-            case 0xDB: addr = ReadWord(PC); ushort opAddrDB = addr; addr = (ushort)(addr + Y); DCP(addr); instruction_text = $"DCP ${opAddrDB:X4},Y"; PC += 2; cyclesCount += 7; break;
-            case 0xF9: addr = ReadWord(PC); ushort opAddrF9 = addr; addr = (ushort)(addr + Y); A = SBC(ReadByte(addr)); instruction_text = $"SBC ${opAddrF9:X4},Y"; PC += 2; cyclesCount += 4; break;
-            case 0xFB: addr = ReadWord(PC); ushort opAddrFB = addr; addr = (ushort)(addr + Y); ISC(addr); instruction_text = $"ISC ${opAddrFB:X4},Y"; PC += 2; cyclesCount += 7; break;
+            case 0x19: addr = ReadWord(PC); ushort opAddr19 = addr; addr = AddY(addr); A = ORA(ReadByte(addr)); instruction_text = $"ORA ${opAddr19:X4},Y"; PC += 2; cyclesCount += 4; break;
+            case 0x1B: addr = ReadWord(PC); ushort opAddr1B = addr; addr = AddY(addr); SLO(addr); instruction_text = $"SLO ${opAddr1B:X4},Y"; PC += 2; cyclesCount += 7; break;
+            case 0x39: addr = ReadWord(PC); ushort opAddr39 = addr; addr = AddY(addr); A = AND(ReadByte(addr)); instruction_text = $"AND ${opAddr39:X4},Y"; PC += 2; cyclesCount += 4; break;
+            case 0x3B: addr = ReadWord(PC); ushort opAddr3B = addr; addr = AddY(addr); RLA(addr); instruction_text = $"RLA ${opAddr3B:X4},Y"; PC += 2; cyclesCount += 7; break;
+            case 0x59: addr = ReadWord(PC); ushort opAddr59 = addr; addr = AddY(addr); A = EOR(ReadByte(addr)); instruction_text = $"EOR ${opAddr59:X4},Y"; PC += 2; cyclesCount += 4; break;
+            case 0x5B: addr = ReadWord(PC); ushort opAddr5B = addr; addr = AddY(addr); SRE(addr); instruction_text = $"SRE ${opAddr5B:X4},Y"; PC += 2; cyclesCount += 7; break;
+            case 0x79: addr = ReadWord(PC); ushort opAddr79 = addr; addr = AddY(addr); A = ADC(ReadByte(addr)); instruction_text = $"ADC ${opAddr79:X4},Y"; PC += 2; cyclesCount += 4; break;
+            case 0x7B: addr = ReadWord(PC); ushort opAddr7B = addr; addr = AddY(addr); RRA(addr); instruction_text = $"RRA ${opAddr7B:X4},Y"; PC += 2; cyclesCount += 7; break;
+            case 0x99: addr = ReadWord(PC); ushort opAddr99 = addr; addr = AddY(addr); WriteByte(addr, A); instruction_text = $"STA ${opAddr99:X4},Y"; PC += 2; cyclesCount += 5; break;
+            case 0x9B: addr = ReadWord(PC); ushort opAddr9B = addr; addr = AddY(addr); SP = (byte)(A & X); WriteByte(addr, (byte)(SP & ((addr >> 8) + 1))); instruction_text = $"TAS ${opAddr9B:X4},Y"; PC += 2; cyclesCount += 5; break;
+            case 0x9E: addr = ReadWord(PC); ushort opAddr9E = addr; addr = AddY(addr); WriteByte(addr, (byte)(X & ((addr >> 8) + 1))); instruction_text = $"SHX ${opAddr9E:X4},Y"; PC += 2; cyclesCount += 5; break;
+            case 0x9F: addr = ReadWord(PC); ushort opAddr9F = addr; addr = AddY(addr); WriteByte(addr, (byte)(A & X & ((addr >> 8) + 1))); instruction_text = $"AHX ${opAddr9F:X4},Y"; PC += 2; cyclesCount += 5; break;
+            case 0xB9: addr = ReadWord(PC); ushort opAddrB9 = addr; addr = AddY(addr); A = LDA(ReadByte(addr)); instruction_text = $"LDA ${opAddrB9:X4},Y"; PC += 2; cyclesCount += 4; break;
+            case 0xBB: addr = ReadWord(PC); ushort opAddrBB = addr; addr = AddY(addr); A = X = SP = (byte)(ReadByte(addr) & SP); SetZN(A); instruction_text = $"LAS ${opAddrBB:X4},Y"; PC += 2; cyclesCount += 4; break;
+            case 0xBE: addr = ReadWord(PC); ushort opAddrBE = addr; addr = AddY(addr); X = LDX(ReadByte(addr)); instruction_text = $"LDX ${opAddrBE:X4},Y"; PC += 2; cyclesCount += 4; break;
+            case 0xBF: addr = ReadWord(PC); ushort opAddrBF = addr; addr = AddY(addr); A = X = LAX(ReadByte(addr)); instruction_text = $"LAX ${opAddrBF:X4},Y"; PC += 2; cyclesCount += 4; break;
+            case 0xD9: addr = ReadWord(PC); ushort opAddrD9 = addr; addr = AddY(addr); Compare(A, ReadByte(addr)); instruction_text = $"CMP ${opAddrD9:X4},Y"; PC += 2; cyclesCount += 4; break;
+            case 0xDB: addr = ReadWord(PC); ushort opAddrDB = addr; addr = AddY(addr); DCP(addr); instruction_text = $"DCP ${opAddrDB:X4},Y"; PC += 2; cyclesCount += 7; break;
+            case 0xF9: addr = ReadWord(PC); ushort opAddrF9 = addr; addr = AddY(addr); A = SBC(ReadByte(addr)); instruction_text = $"SBC ${opAddrF9:X4},Y"; PC += 2; cyclesCount += 4; break;
+            case 0xFB: addr = ReadWord(PC); ushort opAddrFB = addr; addr = AddY(addr); ISC(addr); instruction_text = $"ISC ${opAddrFB:X4},Y"; PC += 2; cyclesCount += 7; break;
                 
                 // *** INDIRECT INDEXED (X) ***
             // Istruzioni che usano indirizzamento indiretto indicizzato con X
@@ -330,8 +353,12 @@ public partial class MOS6510
                 break;
         }
 
+        // +1 ciclo per le letture indicizzate che attraversano una pagina e per i branch presi verso un'altra pagina
+        if (pageCrossed && PageCrossPenalty[opcode]) cyclesCount++;
 
         LogInstructionText(instruction_PC, opcode, instruction_text, cyclesCount);
+
+        cyclesRemaining = cyclesCount - 1;
 
         return cyclesCount;
     }

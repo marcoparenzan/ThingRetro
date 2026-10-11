@@ -1,18 +1,14 @@
-using Fake64;
-using System.Diagnostics;
-using System.Threading.Channels;
+namespace Fake64;
 
 public class MOS6569
 {
     private Board board;
-    Channel<int> channel = Channel.CreateUnbounded<int>();
+    private Action render;
 
     private int rasterLine;
     private int currentCycle;
-    private bool badLine;
-    private bool rasterIrqPending;
-    private bool spriteSpriteCollisionPending;
-    private bool spriteBackgroundCollisionPending;
+    private int rasterCompare;        // Riga del raster interrupt (scritta tramite $D012 e bit 7 di $D011)
+    private bool badLinesEnabled;     // DEN ($D011 bit 4) attivo durante la riga $30 del frame corrente
     private bool frameComplete;
     private bool lineComplete;
 
@@ -79,10 +75,10 @@ public class MOS6569
     private ushort charGenBase;
     private ushort bitmapBase;
 
-    public MOS6569(Board board)
+    public MOS6569(Board board, Action render)
     {
         this.board = board;
-        this.channel = channel; 
+        this.render = render;
         Reset();
     }
 
@@ -100,10 +96,8 @@ public class MOS6569
 
         rasterLine = 0;
         currentCycle = 0;
-        badLine = false;
-        rasterIrqPending = false;
-        spriteSpriteCollisionPending = false;
-        spriteBackgroundCollisionPending = false;
+        rasterCompare = 0;
+        badLinesEnabled = false;
         frameComplete = false;
         lineComplete = false;
         
@@ -116,45 +110,26 @@ public class MOS6569
     internal void ProcessSignals(int currentCycle)
     {
         this.currentCycle = currentCycle;
-        
+
         // Check if we're about to reach the end of the line
         lineComplete = (currentCycle == CYCLES_PER_LINE - 1);
-        
-        // At the end of a line, check if we'll reach a raster interrupt in the next line
+
+        // Will we transition to a new frame in the next cycle?
         if (lineComplete)
-        {
-            int nextRasterLine = (rasterLine + 1) % TOTAL_RASTER_LINES;
-            int targetRaster = ((registers[REG_CONTROL_1] & 0x80) << 1) | registers[REG_RASTER];
-            
-            // Will we hit the raster interrupt on the next line?
-            rasterIrqPending = (nextRasterLine == targetRaster);
-            
-            // Calculate if the next line will be a bad line
-            // Bad lines occur between raster lines 48-247 when the 3 LSBs of the raster line 
-            // match the scroll value in Control Register 1
-            bool nextLineBadLine = (nextRasterLine >= 0x30 && nextRasterLine <= 0xF7) &&
-                                  ((nextRasterLine & 0x07) == (registers[REG_CONTROL_1] & 0x07));
-            
-            // Will we transition to a new frame in the next cycle?
-            frameComplete = (nextRasterLine == 0);
-        }
-        
-        // Check for sprite collisions - simplified for this example
-        // In a real implementation, you would check all sprite positions and background data
-        if (registers[REG_SPRITE_ENABLE] != 0)
-        {
-            // Simulate sprite-sprite collision detection
-            if ((registers[REG_SPRITE_ENABLE] & (registers[REG_SPRITE_ENABLE] - 1)) != 0)
-            {
-                // If more than one sprite is enabled, collision is possible
-                spriteSpriteCollisionPending = true;
-            }
-            
-            // Simulate sprite-background collision detection
-            // This would need actual sprite position and background data checking
-            spriteBackgroundCollisionPending = (registers[REG_SPRITE_ENABLE] != 0);
-        }
+            frameComplete = ((rasterLine + 1) % TOTAL_RASTER_LINES) == 0;
     }
+
+    // Bad line: righe $30-$F7 in cui i 3 bit bassi del raster coincidono con YSCROLL ($D011 bit 0-2),
+    // se il display era abilitato (DEN) durante la riga $30. Valutato a ogni ciclo, così le scritture
+    // a $D011 durante la riga hanno effetto immediato
+    internal bool IsBadLine =>
+        badLinesEnabled &&
+        rasterLine >= 0x30 && rasterLine <= 0xF7 &&
+        (rasterLine & 0x07) == (registers[REG_CONTROL_1] & 0x07);
+
+    // Nelle bad line il VIC-II legge 40 codici carattere nei cicli 15-54 (1-based) e la CPU resta ferma.
+    // Semplificazione: non si modellano i 3 cicli di preavviso di BA in cui la CPU può ancora scrivere
+    internal bool CpuStalled => IsBadLine && currentCycle >= 14 && currentCycle <= 53;
 
     // Handle end-of-line processing
     internal void EndLine(int currentLine)
@@ -163,80 +138,64 @@ public class MOS6569
         {
             // Update the raster line counter
             rasterLine = (rasterLine + 1) % TOTAL_RASTER_LINES;
-            
+
             // Update the raster register (with 8-bit overflow)
             registers[REG_RASTER] = (byte)(rasterLine & 0xFF);
-            
+
             // Set/clear the 9th bit of the raster line in control register 1
             if ((rasterLine & 0x100) != 0)
                 registers[REG_CONTROL_1] |= 0x80;
             else
                 registers[REG_CONTROL_1] &= 0x7F;
-            
-            // Check for raster interrupt that we identified in ProcessSignals
-            if (rasterIrqPending)
-            {
-                // Set raster interrupt flag
-                registers[REG_INTERRUPT_STATUS] |= 0x01;
-                
-                // If raster interrupts are enabled, signal IRQ
-                if ((registers[REG_INTERRUPT_ENABLE] & 0x01) != 0)
-                {
-                    board.CpuTriggerIRQ();
-                }
-                
-                rasterIrqPending = false;
-            }
-            
-            // Calculate bad line condition for current line
-            badLine = (rasterLine >= 0x30 && rasterLine <= 0xF7) &&
-                     ((rasterLine & 0x07) == (registers[REG_CONTROL_1] & 0x07));
-            
-            // If this is a bad line, CPU will be stalled for character data fetches
-            // This affects overall system timing and would need to be communicated to the CPU
-            
+
+            // Le bad line del frame dipendono da DEN durante la riga $30
+            if (rasterLine == 0)
+                badLinesEnabled = false;
+            if (rasterLine == 0x30 && (registers[REG_CONTROL_1] & 0x10) != 0)
+                badLinesEnabled = true;
+
+            CheckRasterCompare();
+
             // Handle frame boundary
             if (frameComplete)
             {
                 // Signal frame completion (for synchronization)
-                channel.Writer.TryWrite(channel.Reader.Count);
+                render();
                 frameComplete = false;
             }
-            
+
             lineComplete = false;
-        }
-        
-        // Handle collisions detected in ProcessSignals
-        if (spriteSpriteCollisionPending)
-        {
-            registers[REG_SPRITE_SPRITE_COLL] |= registers[REG_SPRITE_ENABLE];
-            registers[REG_INTERRUPT_STATUS] |= 0x04; // Set sprite-sprite collision interrupt
-            CheckInterrupts();
-            spriteSpriteCollisionPending = false;
-        }
-        
-        if (spriteBackgroundCollisionPending)
-        {
-            registers[REG_SPRITE_DATA_COLL] |= registers[REG_SPRITE_ENABLE];
-            registers[REG_INTERRUPT_STATUS] |= 0x02; // Set sprite-background collision interrupt
-            CheckInterrupts();
-            spriteBackgroundCollisionPending = false;
         }
     }
 
-    // Check and trigger interrupts if enabled
+    // Il raster interrupt scatta quando la riga corrente raggiunge il valore di confronto
+    // (anche quando il confronto viene scritto con la riga già in corso)
+    private void CheckRasterCompare()
+    {
+        if (rasterLine == rasterCompare)
+        {
+            registers[REG_INTERRUPT_STATUS] |= 0x01;
+            CheckInterrupts();
+        }
+    }
+
+    // Ricalcola il bit 7 di $D019, che rappresenta lo stato della linea /IRQ del VIC-II
     private void CheckInterrupts()
     {
         if ((registers[REG_INTERRUPT_STATUS] & registers[REG_INTERRUPT_ENABLE] & 0x0F) != 0)
-        {
             registers[REG_INTERRUPT_STATUS] |= 0x80; // Set IRQ flag
-            board.CpuTriggerIRQ();
-        }
+        else
+            registers[REG_INTERRUPT_STATUS] &= 0x7F;
     }
+
+    public bool IrqAsserted => (registers[REG_INTERRUPT_STATUS] & 0x80) != 0;
 
     // Address space is 0x00-0x3F (64 bytes), but we only use 0x00-0x2E
     public byte Address(ushort addr)
     {
+        addr &= 0x3F; // I registri si ripetono ogni 64 byte in $D000-$D3FF
+        if (addr == REG_INTERRUPT_STATUS)
+            return (byte)(registers[addr] | 0x70); // Bit 4-6 non usati, letti a 1
         if (addr <= 0x2E)
             return registers[addr];
         else
@@ -245,18 +204,33 @@ public class MOS6569
 
     public void Address(ushort addr, byte value)
     {
+        addr &= 0x3F; // I registri si ripetono ogni 64 byte in $D000-$D3FF
+        if (addr > 0x2E) return; // Registri non usati
+
         // Special handling for certain registers
         switch (addr)
         {
             case REG_RASTER:
-                registers[addr] = value;
+                // La scrittura imposta il confronto, la lettura restituisce la riga corrente
+                rasterCompare = (rasterCompare & 0x100) | value;
+                CheckRasterCompare();
                 break;
             case REG_CONTROL_1:
-                registers[addr] = value;
+                // Il bit 7 in scrittura è il bit 8 del confronto, in lettura il bit 8 del raster
+                rasterCompare = (rasterCompare & 0xFF) | ((value & 0x80) << 1);
+                registers[addr] = (byte)((value & 0x7F) | (registers[addr] & 0x80));
+                if (rasterLine == 0x30 && (value & 0x10) != 0)
+                    badLinesEnabled = true;
+                CheckRasterCompare();
                 break;
             case REG_INTERRUPT_STATUS:
                 // Writing 1s clears the corresponding bits
-                registers[addr] &= (byte)~value;
+                registers[addr] &= (byte)~(value & 0x0F);
+                CheckInterrupts();
+                break;
+            case REG_INTERRUPT_ENABLE:
+                registers[addr] = (byte)(value & 0x0F);
+                CheckInterrupts();
                 break;
             default:
                 registers[addr] = value;
@@ -280,24 +254,10 @@ public class MOS6569
         
         // Most of the cycle-specific operations are now handled in ProcessSignals and EndLine
         
-        // Fetch data on cycle 1-5 of a bad line (simplification)
-        if (badLine && currentCycle >= 1 && currentCycle <= 5)
-        {
-            // Perform character data fetch - this would stall the CPU
-            // This is a simplification; real VIC-II has more complex BA signal timing
-        }
-        
-        // Sprite data fetch cycles
-        if (currentCycle >= 15 && currentCycle <= 54)
-        {
-            // Fetch sprite data if relevant sprites are enabled
-            // Again, this is a simplification
-        }
+        // Lo stallo della CPU nelle bad line è esposto da CpuStalled e applicato dalla Board.
+        // Il rendering avviene ancora a fine frame, quindi qui non si leggono dati
+        // TODO: DMA degli sprite (cicli 55-63 e 1-10), che ruba altri cicli alla CPU
     }
-
-    public ValueTask<bool> WaitForRetraceAsync()=> channel.Reader.WaitToReadAsync();
-
-    public bool TryRead(out int value) => channel.Reader.TryRead(out value);
 
     unsafe public void Render(byte* scan0)
     {
