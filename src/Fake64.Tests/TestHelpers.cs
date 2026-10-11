@@ -60,11 +60,6 @@ static class TestHelpers
         return lines;
     }
 
-    // Inserisce testo nel buffer di tastiera del KERNAL ($0277, max 10 caratteri, contatore in $C6)
-    public static void Type(this Board board, string text)
-    {
-        if (text.Length > 10) throw new ArgumentException("Il buffer di tastiera contiene al massimo 10 caratteri");
-        for (int i = 0; i < text.Length; i++) board.Address((ushort)(0x0277 + i), (byte)text[i]);
-        board.Address(0xC6, (byte)text.Length);
-    }
+    // Inserisce testo nel buffer di tastiera del KERNAL (max 10 caratteri)
+    public static void Type(this Board board, string text) => board.TypeText(text);
 }

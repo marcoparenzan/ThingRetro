@@ -114,6 +114,9 @@ public partial class Board
 
             while (true)
             {
+                // Comandi arrivati da altri thread (es. caricamento di un .prg dalla UI)
+                RunPendingCommands();
+
                 // Converte il tempo trascorso in cicli PAL senza perdere precisione
                 long targetCycles = startCycles + (long)(sw.ElapsedTicks * (double)MASTER_CLOCK_HZ / Stopwatch.Frequency);
 

@@ -20,7 +20,31 @@ public partial class Fake64Form : Form, IScreen
 
         this.DoubleBuffered = true;
         this.SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+
+        this.AllowDrop = true;
     }
+
+    // Percorso di un file .prg trascinato sulla finestra
+    public event Action<string> PrgDropped;
+
+    protected override void OnDragEnter(DragEventArgs e)
+    {
+        base.OnDragEnter(e);
+        if (DroppedPrg(e) is not null) e.Effect = DragDropEffects.Copy;
+    }
+
+    protected override void OnDragDrop(DragEventArgs e)
+    {
+        base.OnDragDrop(e);
+        if (DroppedPrg(e) is string path) PrgDropped?.Invoke(path);
+    }
+
+    static string DroppedPrg(DragEventArgs e) =>
+        e.Data?.GetData(DataFormats.FileDrop) is string[] files &&
+        files.Length == 1 &&
+        string.Equals(Path.GetExtension(files[0]), ".prg", StringComparison.OrdinalIgnoreCase)
+            ? files[0]
+            : null;
 
     // Chiamati dal thread di emulazione a fine frame: il lock resta preso fra BeginRender ed EndRender
     unsafe public byte* BeginRender()
