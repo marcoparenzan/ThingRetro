@@ -13,6 +13,7 @@ public partial class Fake64Form : Form, IScreen
 
     public Fake64Form(int scale = 2)
     {
+        this.Text = "Fake64";
         this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
         this.StartPosition = FormStartPosition.CenterScreen;
         this.BackColor = System.Drawing.Color.Black;
@@ -24,25 +25,27 @@ public partial class Fake64Form : Form, IScreen
         this.AllowDrop = true;
     }
 
-    // Percorso di un file .prg trascinato sulla finestra
-    public event Action<string> PrgDropped;
+    // Percorso di un file .prg o .crt trascinato sulla finestra
+    public event Action<string> FileDropped;
+
+    static readonly string[] SupportedExtensions = [".prg", ".crt"];
 
     protected override void OnDragEnter(DragEventArgs e)
     {
         base.OnDragEnter(e);
-        if (DroppedPrg(e) is not null) e.Effect = DragDropEffects.Copy;
+        if (DroppedFile(e) is not null) e.Effect = DragDropEffects.Copy;
     }
 
     protected override void OnDragDrop(DragEventArgs e)
     {
         base.OnDragDrop(e);
-        if (DroppedPrg(e) is string path) PrgDropped?.Invoke(path);
+        if (DroppedFile(e) is string path) FileDropped?.Invoke(path);
     }
 
-    static string DroppedPrg(DragEventArgs e) =>
+    static string DroppedFile(DragEventArgs e) =>
         e.Data?.GetData(DataFormats.FileDrop) is string[] files &&
         files.Length == 1 &&
-        string.Equals(Path.GetExtension(files[0]), ".prg", StringComparison.OrdinalIgnoreCase)
+        SupportedExtensions.Contains(Path.GetExtension(files[0]), StringComparer.OrdinalIgnoreCase)
             ? files[0]
             : null;
 

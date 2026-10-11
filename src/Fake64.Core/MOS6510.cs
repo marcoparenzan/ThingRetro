@@ -13,9 +13,20 @@ public partial class MOS6510
 
     public void Reset()
     {
-        PC = ReadWord(0xFFFC);
+        // La porta del 6510 torna ai valori di accensione: BASIC, KERNAL e I/O visibili
+        ioRegister0 = 0x2F;
+        ioRegister1 = 0x37;
         SP = 0xFD;
         Status = 0x34; // or 0x20?
+        cyclesRemaining = 0;
+        nmiPending = false;
+    }
+
+    // Il vettore di reset va letto dopo che la Board ha aggiornato la mappa di memoria
+    // (in Ultimax arriva dalla ROM della cartuccia)
+    internal void ReadResetVector()
+    {
+        PC = ReadWord(0xFFFC);
     }
 
     public byte Address(ushort addr)

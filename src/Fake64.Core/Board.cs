@@ -107,8 +107,11 @@ public partial class Board
     {
         if (clock is not null) return;
 
-        clock = Task.Factory.StartNew(async () =>
+        // Thread dedicato: emula i cicli che mancano per stare al passo con l'orologio, poi dorme 1 ms
+        // invece di girare a vuoto (prima il ciclo teneva occupato un core anche a emulazione in pari)
+        clock = Task.Factory.StartNew(() =>
         {
+            using var timerResolution = new TimerResolution(1);
             var sw = Stopwatch.StartNew();
             long startCycles = totalCycles;
 
@@ -120,20 +123,16 @@ public partial class Board
                 // Converte il tempo trascorso in cicli PAL senza perdere precisione
                 long targetCycles = startCycles + (long)(sw.ElapsedTicks * (double)MASTER_CLOCK_HZ / Stopwatch.Frequency);
 
-                // Run as many cycles as needed to catch up to wall clock
-                while (totalCycles < targetCycles)
+                if (totalCycles >= targetCycles)
                 {
-                    // Run one machine cycle
-                    ExecuteCycle();
-
-                    // Throttle if we're getting too far ahead
-                    if (totalCycles % 1000 == 0 && totalCycles > targetCycles + 10000)
-                    {
-                        await Task.Delay(1);
-                    }
+                    Thread.Sleep(1);
+                    continue;
                 }
+
+                while (totalCycles < targetCycles)
+                    ExecuteCycle();
             }
-        }).Unwrap();
+        }, TaskCreationOptions.LongRunning);
     }
 
     // Esegue un numero fisso di cicli in modo sincrono (usato dai test, con startClock: false)
@@ -224,9 +223,12 @@ public partial class Board
         cia1.Reset();
         sid.Reset();
         vicii.Reset();
+        cartridge?.Reset();
         cpu.Reset();
+        MemoryMap(); // la CPU riparte con $01 = $37 e le linee iniziali della cartuccia
+        cpu.ReadResetVector();
 
-        totalCycles = 0;
+        // totalCycles non viene azzerato: il clock in tempo reale lo usa come riferimento
         currentLine = 0;
         currentCycle = 0;
         frameStartCycle = 0;
@@ -246,7 +248,12 @@ public partial class Board
     internal byte VicRead(int bank, int addr)
     {
         addr &= 0x3FFF;
-        if ((bank & 1) == 0 && (addr & 0x3000) == 0x1000)
+        if (ultimax)
+        {
+            // In Ultimax il VIC-II vede ROMH ($F000-$FFFF della cartuccia) a $3000-$3FFF di ogni banco
+            if ((addr & 0x3000) == 0x3000) return cartridge!.ReadRomh(0x1000 | addr & 0x0FFF);
+        }
+        else if ((bank & 1) == 0 && (addr & 0x3000) == 0x1000)
             return chargen[addr & 0x0FFF];
         return ram64.Address((ushort)(bank << 14 | addr));
     }
@@ -254,205 +261,132 @@ public partial class Board
     internal byte VicColorRam(int index) => (byte)(colorRam.Address((ushort)index) & 0x0F);
 
     /*
-        Bits #0-#2: Configuration for memory areas $A000-$BFFF, $D000-$DFFF and $E000-$FFFF. Values:
-        %x00: RAM visible in all three areas.
-        %x01: RAM visible at $A000-$BFFF and $E000-$FFFF.
-        %x10: RAM visible at $A000-$BFFF; KERNAL ROM visible at $E000-$FFFF.
-        %x11: BASIC ROM visible at $A000-$BFFF; KERNAL ROM visible at $E000-$FFFF.
-        %0xx: Character ROM visible at $D000-$DFFF. (Except for the value %000, see above.)
-        %1xx: I/O area visible at $D000-$DFFF. (Except for the value %100, see above.)
+        Il PLA decide cosa vede la CPU combinando i bit 0-2 della porta $01 (LORAM, HIRAM, CHAREN)
+        con le linee GAME ed EXROM della porta di espansione (attive basse, alte senza cartuccia):
+
+        Senza cartuccia (EXROM = 1, GAME = 1):
+          $A000 BASIC se LORAM e HIRAM, $E000 KERNAL se HIRAM,
+          $D000 I/O se CHAREN altrimenti ROM caratteri (tutto RAM se LORAM = HIRAM = 0)
+        Cartuccia 8K (EXROM = 0, GAME = 1):  in più ROML a $8000 se LORAM e HIRAM
+        Cartuccia 16K (EXROM = 0, GAME = 0): in più ROMH a $A000 (al posto del BASIC) se HIRAM
+        Ultimax (EXROM = 1, GAME = 0): ROML a $8000, ROMH a $E000, I/O sempre a $D000,
+          $1000-$7FFF e $A000-$CFFF scollegati; la porta $01 viene ignorata
      */
 
     void MemoryMap()
     {
         var state = cpu.Address(0x01);
-        ramVisible = ((state & (byte)0b00000011) == 0b00000000);
-        kernalVisible = ((state & (byte)0b00000010) == 0b00000010);
-        basicRomVisible = ((state & (byte)0b00000011) == 0b00000011);
+        bool loram = (state & 0x01) != 0;
+        bool hiram = (state & 0x02) != 0;
+        bool charen = (state & 0x04) != 0;
+        bool exrom = cartridge?.Exrom ?? true;
+        bool game = cartridge?.Game ?? true;
 
-        chargenVisible = ((state & (byte)0b00000100) == 0b00000000) && !ramVisible;
-        ioAreaVisible = ((state & (byte)0b00000100) == 0b00000100) && !ramVisible;
+        ultimax = exrom && !game;
+        if (ultimax)
+        {
+            romlVisible = true;
+            romhAtA000 = false;
+            basicRomVisible = false;
+            kernalVisible = false;
+            chargenVisible = false;
+            ioAreaVisible = true;
+            return;
+        }
+
+        bool allRam = !loram && !hiram;
+        romlVisible = !exrom && loram && hiram;
+        romhAtA000 = !exrom && !game && hiram;
+        basicRomVisible = game && loram && hiram;
+        kernalVisible = hiram;
+        chargenVisible = !charen && !allRam;
+        ioAreaVisible = charen && !allRam;
     }
 
-    bool ramVisible;
     bool kernalVisible;
     bool basicRomVisible;
-
     bool chargenVisible;
     bool ioAreaVisible;
+    bool romlVisible;
+    bool romhAtA000;
+    bool ultimax;
+
+    // In modalità Ultimax queste aree non sono collegate a niente
+    bool IsUnmappedInUltimax(ushort addr) =>
+        ultimax && ((addr >= 0x1000 && addr < 0x8000) || (addr >= 0xA000 && addr < 0xD000));
 
     public byte Address(ushort addr)
     {
-        if (addr == 0xea1e)
-        {
-        }
-        
-        if (addr >= kernal_base)
-        {
-            if (kernalVisible)
-            {
-                return kernal[addr - kernal_base];
-            }
-        }
-        else if (addr >= chargen_base)
-        {
-            if (chargenVisible)
-            {
-                return chargen[addr - chargen_base];
-            }
-            else if (ioAreaVisible)
-            {
-                if (addr < 0xd400)
-                {
-                    return vicii.Address((ushort)(addr & 0x03ff));
-                }
-                else if (addr >= 0xdf00) // I/O 2
-                {
-                }
-                else if (addr >= 0xde00) // I/O 1
-                {
-                }
-                else if (addr >= 0xdd00) // CIA 2
-                {
-                    return cia2.Address((ushort)(addr & 0x00ff));
-                }
-                else if (addr >= 0xdc00) // CIA 1
-                {
-                    return cia1.Address((ushort)(addr & 0x00ff));
-                }
-                else if (addr >= 0xd800) // Color RAM
-                {
-                    return colorRam.Address((ushort)(addr & 0x03ff));
-                }
-                else if (addr >= 0xd400) // SID
-                {
-                    return sid.Address((ushort)(addr & 0x03ff));
-                }
-                else
-                {
-                    return vicii.Address((ushort)(addr & 0x03ff));
-                }
-            }
-            else
-            {
-            }
-        }
-        else if (addr >= 0xc000)
-        {
-        }
-        else if (addr >= basic_base)
-        {
-            if (basicRomVisible)
-            {
-                return basic[addr - basic_base];
-            }
-            else
-            {
-            }
-        }
-        else if (addr <= 0x0001)
-        {
+        if (addr <= 0x0001)
             return cpu.Address(addr);
-        }
-        else
+        if (IsUnmappedInUltimax(addr))
+            return 0xFF;
+
+        switch (addr >> 12)
         {
+            case 0x8:
+            case 0x9:
+                if (romlVisible) return cartridge!.ReadRoml(addr & 0x1FFF);
+                break;
+            case 0xA:
+            case 0xB:
+                if (romhAtA000) return cartridge!.ReadRomh(addr & 0x1FFF);
+                if (basicRomVisible) return basic[addr - basic_base];
+                break;
+            case 0xD:
+                if (ioAreaVisible) return ReadIo(addr);
+                if (chargenVisible) return chargen[addr - chargen_base];
+                break;
+            case 0xE:
+            case 0xF:
+                if (ultimax) return cartridge!.ReadRomh(addr & 0x1FFF);
+                if (kernalVisible) return kernal[addr - kernal_base];
+                break;
         }
-        //return ram[addr >> addr_shift].Address((ushort)(addr & addr_mask));
         return ram64.Address(addr);
     }
 
     public void Address(ushort addr, byte value)
     {
-        if (addr == 0xea1e)
-        {
-        }
-
-        if (addr >= kernal_base)
-        {
-            // Writing to KERNAL ROM space falls through to RAM
-            ram64.Address(addr, value);
-        }
-        else if (addr >= chargen_base)
-        {
-            if (chargenVisible)
-            {
-                // Character ROM is read-only, writes fall through to RAM
-                ram64.Address(addr, value);
-            }
-            else if (ioAreaVisible)
-            {
-                if (addr < 0xd400)
-                {
-                    vicii.Address((ushort)(addr & 0x03ff), value);
-                }
-                else if (addr >= 0xdf00) // I/O 2
-                {
-                    // I/O expansion area 2, typically empty
-                    ram64.Address(addr, value);
-                }
-                else if (addr >= 0xde00) // I/O 1
-                {
-                    // I/O expansion area 1, typically empty
-                    ram64.Address(addr, value);
-                }
-                else if (addr >= 0xdd00) // CIA 2
-                {
-                    cia2.Address((ushort)(addr & 0x00ff), value);
-                    return;
-                }
-                else if (addr >= 0xdc00) // CIA 1
-                {
-                    cia1.Address((ushort)(addr & 0x00ff), value);
-                    return;
-                }
-                else if (addr >= 0xd800) // Color RAM
-                {
-                    colorRam.Address((ushort)(addr & 0x03ff), value);
-                    return;
-                }
-                else if (addr >= 0xd400) // SID
-                {
-                    sid.Address((ushort)(addr & 0x03ff), value);
-                    return;
-                }
-                else
-                {
-                    vicii.Address((ushort)(addr & 0x03ff), value);
-                    return;
-                }
-            }
-            else
-            {
-                // RAM underneath when I/O and CHARGEN aren't visible
-                ram64.Address(addr, value);
-            }
-        }
-        else if (addr >= 0xc000)
-        {
-            // RAM area between BASIC ROM and CHARGEN
-            ram64.Address(addr, value);
-        }
-        else if (addr >= basic_base)
-        {
-            // BASIC ROM area - writes go to RAM underneath
-            ram64.Address(addr, value);
-        }
-        else if (addr >= 0x0400 && addr<0x0500)
-        {
-            // Screen memory - special handling if needed
-            ram64.Address(addr, value);
-        }
-        else if (addr <= 0x0001)
+        if (addr <= 0x0001)
         {
             cpu.Address(addr, value);
             MemoryMap();
             return;
         }
-        else
+        if (IsUnmappedInUltimax(addr))
+            return;
+
+        if ((addr >> 12) == 0xD && ioAreaVisible)
         {
-            // All other areas are normal RAM
-            ram64.Address(addr, value);
+            WriteIo(addr, value);
+            return;
         }
+
+        // Le scritture nelle aree ROM (BASIC, KERNAL, caratteri, cartuccia) finiscono nella RAM sottostante
+        ram64.Address(addr, value);
+    }
+
+    byte ReadIo(ushort addr)
+    {
+        if (addr < 0xD400) return vicii.Address((ushort)(addr & 0x03ff));
+        if (addr < 0xD800) return sid.Address((ushort)(addr & 0x03ff));
+        if (addr < 0xDC00) return colorRam.Address((ushort)(addr & 0x03ff));
+        if (addr < 0xDD00) return cia1.Address((ushort)(addr & 0x00ff));
+        if (addr < 0xDE00) return cia2.Address((ushort)(addr & 0x00ff));
+        if (addr < 0xDF00) return cartridge?.ReadIo1(addr & 0xFF) ?? ram64.Address(addr); // I/O 1
+        return cartridge?.ReadIo2(addr & 0xFF) ?? ram64.Address(addr);                    // I/O 2
+    }
+
+    void WriteIo(ushort addr, byte value)
+    {
+        if (addr < 0xD400) vicii.Address((ushort)(addr & 0x03ff), value);
+        else if (addr < 0xD800) sid.Address((ushort)(addr & 0x03ff), value);
+        else if (addr < 0xDC00) colorRam.Address((ushort)(addr & 0x03ff), value);
+        else if (addr < 0xDD00) cia1.Address((ushort)(addr & 0x00ff), value);
+        else if (addr < 0xDE00) cia2.Address((ushort)(addr & 0x00ff), value);
+        else if (addr < 0xDF00) { if (cartridge is null) ram64.Address(addr, value); else cartridge.WriteIo1(addr & 0xFF, value); }
+        else { if (cartridge is null) ram64.Address(addr, value); else cartridge.WriteIo2(addr & 0xFF, value); }
     }
 
     const ushort kernal_base = 0xE000;

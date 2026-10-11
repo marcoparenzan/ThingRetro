@@ -1,3 +1,5 @@
+using Fake64.Cartridges;
+
 namespace Fake64
 {
     static class Program
@@ -15,27 +17,31 @@ namespace Fake64
             var form = new Fake64Form();
             var board = new Board(form);
 
-            form.PrgDropped += path => Load(form, board, path);
+            form.FileDropped += path => Open(form, board, path);
 
-            // Fake64.exe programma.prg: carica ed esegue il programma dopo il boot
+            // Fake64.exe file.prg|file.crt: una cartuccia si inserisce subito (riavvia la macchina),
+            // un programma si carica dopo il boot
             if (args.Length > 0)
             {
                 form.Shown += async (_, _) =>
                 {
-                    await Task.Delay(BootTime);
-                    Load(form, board, args[0]);
+                    if (!IsCartridge(args[0])) await Task.Delay(BootTime);
+                    Open(form, board, args[0]);
                 };
             }
 
             Application.Run(form);
         }
 
-        static void Load(Fake64Form form, Board board, string path)
+        static bool IsCartridge(string path) =>
+            string.Equals(Path.GetExtension(path), ".crt", StringComparison.OrdinalIgnoreCase);
+
+        static void Open(Fake64Form form, Board board, string path)
         {
-            byte[] prg;
+            byte[] content;
             try
             {
-                prg = File.ReadAllBytes(path);
+                content = File.ReadAllBytes(path);
             }
             catch (IOException e)
             {
@@ -43,6 +49,32 @@ namespace Fake64
                 return;
             }
 
+            if (IsCartridge(path))
+                InsertCartridge(form, board, path, content);
+            else
+                LoadProgram(form, board, path, content);
+        }
+
+        static void InsertCartridge(Fake64Form form, Board board, string path, byte[] crt)
+        {
+            Cartridge cartridge;
+            try
+            {
+                cartridge = CrtFile.Load(crt);
+            }
+            catch (Exception e) when (e is InvalidDataException or NotSupportedException)
+            {
+                MessageBox.Show(form, e.Message, $"Fake64 - {Path.GetFileName(path)}", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            board.Enqueue(() => board.InsertCartridge(cartridge));
+            var name = string.IsNullOrEmpty(cartridge.Name) ? Path.GetFileName(path) : cartridge.Name;
+            form.Text = $"Fake64 - {name} ({cartridge.TypeName})";
+        }
+
+        static void LoadProgram(Fake64Form form, Board board, string path, byte[] prg)
+        {
             board.Enqueue(() =>
             {
                 string title;
