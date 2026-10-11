@@ -34,6 +34,9 @@ public partial class MOS6526
 		set => interruptControl = value;
 	}
 
+	// Bit della porta A configurati come uscita (gli ingressi sono tenuti alti dai pull-up)
+	public byte DataDirectionA => dataDirectionA;
+
 	// Stato della linea /IRQ (o /NMI per la CIA2): attiva finché l'ICR non viene letto
 	public bool IrqAsserted => (interruptStatus & 0x80) != 0;
 }

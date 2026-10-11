@@ -189,9 +189,7 @@ public partial class Board
                 currentLine = 0;
                 frameStartCycle = totalCycles;
 
-                // Process frame completion events
-                // Process frame-level events like screen rendering
-                Render();
+                // Il frame viene presentato dal VIC-II alla fine dell'ultima riga (callback render)
 
                 // Get audio samples from SID and send to audio system
                 int[] samples = sid.GetAudioData();
@@ -236,6 +234,21 @@ public partial class Board
     internal bool IrqLine => cia1.IrqAsserted || vicii.IrqAsserted;
 
     public byte Chargen(ushort addr) => chargen[addr];
+
+    // Banco di 16 KB visto dal VIC-II: bit 0-1 della porta A della CIA2, invertiti
+    internal int VicBank => 3 - ((port2A | ~cia2.DataDirectionA) & 0x03);
+
+    // Lettura dal punto di vista del VIC-II: vede sempre la RAM (mai BASIC, KERNAL o I/O),
+    // tranne la ROM caratteri a $1000-$1FFF nei banchi 0 e 2
+    internal byte VicRead(int bank, int addr)
+    {
+        addr &= 0x3FFF;
+        if ((bank & 1) == 0 && (addr & 0x3000) == 0x1000)
+            return chargen[addr & 0x0FFF];
+        return ram64.Address((ushort)(bank << 14 | addr));
+    }
+
+    internal byte VicColorRam(int index) => (byte)(colorRam.Address((ushort)index) & 0x0F);
 
     /*
         Bits #0-#2: Configuration for memory areas $A000-$BFFF, $D000-$DFFF and $E000-$FFFF. Values:

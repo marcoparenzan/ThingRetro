@@ -1,79 +1,51 @@
-﻿using System.Drawing.Imaging;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 
 namespace Fake64;
 
 public partial class Fake64Form : Form, IScreen
 {
-    Bitmap bitmap;
-    Task render;
+    // La bitmap ha sempre la dimensione del frame del VIC-II: Render scrive righe contigue di
+    // SCREEN_WIDTH pixel, quindi non deve dipendere dalla dimensione (o dal DPI) della finestra
+    readonly Bitmap bitmap = new(MOS6569.SCREEN_WIDTH, MOS6569.SCREEN_HEIGHT, PixelFormat.Format32bppArgb);
+    readonly object bitmapLock = new();
+    BitmapData bitmapData;
 
-    public Fake64Form(int w = 403, int h = 284)
+    public Fake64Form(int scale = 2)
     {
         this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
         this.StartPosition = FormStartPosition.CenterScreen;
-        this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
-        this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-        this.BackColor = System.Drawing.Color.White;
-        this.ClientSize = new System.Drawing.Size(w, h);
+        this.BackColor = System.Drawing.Color.Black;
+        this.ClientSize = new System.Drawing.Size(MOS6569.SCREEN_WIDTH * scale, MOS6569.SCREEN_HEIGHT * scale);
 
         this.DoubleBuffered = true;
-        this.SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+        this.SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
     }
 
+    // Chiamati dal thread di emulazione a fine frame: il lock resta preso fra BeginRender ed EndRender
     unsafe public byte* BeginRender()
     {
-        this.bitmapData = bitmap.LockBits(this.ClientRectangle, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
-
-        var scan0 = (byte*)bitmapData.Scan0.ToPointer();
-
-        //vicii.Render(scan0);
-
-        return scan0;
+        Monitor.Enter(bitmapLock);
+        bitmapData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+        return (byte*)bitmapData.Scan0;
     }
 
-    unsafe public void EndRender()
+    public void EndRender()
     {
         bitmap.UnlockBits(bitmapData);
+        Monitor.Exit(bitmapLock);
 
-        g.DrawImage(bitmap, 0, 0);
-
-        this.Invalidate();
-    }
-
-    BufferedGraphics bufferedGraphics;
-    private BitmapData bitmapData;
-
-    bool Suspended { get; set; } = true;
-
-    public Graphics g => bufferedGraphics.Graphics;
-
-    protected override void OnResize(EventArgs e)
-    {
-        if (this.bufferedGraphics != null)
-        {
-            this.Suspended = true;
-            this.bufferedGraphics.Dispose();
-            this.bufferedGraphics = null;
-            this.Invalidate();
-        }
+        // Invalidate è sicuro da qualunque thread: il disegno avviene poi sul thread della UI
+        if (IsHandleCreated) Invalidate();
     }
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        base.OnPaint(e);
-        if (this.bufferedGraphics == null)
+        e.Graphics.InterpolationMode = InterpolationMode.NearestNeighbor;
+        e.Graphics.PixelOffsetMode = PixelOffsetMode.Half;
+        lock (bitmapLock)
         {
-            this.bufferedGraphics = BufferedGraphicsManager.Current.Allocate(e.Graphics,
-                this.ClientRectangle
-            );
-
-            this.bitmap = new Bitmap(this.ClientSize.Width, this.ClientSize.Height, PixelFormat.Format32bppArgb);
-
-            this.Suspended = false;
-        }
-        else
-        {
-            this.bufferedGraphics.Render(e.Graphics);
+            e.Graphics.DrawImage(bitmap, ClientRectangle);
         }
     }
 }

@@ -1,6 +1,6 @@
 namespace Fake64;
 
-public class MOS6569
+public partial class MOS6569
 {
     private Board board;
     private Action render;
@@ -67,13 +67,6 @@ public class MOS6569
     // Screen properties
     const ushort TOTAL_RASTER_LINES = 312;    // PAL has 312 raster lines
     const ushort CYCLES_PER_LINE = 63;        // 63 cycles per raster line
-    const ushort VISIBLE_SCREEN_WIDTH = 320;
-    const ushort VISIBLE_SCREEN_HEIGHT = 200;
-
-    // Memory pointers
-    private ushort videoMatrixBase;
-    private ushort charGenBase;
-    private ushort bitmapBase;
 
     public MOS6569(Board board, Action render)
     {
@@ -100,9 +93,6 @@ public class MOS6569
         badLinesEnabled = false;
         frameComplete = false;
         lineComplete = false;
-        
-        // Initialize memory pointers
-        UpdateMemoryPointers();
     }
 
 
@@ -136,6 +126,9 @@ public class MOS6569
     {
         if (lineComplete)
         {
+            // Disegna la riga appena terminata con lo stato attuale dei registri
+            RenderLine(rasterLine);
+
             // Update the raster line counter
             rasterLine = (rasterLine + 1) % TOTAL_RASTER_LINES;
 
@@ -196,6 +189,13 @@ public class MOS6569
         addr &= 0x3F; // I registri si ripetono ogni 64 byte in $D000-$D3FF
         if (addr == REG_INTERRUPT_STATUS)
             return (byte)(registers[addr] | 0x70); // Bit 4-6 non usati, letti a 1
+        if (addr == REG_SPRITE_SPRITE_COLL || addr == REG_SPRITE_DATA_COLL)
+        {
+            // I registri di collisione si azzerano quando vengono letti
+            byte collisions = registers[addr];
+            registers[addr] = 0;
+            return collisions;
+        }
         if (addr <= 0x2E)
             return registers[addr];
         else
@@ -232,158 +232,19 @@ public class MOS6569
                 registers[addr] = (byte)(value & 0x0F);
                 CheckInterrupts();
                 break;
+            case REG_SPRITE_SPRITE_COLL:
+            case REG_SPRITE_DATA_COLL:
+                break; // Registri di sola lettura
             default:
                 registers[addr] = value;
                 break;
         }
     }
 
-    // Update memory pointers based on register settings
-    private void UpdateMemoryPointers()
-    {
-        // Extract memory pointers from register 0x18 (Memory Pointers)
-        videoMatrixBase = (ushort)((registers[REG_MEMORY_POINTERS] & 0xF0) << 6); // $0400, $0800, $0C00, etc.
-        charGenBase = (ushort)((registers[REG_MEMORY_POINTERS] & 0x0E) << 10);    // $1000, $1800, etc.
-        bitmapBase = (ushort)((registers[REG_MEMORY_POINTERS] & 0x08) << 10);     // $0000 or $2000
-    }
-
     public void Clock(long ticks)
     {
-        // This is now a single-cycle implementation
-        // Each call to Clock processes exactly one cycle's worth of operations
-        
-        // Most of the cycle-specific operations are now handled in ProcessSignals and EndLine
-        
-        // Lo stallo della CPU nelle bad line è esposto da CpuStalled e applicato dalla Board.
-        // Il rendering avviene ancora a fine frame, quindi qui non si leggono dati
+        // Lo stallo della CPU nelle bad line è esposto da CpuStalled e applicato dalla Board;
+        // il rendering avviene a fine riga in EndLine (MOS6569.Graphics.cs)
         // TODO: DMA degli sprite (cicli 55-63 e 1-10), che ruba altri cicli alla CPU
     }
-
-    unsafe public void Render(byte* scan0)
-    {
-        // Determine which display mode to use based on control registers
-        byte displayMode = (byte)((registers[REG_CONTROL_1] & 0x60) >> 5);
-
-        switch (displayMode)
-        {
-            case 0: // Standard character mode
-                TextMode(scan0);
-                break;
-            case 1: // Multicolor character mode
-                break;
-            case 2: // Standard bitmap mode
-                break;
-            case 3: // Multicolor bitmap mode
-                break;
-        }
-    }
-
-    // https://lospec.com/palette-list/commodore64
-    unsafe void TextMode(byte* scan0)
-    {
-        var borderColorAddress = (ushort)(registers[REG_BORDER_COLOR] << 2);
-        var backgroundColorAddress = (ushort)(registers[REG_BACKGROUND_COLOR] << 2);
-
-        for (var y = 0; y < 42; y++)
-        {
-            for (var x = 0; x < 403; x++)
-            {
-                var colorAddress = borderColorAddress;
-                scan0[0] = palette[colorAddress++]; // blueComponent;
-                scan0++;
-                scan0[0] = palette[colorAddress++]; // greenComponent;
-                scan0++;
-                scan0[0] = palette[colorAddress++]; // redComponent;
-                scan0++;
-                scan0[0] = palette[colorAddress++]; // transparency;
-                scan0++;
-            }
-        }
-        for (var y = 0; y < 200; y++)
-        {
-            for (var x = 0; x < 42; x++)
-            {
-                var colorAddress = borderColorAddress;
-                scan0[0] = palette[colorAddress++]; // blueComponent;
-                scan0++;
-                scan0[0] = palette[colorAddress++]; // greenComponent;
-                scan0++;
-                scan0[0] = palette[colorAddress++]; // redComponent;
-                scan0++;
-                scan0[0] = palette[colorAddress++]; // transparency;
-                scan0++;
-            }
-            for (var x = 0; x < 320; x += 8)
-            {
-                var offset = (y >> 3) * 40 + (x >> 3);
-                var ch = board.Address((ushort)(0x400 + offset));
-                var chBits = board.Chargen((ushort)((ch << 3) + (y & 0b00000111)));
-                var foregroundColorAddress = (ushort)(board.Address((ushort)(0xD800 + offset)) << 2);
-                var mask = 0b10000000;
-                while (mask > 0)
-                {
-                    var colorAddress = foregroundColorAddress;
-                    if ((chBits & mask) == 0)
-                        colorAddress = backgroundColorAddress;
-                    scan0[0] = palette[colorAddress++]; // blueComponent;
-                    scan0++;
-                    scan0[0] = palette[colorAddress++]; // greenComponent;
-                    scan0++;
-                    scan0[0] = palette[colorAddress++]; // redComponent;
-                    scan0++;
-                    scan0[0] = palette[colorAddress++]; // transparency;
-                    scan0++;
-
-                    mask >>= 1;
-                }
-            }
-            for (var x = 0; x < 41; x++)
-            {
-                var colorAddress = borderColorAddress;
-                scan0[0] = palette[colorAddress++]; // blueComponent;
-                scan0++;
-                scan0[0] = palette[colorAddress++]; // greenComponent;
-                scan0++;
-                scan0[0] = palette[colorAddress++]; // redComponent;
-                scan0++;
-                scan0[0] = palette[colorAddress++]; // transparency;
-                scan0++;
-            }
-        }
-        for (var y = 0; y < 42; y++)
-        {
-            for (var x = 0; x < 403; x++)
-            {
-                var colorAddress = borderColorAddress;
-                scan0[0] = palette[colorAddress++]; // blueComponent;
-                scan0++;
-                scan0[0] = palette[colorAddress++]; // greenComponent;
-                scan0++;
-                scan0[0] = palette[colorAddress++]; // redComponent;
-                scan0++;
-                scan0[0] = palette[colorAddress++]; // transparency;
-                scan0++;
-            }
-        }
-    }
-
-    // http://unusedino.de/ec64/technical/misc/vic656x/colors/
-    static byte[] palette = new byte[] {
-        (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0xFF,  // 0 - Black
-        (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,  // 1 - White
-        (byte) 0x2B, (byte) 0x37, (byte) 0x68, (byte) 0xFF,  // 2 - Red
-        (byte) 0xB2, (byte) 0xA4, (byte) 0x70, (byte) 0xFF,  // 3 - Cyan
-        (byte) 0x86, (byte) 0x3D, (byte) 0x6F, (byte) 0xFF,  // 4 - Purple
-        (byte) 0x43, (byte) 0x8D, (byte) 0x58, (byte) 0xFF,  // 5 - Green
-        (byte) 0x79, (byte) 0x28, (byte) 0x35, (byte) 0xFF,  // 6 - Blue
-        (byte) 0x6F, (byte) 0xC7, (byte) 0xB8, (byte) 0xFF,  // 7 - Yellow
-        (byte) 0x25, (byte) 0x4F, (byte) 0x6F, (byte) 0xFF,  // 8 - Orange
-        (byte) 0x00, (byte) 0x39, (byte) 0x43, (byte) 0xFF,  // 9 - Brown
-        (byte) 0x59, (byte) 0x67, (byte) 0x9A, (byte) 0xFF,  // A - Light Red
-        (byte) 0x44, (byte) 0x44, (byte) 0x44, (byte) 0xFF,  // B - Dark Grey
-        (byte) 0x6C, (byte) 0x6C, (byte) 0x6C, (byte) 0xFF,  // C - Grey
-        (byte) 0x84, (byte) 0xD2, (byte) 0x9A, (byte) 0xFF,  // D - Light Green
-        (byte) 0xB5, (byte) 0x5E, (byte) 0x6C, (byte) 0xFF,  // E - Light Blue
-        (byte) 0x95, (byte) 0x95, (byte) 0x95, (byte) 0xFF   // F - Light Grey
-    };
 }

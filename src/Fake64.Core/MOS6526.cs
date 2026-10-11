@@ -15,8 +15,8 @@ public partial class MOS6526
     private Action<MOS6526> initializationHandler; // For system-specific initialization
 
     // Registers
-    // $DC00/DD00
-    // $DC01/DD01
+    private byte dataPortA; // $DC00/DD00 (latch di uscita)
+    private byte dataPortB; // $DC01/DD01 (latch di uscita)
     private byte dataDirectionA; // $DC02/DD02
     private byte dataDirectionB; // $DC03/DD03
     private ushort timerA; // $DC04-$DC05/DD04-DD05
@@ -72,7 +72,7 @@ public partial class MOS6526
     public void Reset()
     {
         // Clear all registers
-        //dataPortA = dataPortB = 0;
+        dataPortA = dataPortB = 0;
         dataDirectionA = dataDirectionB = 0;
         timerA = timerB = 0;
         timerALatch = timerBLatch = 0;
@@ -108,9 +108,10 @@ public partial class MOS6526
         {
             case 0x00:
                 // Use the delegate for port reading
-                return (byte)(portReadHandler('A') & ~dataDirectionA);
+                // I bit in uscita restituiscono il valore scritto, quelli in ingresso lo stato esterno
+                return (byte)((dataPortA & dataDirectionA) | (portReadHandler('A') & ~dataDirectionA));
             case 0x01:
-                return (byte)(portReadHandler('B') & ~dataDirectionB);
+                return (byte)((dataPortB & dataDirectionB) | (portReadHandler('B') & ~dataDirectionB));
             case 0x02: return dataDirectionA; // DDRA
             case 0x03: return dataDirectionB; // DDRB
             case 0x04: return (byte)(timerA & 0xFF); // Timer A low
@@ -140,9 +141,11 @@ public partial class MOS6526
         switch (register)
         {
             case 0x00: // Port A
+                dataPortA = value;
                 portWriteHandler('A', value);
                 break;
             case 0x01: // Port B
+                dataPortB = value;
                 portWriteHandler('B', value);
                 break;
             case 0x02: // DDRA
