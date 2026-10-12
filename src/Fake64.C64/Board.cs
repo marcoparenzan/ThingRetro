@@ -13,9 +13,12 @@ public partial class Board
     readonly Ram64KbChip ram64 = new();
     readonly ColorRamChip colorRam = new();
 
-    // Prese esterne: uscita video (vi si collega un monitor con un MonitorCable) e tastiera
+    // Prese esterne: uscita video (vi si collega un monitor con un MonitorCable), tastiera
+    // e le due porte di controllo (joystick, paddle, mouse)
     public VideoPort VideoOut { get; } = new();
     public Keyboard Keyboard => keyboard;
+    public ControlPort ControlPort1 { get; } = new("porta di controllo 1");
+    public ControlPort ControlPort2 { get; } = new("porta di controllo 2");
 
     // Accesso diretto alla RAM, senza passare per la mappa di memoria (come un DMA): permette di
     // scrivere anche sotto le ROM. Da usare dal thread di emulazione, ad esempio tramite Enqueue

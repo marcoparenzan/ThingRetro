@@ -68,6 +68,8 @@ public interface I6581Pinout
 {
     byte Read(int register);             // A0-A4, D0-D7, R/W = 1, /CS
     void Write(int register, byte value);
+    Func<byte> PotXInput { get; set; }   // POT X: resistenza collegata, come valore 0-255 ($FF = nulla)
+    Func<byte> PotYInput { get; set; }   // POT Y
     int[] GetAudioData();                // AUDIO OUT
     void Reset();                        // /RES
     void Tick();                         // φ2

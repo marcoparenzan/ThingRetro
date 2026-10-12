@@ -62,6 +62,9 @@ flowchart TB
     ROM[(KERNAL, BASIC,<br/>caratteri)]
     EXP[Porta di<br/>espansione]
     KBD[Matrice della<br/>tastiera]
+    CP1[Porta di<br/>controllo 1]
+    CP2[Porta di<br/>controllo 2]
+    POTSW{{4066<br/>commutatore POT}}
     VIDEO[Uscita video]
     IRQ(["/IRQ"])
     NMI(["/NMI"])
@@ -82,6 +85,12 @@ flowchart TB
     NMI --> CPU
     CIA1 -- PA: righe --> KBD
     KBD -- colonne --> CIA1
+    CP1 -- contatti --> CIA1
+    CP2 -- contatti --> CIA1
+    CP1 -- POT X, POT Y --> POTSW
+    CP2 -- POT X, POT Y --> POTSW
+    CIA1 -- PA6, PA7 --> POTSW
+    POTSW --> SID
     VIC --> VIDEO
 ```
 
@@ -92,6 +101,9 @@ flowchart TB
 | Mappa di memoria | `Board.Pla.cs`: combina LORAM/HIRAM/CHAREN con GAME/EXROM (modi normale, 8K, 16K, Ultimax) |
 | Banco del VIC-II | PA0/PA1 della CIA 2, invertiti; ricalcolato quando la porta cambia |
 | Tastiera | colonne lette dalla porta B della CIA 1 in base alle righe selezionate dalla porta A |
+| Porte di controllo | `ControlPort` con un `IControlPortDevice` (pin della DE-9). I contatti della porta 1 vanno sulla porta B della CIA 1, quelli della porta 2 sulla porta A; le uscite NMOS possono essere tirate a massa dall'esterno (`ParallelPort.Pins` è un AND), per questo un joystick nella porta 1 genera tasti fantasma |
+| Linee POT | POT X e POT Y della porta 1 o 2, scelte da PA6/PA7 della CIA 1 (commutatore 4066), entrano nel SID, che aggiorna `$D419`/`$D41A` ogni 512 cicli |
+| Dispositivi | `Joystick` (5 contatti), `Paddles` (due potenziometri, pulsanti sui pin sinistra e destra), `Mouse1351` (posizione mod 64 sulle linee POT, pulsanti su fuoco e su) |
 | Bus seriale | senza drive collegati, CLK IN e DATA IN riflettono le uscite del C64 invertite |
 
 ## Il ciclo di clock

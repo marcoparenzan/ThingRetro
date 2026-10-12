@@ -24,8 +24,11 @@ vera, con i chip MOS negli zoccoli, le piste che li collegano e i cavi verso mon
 - **Cartucce `.crt`**: Normal 8K/16K/Ultimax, Ocean, C64 Game System / System 3, Magic Desk, EasyFlash
   (in sola lettura).
 - **Tastiera del PC** con mappatura posizionale, tasti funzione F1-F8 e tasti cursore.
+- **Porte di controllo** (prese DE-9) con joystick, paddle e mouse 1351: i contatti digitali arrivano alla CIA 1,
+  le linee POT al SID attraverso il commutatore analogico comandato dalla CIA 1. Per ora si comandano da codice:
+  i simulatori (tastiera del PC come joystick, mouse del PC come 1351) sono il prossimo passo.
 
-Non ancora: audio del SID, joystick, drive 1541 e immagini disco/nastro (`.d64`, `.t64`), accessi DMA degli
+Non ancora: audio del SID, drive 1541 e immagini disco/nastro (`.d64`, `.t64`), accessi DMA degli
 sprite. Vedi [Limiti noti](#limiti-noti).
 
 ## Struttura
@@ -62,6 +65,18 @@ var keys  = new PcKeyboard(monitor, board.Keyboard);     // il cavo della tastie
 
 Uno zoccolo vuoto si comporta come sul C64: il bus legge `$FF` e le linee restano inattive (il C64 si avvia
 anche senza SID).
+
+Le porte di controllo funzionano allo stesso modo: nella presa entra qualunque dispositivo che implementa i
+pin della DE-9 (`IControlPortDevice`).
+
+```csharp
+var joystick = new Joystick();
+board.ControlPort2.Plug(joystick);        // quasi tutti i giochi usano la porta 2
+joystick.Fire = true;
+
+board.ControlPort1.Plug(new Paddles { PositionA = 128 });   // Le Mans, REVS...
+// oppure: board.ControlPort1.Plug(new Mouse1351());        // GEOS
+```
 
 ## Compilare ed eseguire
 
@@ -153,7 +168,9 @@ singolo chip.
 ## Limiti noti
 
 - **SID**: i registri ci sono, l'audio non viene riprodotto.
-- **Joystick, drive 1541, `.d64`/`.t64`**: non ancora emulati.
+- **Simulatori dei dispositivi di controllo** (tastiera e mouse del PC come joystick, paddle, 1351): non ancora.
+  La penna ottica e il modo joystick del 1351 non sono modellati.
+- **Drive 1541, `.d64`/`.t64`**: non ancora emulati.
 - **VIC-II**: gli accessi DMA degli sprite non rubano cicli alla CPU; non si aprono i bordi con i trucchi
   delle demo; la grafica di una riga viene calcolata con i dati di memoria di fine riga (solo i cambi di
   registro sono precisi al ciclo).

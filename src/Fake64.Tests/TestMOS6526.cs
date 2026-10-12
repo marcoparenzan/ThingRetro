@@ -121,12 +121,24 @@ public sealed class MOS6526Tests
     [TestMethod]
     public void Ports_ShouldDriveOutputsAndReadExternalInputs()
     {
-        _cia.PortA.External = () => 0x5A;  // ciò che c'è sui pin dall'esterno
+        _cia.PortA.External = () => 0xFA;  // l'esterno tira a massa PA0 e PA2
         _cia.Write(0x02, 0xF0);            // PA4-PA7 in uscita
         _cia.Write(0x00, 0xA5);
 
         Assert.AreEqual(0xA0, (int)_cia.PortA.Output);
-        Assert.AreEqual(0xAA, (int)_cia.Read(0x00)); // uscite dal latch, ingressi dai pin
+        Assert.AreEqual(0xAA, (int)_cia.Read(0x00)); // uscite dal latch, ingressi con pull-up, AND con l'esterno
+    }
+
+    [TestMethod]
+    public void Ports_ExternalDeviceShouldPullOutputsLow()
+    {
+        // Le uscite NMOS hanno un pull-up debole: un contatto a massa vince (così si legge un joystick)
+        _cia.Write(0x02, 0xFF);
+        _cia.Write(0x00, 0xFF);
+        _cia.PortA.External = () => 0xEF;  // fuoco premuto: PA4 a massa
+
+        Assert.AreEqual(0xEF, (int)_cia.Read(0x00));
+        Assert.AreEqual(0xFF, (int)_cia.PortA.Output); // il chip continua a pilotare 1
     }
 
     [TestMethod]

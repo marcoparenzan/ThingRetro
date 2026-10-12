@@ -35,7 +35,7 @@ public partial class Board
 
         CpuSocket = new Socket<I6510Pinout>("CPU", ConnectCpu, DisconnectCpu);
         VicSocket = new Socket<I6569Pinout>("VIC-II", ConnectVic, DisconnectVic);
-        SidSocket = new Socket<I6581Pinout>("SID", chip => sid = chip, _ => sid = null);
+        SidSocket = new Socket<I6581Pinout>("SID", ConnectSid, DisconnectSid);
         Cia1Socket = new Socket<I6526Pinout>("CIA 1", ConnectCia1, DisconnectCia1);
         Cia2Socket = new Socket<I6526Pinout>("CIA 2", ConnectCia2, DisconnectCia2);
     }
@@ -78,18 +78,46 @@ public partial class Board
         vic = null;
     }
 
-    // CIA 1: porta A alle righe della tastiera, porta B alle colonne (il joystick non è ancora collegato)
+    // CIA 1: porta A alle righe della tastiera e ai contatti della porta di controllo 2, porta B alle
+    // colonne della tastiera e ai contatti della porta di controllo 1. I contatti chiusi tirano a massa
+    // le linee anche quando sono uscite: per questo un joystick nella porta 1 "preme" tasti fantasma
+    // durante la scansione della tastiera, e quasi tutti i giochi usano la porta 2
     void ConnectCia1(I6526Pinout chip)
     {
-        chip.PortA.External = () => 0xFF;
-        chip.PortB.External = () => keyboard.GetKeyboardState(chip.PortA.Pins);
+        chip.PortA.External = () => ControlPort2.DigitalLines;
+        chip.PortB.External = () => (byte)(keyboard.GetKeyboardState(chip.PortA.Pins) & ControlPort1.DigitalLines);
         cia1 = chip;
     }
 
     void DisconnectCia1(I6526Pinout chip)
     {
+        chip.PortA.External = () => 0xFF;
         chip.PortB.External = () => 0xFF;
         cia1 = null;
+    }
+
+    // SID: POT X e POT Y arrivano dalle porte di controllo attraverso un commutatore analogico (4066)
+    // comandato da PA6 (porta 1) e PA7 (porta 2) della CIA 1. Senza porta selezionata le linee sono libere
+    void ConnectSid(I6581Pinout chip)
+    {
+        chip.PotXInput = () => SelectedPotPort()?.PotX ?? 0xFF;
+        chip.PotYInput = () => SelectedPotPort()?.PotY ?? 0xFF;
+        sid = chip;
+    }
+
+    void DisconnectSid(I6581Pinout chip)
+    {
+        chip.PotXInput = () => 0xFF;
+        chip.PotYInput = () => 0xFF;
+        sid = null;
+    }
+
+    ControlPort? SelectedPotPort()
+    {
+        byte select = cia1?.PortA.Pins ?? 0xFF;
+        if ((select & 0x40) != 0) return ControlPort1;
+        if ((select & 0x80) != 0) return ControlPort2;
+        return null;
     }
 
     // CIA 2: PA0-PA1 = banco del VIC-II (invertiti), PA2 = user port, PA3-PA5 = ATN/CLK/DATA in uscita

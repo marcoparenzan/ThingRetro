@@ -117,10 +117,20 @@ public class MOS6581 : I6581Pinout
 
         cycleCount = 0;
         sidCycleCounter = 0;
+        potCycle = 0;
+        potX = potY = 0xFF;
         outputIndex = 0;
         filterChangePending = false;
         volumeChangePending = false;
     }
+
+    // POT X / POT Y: il SID scarica e ricarica un condensatore attraverso la resistenza esterna e conta
+    // i cicli; il risultato (0-255) è disponibile in $19 / $1A e si aggiorna ogni 512 cicli
+    public Func<byte> PotXInput { get; set; } = () => 0xFF;
+    public Func<byte> PotYInput { get; set; } = () => 0xFF;
+    const int POT_MEASUREMENT_CYCLES = 512;
+    byte potX = 0xFF, potY = 0xFF;
+    int potCycle;
 
     // φ2: ProcessSignals e Clock sono la logica interna di temporizzazione (l'audio non viene ancora riprodotto)
     private int tickCount;
@@ -130,6 +140,13 @@ public class MOS6581 : I6581Pinout
         ProcessSignals(tickCount);
         Clock();
         tickCount = (tickCount + 1) % SID_CLOCK_DIVIDER;
+
+        if (++potCycle == POT_MEASUREMENT_CYCLES)
+        {
+            potCycle = 0;
+            potX = PotXInput();
+            potY = PotYInput();
+        }
     }
 
     // Process signals for upcoming cycle changes
@@ -443,6 +460,8 @@ public class MOS6581 : I6581Pinout
     public byte Read(int register)
     {
         int addr = register & 0x1F;
+        if (addr == 0x19) return potX;
+        if (addr == 0x1A) return potY;
         if (addr >= REG_COUNT) return 0xFF; // nessun registro: bus aperto
         // Handle special read registers (random values for oscillators, etc.)
         if (addr == 0x1B) // Voice 3 oscillator
