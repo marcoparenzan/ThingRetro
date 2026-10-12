@@ -1,3 +1,5 @@
+using Fake64.C64;
+
 namespace Fake64.WinForms;
 
 // Corrispondenza fra i tasti del PC e i tasti del C64. È posizionale, come in VICE: i simboli

@@ -1,4 +1,5 @@
 using Fake64.WinForms;
+using Fake64.C64;
 
 namespace Fake64;
 

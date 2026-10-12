@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using Fake64.C64;
+using Fake64.Mos;
 
 namespace Fake64.WinForms;
 

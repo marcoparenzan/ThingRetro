@@ -76,7 +76,7 @@ public sealed class ProgramLoadingTests
 
         board.LoadPrg(new byte[] { 0x00, 0xA0, 0x42 });
 
-        board.Poke(0x0001, 0x36); // BASIC ROM disattivata
+        board.SetCpuPort(0x36); // BASIC ROM disattivata
         Assert.AreEqual(0x42, (int)board.Peek(0xA000));
     }
 
@@ -129,7 +129,7 @@ public sealed class ProgramLoadingTests
         board.RunCycles(FRAME_CYCLES); // un frame completo con le raster bar attive
 
         const byte RED = 2, LIGHT_BLUE = 14;
-        byte BorderAt(int rasterLine) => board.VICII.PixelAt(0, rasterLine - 9);
+        byte BorderAt(int rasterLine) => board.Vic.PixelAt(0, rasterLine - 9);
         Assert.AreEqual(LIGHT_BLUE, BorderAt(98));
         Assert.AreEqual(RED, BorderAt(102));
         Assert.AreEqual(RED, BorderAt(148));

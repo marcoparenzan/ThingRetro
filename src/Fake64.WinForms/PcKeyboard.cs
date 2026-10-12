@@ -1,3 +1,5 @@
+using Fake64.C64;
+
 namespace Fake64.WinForms;
 
 // Il cavo della tastiera: porta i tasti premuti su un controllo WinForms (di solito il C64Monitor)

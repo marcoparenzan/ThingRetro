@@ -1,3 +1,5 @@
+using Fake64.C64;
+
 namespace Fake64
 {
     static class Program

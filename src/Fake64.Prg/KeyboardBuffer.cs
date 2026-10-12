@@ -1,3 +1,5 @@
+using Fake64.C64;
+
 namespace Fake64.Prg;
 
 // Buffer di tastiera del KERNAL: il testo inserito qui viene letto come se fosse stato digitato.

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- I chip MOS come componenti autonomi: non sanno in quale computer sono montati.
+       Ogni chip implementa la propria piedinatura (I6510Pinout, I6526Pinout, ...), che è il contratto dello zoccolo -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Fake64.Tests" />
+  </ItemGroup>
+
+</Project>

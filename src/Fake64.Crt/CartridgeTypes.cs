@@ -1,3 +1,5 @@
+using Fake64.C64;
+
 namespace Fake64.Crt;
 
 // Cartuccia con banchi ROML/ROMH selezionabili; i tipi concreti decidono come si cambia banco

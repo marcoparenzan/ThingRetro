@@ -1,3 +1,5 @@
+using Fake64.C64;
+
 namespace Fake64.Prg;
 
 // File .prg: i primi due byte sono l'indirizzo di caricamento (little-endian), il resto i dati.

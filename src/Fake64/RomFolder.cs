@@ -1,3 +1,5 @@
+using Fake64.C64;
+
 namespace Fake64;
 
 // Le ROM del C64 stanno nella cartella roms dell'app (file kernal, basic, chargen) e vengono

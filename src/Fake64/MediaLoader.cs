@@ -1,5 +1,6 @@
 using Fake64.Crt;
 using Fake64.Prg;
+using Fake64.C64;
 
 namespace Fake64;
 

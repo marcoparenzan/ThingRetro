@@ -29,7 +29,7 @@ public sealed class VicGraphicsTests
 
     private static void RenderFrame(Board board) => board.RunCycles(FRAME_CYCLES);
 
-    private static byte Pixel(Board board, int x, int y) => board.VICII.PixelAt(x, y);
+    private static byte Pixel(Board board, int x, int y) => board.Vic.PixelAt(x, y);
 
     #region Text modes
 

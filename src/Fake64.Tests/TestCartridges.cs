@@ -112,7 +112,7 @@ public sealed class CartridgeTests
 
         Assert.AreEqual(0x11, (int)board.Peek(0x8000));
         Assert.AreEqual(basicFirstByte, board.Peek(0xA000));
-        board.Poke(0x0001, 0x36); // LORAM = 0
+        board.SetCpuPort(0x36); // LORAM = 0
         Assert.AreEqual(0x42, (int)board.Peek(0x8000));
     }
 
@@ -140,7 +140,7 @@ public sealed class CartridgeTests
         Assert.AreEqual(0x11, (int)board.Peek(0x8000));
         Assert.AreEqual(0x22, (int)board.Peek(0xA000));
 
-        board.Poke(0x0001, 0x36); // LORAM = 0: ROML sparisce, ROMH resta (HIRAM = 1)
+        board.SetCpuPort(0x36); // LORAM = 0: ROML sparisce, ROMH resta (HIRAM = 1)
         Assert.AreEqual(0x00, (int)board.Peek(0x8000));
         Assert.AreEqual(0x22, (int)board.Peek(0xA000));
     }
@@ -160,7 +160,7 @@ public sealed class CartridgeTests
         Assert.AreEqual(7, board.Peek(0xD020) & 0x0F);
         board.Poke(0x2000, 0x42);
         Assert.AreEqual(0xFF, (int)board.Peek(0x2000)); // area scollegata
-        Assert.AreEqual(0x5A, (int)board.VicRead(0, 0x3000));
+        Assert.AreEqual(0x5A, (int)board.VicRead(0x3000));
     }
 
     [TestMethod]

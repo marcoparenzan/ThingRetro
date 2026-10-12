@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Fake64.Core\Fake64.Core.csproj" />
+    <ProjectReference Include="..\Fake64.C64\Fake64.C64.csproj" />
   </ItemGroup>
 
 </Project>

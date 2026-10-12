@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using Fake64.C64;
 
 namespace Fake64.Crt;
 

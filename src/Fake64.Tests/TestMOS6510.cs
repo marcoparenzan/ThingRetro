@@ -212,7 +212,7 @@ public sealed class MOS6510Tests
         board.Poke(0xDC0E, 0x11);
 
         for (int i = 0; i < 4; i++) board.StepInstruction(); // con I attivo l'IRQ resta in attesa
-        Assert.IsTrue(board.Cia1.IrqAsserted);
+        Assert.IsTrue(board.Cia1.Irq);
         Assert.AreEqual(0xC004, (int)board.Cpu.PC);
 
         board.StepInstruction(); // CLI
