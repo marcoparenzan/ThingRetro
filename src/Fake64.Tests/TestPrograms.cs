@@ -1,4 +1,5 @@
 using Fake64.Prg;
+using Fake64.Samples;
 using static Fake64.Tests.TestHelpers;
 
 namespace Fake64.Tests;
@@ -9,43 +10,8 @@ public sealed class ProgramLoadingTests
     const long CYCLES_PER_SECOND = 985248;
     const int FRAME_CYCLES = 312 * 63;
 
-    // 10 PRINT 6*7 (tokenizzato: PRINT = $99, * = $AC), caricato a $0801
-    static readonly byte[] BasicPrintProgram =
-    [
-        0x01, 0x08,                         // indirizzo di caricamento $0801
-        0x0A, 0x08, 0x0A, 0x00,             // link alla riga successiva ($080A), numero di riga 10
-        0x99, 0x36, 0xAC, 0x37, 0x00,       // PRINT 6*7, fine riga
-        0x00, 0x00,                         // fine del programma
-    ];
-
-    // Raster bar: un raster interrupt a riga 100 colora il bordo di rosso, uno a riga 150 lo rimette azzurro.
-    // Il gestore condivide $0314 con l'IRQ della CIA1, che continua a passare al KERNAL ($EA31)
-    static readonly byte[] RasterBarProgram =
-    [
-        0x00, 0xC0,                         // indirizzo di caricamento $C000
-        0x78,                               // C000 SEI
-        0xA9, 0x01, 0x8D, 0x1A, 0xD0,       // C001 LDA #$01 : STA $D01A
-        0xA9, 0x64, 0x8D, 0x12, 0xD0,       // C006 LDA #100 : STA $D012
-        0xAD, 0x11, 0xD0, 0x29, 0x7F,       // C00B LDA $D011 : AND #$7F
-        0x8D, 0x11, 0xD0,                   // C010 STA $D011
-        0xA9, 0x1F, 0x8D, 0x14, 0x03,       // C013 LDA #<irq : STA $0314
-        0xA9, 0xC0, 0x8D, 0x15, 0x03,       // C018 LDA #>irq : STA $0315
-        0x58,                               // C01D CLI
-        0x60,                               // C01E RTS
-        0xAD, 0x19, 0xD0,                   // C01F irq: LDA $D019
-        0x30, 0x03,                         // C022 BMI raster
-        0x4C, 0x31, 0xEA,                   // C024 JMP $EA31 (IRQ della CIA1)
-        0x8D, 0x19, 0xD0,                   // C027 raster: STA $D019 (acknowledge)
-        0xAD, 0x12, 0xD0,                   // C02A LDA $D012
-        0xC9, 0x78,                         // C02D CMP #120
-        0xB0, 0x0D,                         // C02F BCS bottom
-        0xA9, 0x02, 0x8D, 0x20, 0xD0,       // C031 LDA #2 : STA $D020
-        0xA9, 0x96, 0x8D, 0x12, 0xD0,       // C036 LDA #150 : STA $D012
-        0x4C, 0x81, 0xEA,                   // C03B JMP $EA81 (ripristina i registri, RTI)
-        0xA9, 0x0E, 0x8D, 0x20, 0xD0,       // C03E bottom: LDA #14 : STA $D020
-        0xA9, 0x64, 0x8D, 0x12, 0xD0,       // C043 LDA #100 : STA $D012
-        0x4C, 0x81, 0xEA,                   // C048 JMP $EA81
-    ];
+    // I programmi vengono dagli esempi di samples/ (sorgenti in samples/src)
+    static byte[] Sample(string fileName) => SampleSet.All.Single(sample => sample.FileName == fileName).Content;
 
     private static Board BootedBoard()
     {
@@ -94,7 +60,7 @@ public sealed class ProgramLoadingTests
     {
         var board = BootedBoard();
 
-        var (start, end) = board.LoadPrg(BasicPrintProgram);
+        var (start, end) = board.LoadPrg(Sample("math.prg"));
 
         Assert.IsTrue(board.IsBasicProgram(start));
         Assert.AreEqual((int)end, board.Peek(0x2D) | board.Peek(0x2E) << 8); // VARTAB
@@ -105,7 +71,7 @@ public sealed class ProgramLoadingTests
     public void LoadPrg_BasicProgram_ShouldListAndRun()
     {
         var board = BootedBoard();
-        board.LoadPrg(BasicPrintProgram);
+        board.LoadPrg(Sample("math.prg"));
 
         board.TypeText("LIST\r");
         board.RunCycles(CYCLES_PER_SECOND / 2);
@@ -113,18 +79,33 @@ public sealed class ProgramLoadingTests
         board.RunCycles(CYCLES_PER_SECOND / 2);
 
         var screen = Screen(board);
-        StringAssert.Contains(screen, "10 PRINT6*7\nREADY.");
-        StringAssert.Contains(screen, "RUN\n 42\n");
+        StringAssert.Contains(screen, "10 PRINT 6*7\n");   // la riga 20 contiene ^, la freccia su del C64
+        StringAssert.Contains(screen, "30 PRINT \"PI GRECO\";4*ATN(1)");
+        StringAssert.Contains(screen, "RUN\n 42\n 1024\n");
     }
 
     [TestMethod]
-    public void LoadPrg_MachineCode_ShouldRunWithSysAndSplitBorder()
+    public void LoadPrg_MachineCode_ShouldRunWithSys()
     {
         var board = BootedBoard();
-        var (start, _) = board.LoadPrg(RasterBarProgram);
+        var (start, _) = board.LoadPrg(Sample("sys.prg"));
+        Assert.AreEqual(0xC000, (int)start);
         Assert.IsFalse(board.IsBasicProgram(start));
 
         board.TypeText("SYS49152\r");
+        board.RunCycles(CYCLES_PER_SECOND / 2);
+
+        Assert.AreEqual(0, board.Peek(0xD020) & 0x0F);
+        Assert.AreEqual(11, board.Peek(0xD021) & 0x0F);
+        StringAssert.Contains(Screen(board), "CIAO DA $C000! (SYS 49152)\n\nREADY.");
+    }
+
+    [TestMethod]
+    public void RasterBars_ShouldSplitTheBorderAndKeepBasicAlive()
+    {
+        var board = BootedBoard();
+        board.LoadPrg(Sample("rasterbars.prg"));
+        board.TypeText("RUN\r");
         board.RunCycles(CYCLES_PER_SECOND / 2);
         board.RunCycles(FRAME_CYCLES); // un frame completo con le raster bar attive
 
@@ -142,13 +123,13 @@ public sealed class ProgramLoadingTests
     }
 
     [TestMethod]
-    public void RasterBar_ShouldStayOnTheSameLinesFrameAfterFrame()
+    public void RasterBars_ShouldStayOnTheSameLinesFrameAfterFrame()
     {
         // Il cambio di colore cade a metà riga: deve restare fermo invece di spostare righe intere.
         // Sono ammessi pochi frame diversi, quando l'IRQ della CIA ritarda quello raster (come sul C64 vero)
         var board = BootedBoard();
-        board.LoadPrg(RasterBarProgram);
-        board.TypeText("SYS49152\r");
+        board.LoadPrg(Sample("rasterbars.prg"));
+        board.TypeText("RUN\r");
         board.RunCycles(CYCLES_PER_SECOND / 2);
 
         var topLines = new List<int>();

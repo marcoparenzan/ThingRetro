@@ -8,4 +8,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!-- I sorgenti degli esempi (samples/src) come risorse: "samples/nome.estensione" -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\samples\src\*.bas;..\..\samples\src\*.asm" LogicalName="samples/%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

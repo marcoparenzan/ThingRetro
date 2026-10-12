@@ -25,8 +25,8 @@ vera, con i chip MOS negli zoccoli, le piste che li collegano e i cavi verso mon
   (in sola lettura).
 - **Tastiera del PC** con mappatura posizionale, tasti funzione F1-F8 e tasti cursore.
 - **Porte di controllo** (prese DE-9) con joystick, paddle e mouse 1351: i contatti digitali arrivano alla CIA 1,
-  le linee POT al SID attraverso il commutatore analogico comandato dalla CIA 1. Per ora si comandano da codice:
-  i simulatori (tastiera del PC come joystick, mouse del PC come 1351) sono il prossimo passo.
+  le linee POT al SID attraverso il commutatore analogico comandato dalla CIA 1. Nell'app il joystick si comanda
+  dalla tastiera del PC o da un joystick/gamepad USB, i paddle dal mouse del PC.
 
 Non ancora: audio del SID, drive 1541 e immagini disco/nastro (`.d64`, `.t64`), accessi DMA degli
 sprite. Vedi [Limiti noti](#limiti-noti).
@@ -41,9 +41,9 @@ sprite. Vedi [Limiti noti](#limiti-noti).
 | `src/Fake64.Crt` | Formato `.crt` e tipi di cartuccia |
 | `src/Fake64.WinForms` | `C64Monitor` (lo schermo, uno UserControl) e `PcKeyboard` (il cavo della tastiera) |
 | `src/Fake64` | L'app Windows: una finestra che ospita il monitor |
-| `src/Fake64.Samples` | Generatore dei programmi di esempio (tokenizzatore BASIC V2, writer `.crt`) |
+| `src/Fake64.Samples` | Generatore degli esempi: tokenizzatore BASIC V2, assembler 6502, writer `.crt` |
 | `src/Fake64.Tests` | Test (MSTest) |
-| `samples` | Programmi di esempio pronti da caricare |
+| `samples` | Programmi di esempio pronti da caricare, con i sorgenti BASIC e assembly commentati in `samples/src` |
 | `tools` | Script di supporto (download delle suite di test della CPU) |
 
 L'architettura è descritta in [docs/ARCHITETTURA.md](docs/ARCHITETTURA.md).
@@ -95,8 +95,10 @@ Sono le ROM originali del C64, protette da copyright.
 
 ### Esempi
 
-La cartella [samples](samples/README.md) contiene programmi pronti da trascinare sulla finestra: testo a colori,
-raster interrupt, uno sprite che rimbalza, i tasti funzione, il modo bitmap e una cartuccia con avvio automatico.
+La cartella [samples](samples/README.md) contiene una ventina di programmi pronti da trascinare sulla finestra,
+ciascuno su un argomento del C64: BASIC, interrupt (raster, CIA, NMI), modo decimale, tutti i modi grafici del VIC-II,
+sprite, scroll fine, banchi del VIC-II, joystick e paddle, cartucce (avvio automatico, Ultimax, banchi). I sorgenti
+in `samples/src` sono BASIC e assembly 6502 commentato riga per riga: sono pensati per imparare.
 
 ```powershell
 dotnet run --project src/Fake64 -- samples/rasterbars.prg
@@ -120,6 +122,21 @@ dotnet run --project src/Fake64 -- samples/rasterbars.prg
 | Backspace | INST/DEL |
 | `;` e `'` (a destra della L) | `:` e `;` |
 | `\` | ↑ |
+
+### Joystick e paddle
+
+Clic destro sul monitor: per ciascuna porta di controllo si sceglie cosa è collegato. La scelta resta fra un
+avvio e l'altro; il predefinito è il joystick dal tastierino nella porta 2, quella usata da quasi tutti i giochi.
+**Scambia le porte** (Ctrl+F12) serve per i giochi che vogliono il joystick nella porta 1.
+
+| Scelta | Comandi |
+|---|---|
+| Joystick: tastierino numerico | 8 su, 2 giù, 4 sinistra, 6 destra; 7, 9, 1, 3 diagonali; 0 o 5 fuoco (Bloc Num attivo) |
+| Joystick: frecce, fuoco Ctrl | per i portatili senza tastierino; in questo modo le frecce non fanno da tasti cursore del C64 |
+| Joystick USB | joystick o gamepad USB (API joystick di Windows): leva principale o pad direzionale, pulsanti 1-4 per il fuoco |
+| Paddle: mouse | clic sul monitor per catturare il mouse, movimento orizzontale per girare la manopola, pulsante sinistro come pulsante del paddle, clic destro per liberarlo |
+
+I tasti usati dal joystick non arrivano alla tastiera del C64. Una stessa origine può essere in una sola porta.
 
 ### Usare il C64 in un'altra applicazione
 
@@ -168,8 +185,9 @@ singolo chip.
 ## Limiti noti
 
 - **SID**: i registri ci sono, l'audio non viene riprodotto.
-- **Simulatori dei dispositivi di controllo** (tastiera e mouse del PC come joystick, paddle, 1351): non ancora.
-  La penna ottica e il modo joystick del 1351 non sono modellati.
+- **Porte di controllo**: il mouse del PC non simula ancora il 1351; la penna ottica e il modo joystick del
+  1351 non sono modellati. Il joystick USB è verificato solo nei test (conversione delle letture), non con
+  tutti i dispositivi.
 - **Drive 1541, `.d64`/`.t64`**: non ancora emulati.
 - **VIC-II**: gli accessi DMA degli sprite non rubano cicli alla CPU; non si aprono i bordi con i trucchi
   delle demo; la grafica di una riga viene calcolata con i dati di memoria di fine riga (solo i cambi di

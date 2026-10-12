@@ -8,6 +8,7 @@ namespace Fake64.Samples;
 public static class CrtImage
 {
     public const int TypeNormal = 0;
+    public const int TypeMagicDesk = 19;
 
     public static byte[] Build(string name, int hardwareType, bool exromActive, bool gameActive, params (int Bank, ushort LoadAddress, byte[] Rom)[] chips)
     {
