@@ -1,9 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿namespace Fake64.Mos;
 
-namespace Fake64.Mos;
-
-public partial class MOS6510
+// ALU: operazioni sui valori e sui flag, senza accessi al bus
+public partial class MOS6502
 {
     private byte ASL(byte val)
     {
@@ -169,126 +167,5 @@ public partial class MOS6510
                         (val & FLAG_N) |
                         (val & FLAG_V) |
                         ((A & val) == 0 ? FLAG_Z : 0));
-    }
-
-
-    private void JSR(ushort addr)
-    {
-        // PC punta al primo byte dell'operando: si salva l'indirizzo dell'ultimo byte di JSR
-        // (indirizzo di ritorno - 1), come fa il 6502 reale
-        ushort returnAddress = (ushort)(PC + 1);
-        Push((byte)(returnAddress >> 8)); // High byte
-        Push((byte)returnAddress);        // Low byte
-        PC = addr;
-    }
-
-    private ushort RTS()
-    {
-        // Pull the return address from the stack: RTS salta all'indirizzo letto + 1
-        byte low = Pop();
-        byte high = Pop();
-        return (ushort)(((high << 8) | low) + 1);
-    }
-
-    private void RTI()
-    {
-        Status = (byte)((Pop() & ~FLAG_B) | FLAG_U);
-        byte low = Pop();
-        byte high = Pop();
-        PC = (ushort)((high << 8) | low);
-    }
-
-
-    private byte SLO(ushort addr)
-    {
-        byte value = ASL(ReadByte(addr));
-        WriteByte(addr, value);
-        A = ORA(value);
-        return A;
-    }
-
-    private byte RLA(ushort addr)
-    {
-        byte value = ROL(ReadByte(addr));
-        WriteByte(addr, value);
-        A = AND(value);
-        return A;
-    }
-
-    private byte SRE(ushort addr)
-    {
-        byte value = LSR(ReadByte(addr));
-        WriteByte(addr, value);
-        A = EOR(value);
-        return A;
-    }
-
-    private byte ISC(ushort addr)
-    {
-        byte value = INC(ReadByte(addr));
-        WriteByte(addr, value);
-        A = SBC(value);
-        return A;
-    }
-
-    private void BRK()
-    {
-        // BRK occupa due byte (opcode + byte di padding): si salva l'indirizzo dopo il padding
-        PC++;
-        Push((byte)(PC >> 8)); // Push high byte of PC
-        Push((byte)PC);        // Push low byte of PC
-        Push((byte)(Status | FLAG_B | FLAG_U)); // Push status register with Break flag set
-        Status |= FLAG_I;      // Set Interrupt Disable flag
-        PC = ReadWord(0xFFFE); // Jump to interrupt vector
-    }
-    /// <summary>
-    /// RRA - Illegal opcode that performs ROR followed by ADC on the same memory location
-    /// </summary>
-    /// <param name="address">The memory address to operate on</param>
-    private void RRA(ushort address)
-    {
-        // Read the value from memory
-        byte value = ReadByte(address);
-
-        // Perform ROR (Rotate Right)
-        byte rotatedValue = ROR(value);
-
-        // Write the rotated value back to memory
-        WriteByte(address, rotatedValue);
-
-        // Perform ADC with the rotated value
-        A = ADC(rotatedValue);
-    }
-
-    /// <summary>
-    /// LAX - Illegal opcode that loads a value into both the Accumulator and X register
-    /// </summary>
-    /// <param name="value">The value to load</param>
-    /// <returns>The loaded value</returns>
-    private byte LAX(byte value)
-    {
-        // Set the zero and negative flags based on the value
-        SetZN(value);
-
-        // Return the value (which will be assigned to both A and X)
-        return value;
-    }
-    /// <summary>
-    /// DCP - Illegal opcode that performs DEC followed by CMP at the same memory location
-    /// </summary>
-    /// <param name="address">The memory address to operate on</param>
-    private void DCP(ushort address)
-    {
-        // Read the value from memory
-        byte value = ReadByte(address);
-
-        // Decrement the value
-        value--;
-
-        // Write the decremented value back to memory
-        WriteByte(address, value);
-
-        // Compare the accumulator with the decremented value
-        Compare(A, value);
     }
 }

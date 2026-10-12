@@ -40,7 +40,7 @@ public partial class Board
         Cia2Socket = new Socket<I6526Pinout>("CIA 2", ConnectCia2, DisconnectCia2);
     }
 
-    // CPU: bus indirizzi/dati attraverso il PLA, /IRQ, /NMI, RDY da BA del VIC-II,
+    // CPU: bus indirizzi/dati attraverso il PLA, /IRQ, /NMI, RDY da BA e AEC da AEC del VIC-II,
     // P0-P2 (LORAM, HIRAM, CHAREN) al PLA; P3-P5 al registratore (non collegato: pull-up)
     void ConnectCpu(I6510Pinout chip)
     {
@@ -48,6 +48,7 @@ public partial class Board
         chip.IrqInput = () => irqLine.IsLow;
         chip.NmiInput = () => nmiLine.IsLow;
         chip.RdyInput = () => vic?.BusAvailable ?? true;
+        chip.AecInput = () => vic?.AddressEnable ?? true;
         chip.Port.External = () => 0xFF;
         chip.Port.Changed += MemoryMap;
         cpu = chip;

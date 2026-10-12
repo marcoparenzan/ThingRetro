@@ -122,7 +122,7 @@ public class MOS6581 : I6581Pinout
         volumeChangePending = false;
     }
 
-    // φ2: la logica di temporizzazione interna (ProcessSignals/Clock) è quella di prima
+    // φ2: ProcessSignals e Clock sono la logica interna di temporizzazione (l'audio non viene ancora riprodotto)
     private int tickCount;
 
     public void Tick()

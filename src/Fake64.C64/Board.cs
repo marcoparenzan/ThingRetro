@@ -23,7 +23,7 @@ public partial class Board
 
     internal long TotalCycles => totalCycles;
 
-    // Cicli in cui la CPU è stata fermata dal VIC-II (bad line)
+    // Cicli con BA basso: il VIC-II ha chiesto il bus (43 per bad line; la CPU può ancora scrivere nei primi 3)
     internal long StolenCycles { get; private set; }
 
     // Cycle constants for PAL C64
@@ -103,7 +103,7 @@ public partial class Board
         cia1?.Tick();
         cia2?.Tick();
         sid?.Tick();
-        cpu?.Tick(); // RDY è collegato a BA: con BA basso la CPU resta ferma da sola
+        cpu?.Tick(); // RDY e AEC sono collegati al VIC-II: la CPU si ferma da sola quando serve
         if (!busAvailable) StolenCycles++;
         vic?.Tick();
 

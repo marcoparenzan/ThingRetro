@@ -86,6 +86,7 @@ public partial class MOS6569 : I6569Pinout
         registers[REG_BACKGROUND_COLOR] = 6;  // Blue background
 
         rasterLine = 0;
+        renderedTo = 0;
         currentCycle = 0;
         rasterCompare = 0;
         badLinesEnabled = false;
@@ -114,12 +115,12 @@ public partial class MOS6569 : I6569Pinout
         rasterLine >= 0x30 && rasterLine <= 0xF7 &&
         (rasterLine & 0x07) == (registers[REG_CONTROL_1] & 0x07);
 
-    // Nelle bad line il VIC-II legge 40 codici carattere nei cicli 15-54 (1-based) e la CPU resta ferma.
-    // Semplificazione: non si modellano i 3 cicli di preavviso di BA in cui la CPU può ancora scrivere
-    internal bool CpuStalled => IsBadLine && currentCycle >= 14 && currentCycle <= 53;
-
-    // BA: alto quando la CPU può usare il bus
-    public bool BusAvailable => !CpuStalled;
+    // Nelle bad line il VIC-II legge 40 codici carattere nei cicli 15-54 (contando da 1): in quei cicli
+    // tiene AEC basso e il bus è suo. BA scende 3 cicli prima (dal ciclo 12), così la CPU, collegata a RDY,
+    // può finire le scritture in corso e si ferma al primo ciclo di lettura.
+    // Non modellati: gli accessi degli sprite, che rubano altri cicli
+    public bool BusAvailable => !(IsBadLine && currentCycle >= 11 && currentCycle <= 53);
+    public bool AddressEnable => !(IsBadLine && currentCycle >= 14 && currentCycle <= 53);
 
     // Handle end-of-line processing
     private void EndLine()
@@ -201,6 +202,10 @@ public partial class MOS6569 : I6569Pinout
         ushort addr = (ushort)register;
         addr &= 0x3F; // I registri si ripetono ogni 64 byte in $D000-$D3FF
         if (addr > 0x2E) return; // Registri non usati
+
+        // I pixel già emessi in questa riga restano con i valori di prima
+        if (addr != REG_INTERRUPT_STATUS && addr != REG_INTERRUPT_ENABLE)
+            CatchUp();
 
         // Special handling for certain registers
         switch (addr)

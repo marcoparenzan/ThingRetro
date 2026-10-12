@@ -216,6 +216,9 @@ public sealed class MOS6510Tests
         Assert.AreEqual(0xC004, (int)board.Cpu.PC);
 
         board.StepInstruction(); // CLI
+        board.StepInstruction(); // come sul 6502 vero, dopo CLI viene eseguita ancora un'istruzione
+        Assert.AreEqual(0xC006, (int)board.Cpu.PC);
+
         board.StepInstruction(); // IRQ servito, poi la prima istruzione dell'handler
 
         ushort irqVector = (ushort)(board.Peek(0xFFFE) | board.Peek(0xFFFF) << 8);

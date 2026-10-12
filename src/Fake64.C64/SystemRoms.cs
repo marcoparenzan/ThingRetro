@@ -1,6 +1,6 @@
 namespace Fake64.C64;
 
-// Contenuto delle tre ROM della scheda madre. Il core non sa da dove arrivano (file, risorse, rete):
+// Contenuto delle tre ROM della scheda madre. La scheda non sa da dove arrivano (file, risorse, rete):
 // chi crea la Board le legge e le passa al costruttore
 public sealed record SystemRoms
 {

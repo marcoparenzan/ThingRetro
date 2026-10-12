@@ -1,7 +1,9 @@
 namespace Fake64.Mos;
 
-// Rendering del VIC-II: ogni riga raster viene disegnata alla sua fine in un frame buffer di indici
-// colore, così i cambi di registro a metà frame (split raster) sono visibili con risoluzione di riga
+// Rendering del VIC-II in un frame buffer di indici colore. Il VIC-II emette 8 pixel per ciclo: quando
+// la CPU scrive un registro a metà riga, i pixel già "passati sotto il pennello" vengono disegnati
+// con i valori vecchi (CatchUp) e il resto della riga con quelli nuovi. Così uno split raster cade
+// nel punto giusto della riga, con la precisione di un ciclo, invece di spostare righe intere
 public partial class MOS6569
 {
     // Area visibile: 42 pixel di bordo a sinistra/sopra, 320x200 di display, 41/42 a destra/sotto
@@ -19,14 +21,43 @@ public partial class MOS6569
     readonly bool[] lineForeground = new bool[SCREEN_WIDTH]; // pixel di primo piano (priorità e collisioni sprite)
     readonly byte[] lineSprites = new byte[SCREEN_WIDTH];    // maschera degli sprite presenti in ogni pixel
 
+    // Pixel della riga corrente già disegnati nel frame buffer
+    int renderedTo;
+
     // Indice colore (0-15) di un pixel dell'ultimo frame disegnato
     internal byte PixelAt(int x, int y) => frame[y * SCREEN_WIDTH + x];
 
+    // Colonna del frame buffer emessa nel ciclo corrente: 8 pixel per ciclo, la X sprite 24
+    // (colonna 42) esce nel ciclo 16 (contando da 0)
+    int BeamX => Math.Clamp(8 * currentCycle - 86, 0, SCREEN_WIDTH);
+
+    // Prima di una scrittura in un registro: disegna con i valori vecchi i pixel già emessi in questa riga
+    private void CatchUp()
+    {
+        int x = BeamX;
+        int y = rasterLine - FIRST_VISIBLE_LINE;
+        if (x <= renderedTo || y < 0 || y >= SCREEN_HEIGHT) return;
+
+        ComposeLine(rasterLine, detectCollisions: false);
+        Array.Copy(lineColor, renderedTo, frame, y * SCREEN_WIDTH + renderedTo, x - renderedTo);
+        renderedTo = x;
+    }
+
+    // Fine riga: disegna i pixel rimasti e rileva le collisioni degli sprite
     private void RenderLine(int line)
     {
         int y = line - FIRST_VISIBLE_LINE;
-        if (y < 0 || y >= SCREEN_HEIGHT) return;
+        if (y >= 0 && y < SCREEN_HEIGHT)
+        {
+            ComposeLine(line, detectCollisions: true);
+            Array.Copy(lineColor, renderedTo, frame, y * SCREEN_WIDTH + renderedTo, SCREEN_WIDTH - renderedTo);
+        }
+        renderedTo = 0;
+    }
 
+    // Calcola l'intera riga con i registri attuali nei buffer di lavoro
+    private void ComposeLine(int line, bool detectCollisions)
+    {
         byte control1 = registers[REG_CONTROL_1];
         byte control2 = registers[REG_CONTROL_2];
 
@@ -34,10 +65,8 @@ public partial class MOS6569
         Array.Clear(lineForeground);
 
         RenderGraphics(line, control1, control2);
-        RenderSprites(line);
+        RenderSprites(line, detectCollisions);
         RenderBorder(line, control1, control2);
-
-        Array.Copy(lineColor, 0, frame, y * SCREEN_WIDTH, SCREEN_WIDTH);
     }
 
     // Letture sul bus video; senza nulla collegato il bus resta alto
@@ -148,7 +177,7 @@ public partial class MOS6569
         }
     }
 
-    private void RenderSprites(int line)
+    private void RenderSprites(int line, bool detectCollisions)
     {
         byte enabled = registers[REG_SPRITE_ENABLE];
         if (enabled == 0) return;
@@ -200,7 +229,7 @@ public partial class MOS6569
             }
         }
 
-        DetectCollisions();
+        if (detectCollisions) DetectCollisions();
     }
 
     private void PutSpritePixels(int x, int count, byte color, int bit, bool behindForeground)

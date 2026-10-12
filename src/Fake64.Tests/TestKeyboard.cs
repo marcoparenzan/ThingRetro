@@ -3,7 +3,7 @@ using static Fake64.Tests.TestHelpers;
 
 namespace Fake64.Tests;
 
-// Matrice della tastiera del C64 (core) e corrispondenza con i tasti del PC (Fake64.WinForms)
+// Matrice della tastiera del C64 (Fake64.C64) e corrispondenza con i tasti del PC (Fake64.WinForms)
 [TestClass]
 public sealed class KeyboardTests
 {
@@ -13,7 +13,7 @@ public sealed class KeyboardTests
     // Righe della matrice: una riga si seleziona mettendo a 0 il suo bit della porta A della CIA1
     static byte Row(Board board, int row) => board.Keyboard.GetKeyboardState((byte)~(1 << row));
 
-    #region Matrice (core)
+    #region Matrice (Fake64.C64)
 
     [TestMethod]
     [DataRow(C64Key.F1, 0, 4)]

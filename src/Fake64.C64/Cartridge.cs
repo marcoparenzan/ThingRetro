@@ -2,7 +2,7 @@ namespace Fake64.C64;
 
 // Dispositivo collegato alla porta di espansione: il contratto elettrico che la Board conosce.
 // ROML compare a $8000-$9FFF, ROMH a $A000-$BFFF (modo 16K) o a $E000-$FFFF (Ultimax).
-// I tipi concreti e il formato dei file (.crt) stanno fuori dal core, nel progetto Fake64.Crt
+// I tipi concreti e il formato dei file (.crt) stanno fuori dalla scheda, nel progetto Fake64.Crt
 public abstract class Cartridge
 {
     protected Cartridge(string name, bool exrom, bool game)

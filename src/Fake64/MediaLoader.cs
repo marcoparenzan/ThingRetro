@@ -4,8 +4,8 @@ using Fake64.C64;
 
 namespace Fake64;
 
-// Apertura dei file supportati dall'app: .prg (Fake64.Prg) e .crt (Fake64.Crt). Il core non conosce
-// nessuno dei due formati: qui si legge il file e si passa il risultato alla Board
+// Apertura dei file supportati dall'app: .prg (Fake64.Prg) e .crt (Fake64.Crt). La scheda (Fake64.C64)
+// non conosce nessuno dei due formati: qui si legge il file e si passa il risultato alla Board
 static class MediaLoader
 {
     // Tempo lasciato al KERNAL per arrivare a READY. prima di caricare un .prg all'avvio

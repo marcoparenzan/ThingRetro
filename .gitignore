@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Suite di test esterne per la CPU (scaricate con tools/Download-CpuTests.ps1, licenze GPL-3.0 e MIT)
+src/Fake64.Tests/TestData/External/

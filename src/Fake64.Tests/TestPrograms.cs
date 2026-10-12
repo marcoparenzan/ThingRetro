@@ -142,6 +142,27 @@ public sealed class ProgramLoadingTests
     }
 
     [TestMethod]
+    public void RasterBar_ShouldStayOnTheSameLinesFrameAfterFrame()
+    {
+        // Il cambio di colore cade a metà riga: deve restare fermo invece di spostare righe intere.
+        // Sono ammessi pochi frame diversi, quando l'IRQ della CIA ritarda quello raster (come sul C64 vero)
+        var board = BootedBoard();
+        board.LoadPrg(RasterBarProgram);
+        board.TypeText("SYS49152\r");
+        board.RunCycles(CYCLES_PER_SECOND / 2);
+
+        var topLines = new List<int>();
+        for (int frame = 0; frame < 100; frame++)
+        {
+            board.RunCycles(FRAME_CYCLES);
+            topLines.Add(Enumerable.Range(90, 40).First(line => board.Vic.PixelAt(0, line - 9) == 2));
+        }
+
+        int mostCommon = topLines.GroupBy(line => line).OrderByDescending(group => group.Count()).First().Key;
+        Assert.IsTrue(topLines.Count(line => line == mostCommon) >= 95, string.Join(",", topLines));
+    }
+
+    [TestMethod]
     public void TypeText_ShouldRejectMoreThanTenCharacters()
     {
         var board = NewBoard();

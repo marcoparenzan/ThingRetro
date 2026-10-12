@@ -243,6 +243,21 @@ public sealed class VicGraphicsTests
         Assert.AreEqual(WHITE, Pixel(board, 0, 100 - 9));
     }
 
+    [TestMethod]
+    public void RasterSplit_MidLine_ShouldChangeColorAtBeamPosition()
+    {
+        var board = NewDisplay();
+        board.RunCycles(100 * 63 + 13); // ciclo 13 della riga 100: il pennello è nel bordo sinistro
+        board.Poke(0xD020, WHITE);
+        board.RunCycles(FRAME_CYCLES - (100 * 63 + 13));
+
+        int row = 100 - 9;
+        int beam = 8 * 13 - 86;          // 8 pixel per ciclo: colonna emessa nel ciclo 13
+        Assert.AreEqual(RED, Pixel(board, beam - 1, row));
+        Assert.AreEqual(WHITE, Pixel(board, beam, row));
+        Assert.AreEqual(WHITE, Pixel(board, 0, row + 1));
+    }
+
     #endregion
 
     #region Sprites

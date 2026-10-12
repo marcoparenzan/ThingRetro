@@ -73,7 +73,7 @@ public sealed class MOS6569Tests
     }
 
     [TestMethod]
-    public void BadLines_ShouldStealFortyCyclesPerCharacterRow()
+    public void BadLines_ShouldHoldBaLowFortyThreeCyclesPerCharacterRow()
     {
         var board = NewBoard();
         board.ParkCpu();
@@ -81,7 +81,9 @@ public sealed class MOS6569Tests
 
         board.RunCycles(LINES_PER_FRAME * CYCLES_PER_LINE);
 
-        Assert.AreEqual(25 * 40, board.StolenCycles);
+        // 40 accessi ai codici carattere + 3 cicli di preavviso: con la CPU in un loop di sole letture
+        // la CPU resta ferma per tutti i 43
+        Assert.AreEqual(25 * 43, board.StolenCycles);
     }
 
     [TestMethod]

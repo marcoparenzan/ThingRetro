@@ -61,6 +61,8 @@ static class TestHelpers
     // Carica un programma in RAM e posiziona la CPU sulla prima istruzione con gli IRQ disabilitati
     public static void Load(this Board board, ushort addr, params byte[] program)
     {
+        // Come un debugger: si cambia il PC solo fra due istruzioni, non a metà di una
+        while (!board.Cpu.IsInstructionBoundary) board.RunCycles(1);
         board.Poke(addr, program);
         board.Cpu.PC = addr;
         board.Cpu.Status = 0x24; // I + bit 5

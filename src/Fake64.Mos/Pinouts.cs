@@ -20,7 +20,8 @@ public interface I6510Pinout
     IBus? Bus { get; set; }              // A0-A15, D0-D7, R/W
     Func<bool> IrqInput { get; set; }    // /IRQ (a livello)
     Func<bool> NmiInput { get; set; }    // /NMI (sul fronte di discesa)
-    Func<bool> RdyInput { get; set; }    // RDY: falso = la CPU si ferma (collegato a BA del VIC-II)
+    Func<bool> RdyInput { get; set; }    // RDY: falso = la CPU si ferma al primo ciclo di lettura (BA del VIC-II)
+    Func<bool> AecInput { get; set; }    // AEC: falso = il bus è di un altro (il VIC-II), la CPU è ferma
     ParallelPort Port { get; }           // P0-P5, registri $0000 (direzione) e $0001 (dati)
     void Reset();                        // /RES
     void Tick();                         // un ciclo di φ2
@@ -54,7 +55,8 @@ public interface I6569Pinout
     void Write(int register, byte value);
     IVicMemory? Memory { get; set; }     // bus video
     bool Irq { get; }                    // /IRQ
-    bool BusAvailable { get; }           // BA: falso = il VIC-II ha bisogno del bus, la CPU deve fermarsi
+    bool BusAvailable { get; }           // BA: falso = il VIC-II chiederà il bus fra 3 cicli (la CPU finisce le scritture)
+    bool AddressEnable { get; }          // AEC: falso = il VIC-II sta usando il bus anche nella fase della CPU
     Action? FrameCompleted { get; set; } // uscita video: un frame completo è pronto
     unsafe void Render(byte* pixels);    // copia l'ultimo frame (SCREEN_WIDTH x SCREEN_HEIGHT, BGRA)
     void Reset();                        // nessun /RES sul VIC-II: azzera lo stato all'accensione
