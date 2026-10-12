@@ -6,14 +6,11 @@ public class Keyboard(Board board)
 {
     private byte[] keyboardMatrix = new byte[8] { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 
-    // For cycle-exact emulation
-    private bool[,] pendingKeyChanges = new bool[8, 8];
-    private bool[,] pendingKeyStates = new bool[8, 8];
-    private bool pendingShiftKeyChange = false;
-    private bool pendingShiftKeyState = false;
-    private bool keyPollingNeeded = false;
     private int keyScanCycleCounter = 0;
     private const int KEY_SCAN_INTERVAL_CYCLES = 19656; // PAL: 312 linee x 63 cicli = 1 frame
+
+    // Stato di un tasto del PC (codice virtual key di Windows); sostituibile nei test
+    internal Func<int, bool> HostKeyDown { get; set; } = vk => (GetAsyncKeyState(vk) & 0x8000) != 0;
 
     // Method to get keyboard matrix state for CIA1
     public byte GetKeyboardState(byte rowSelectionMask)
@@ -34,20 +31,6 @@ public class Keyboard(Board board)
         return result;
     }
 
-    // Methods for keyboard input
-    public void KeyDown(byte row, byte col)
-    {
-        keyboardMatrix[row] &= (byte)~(1 << col);
-    }
-
-    public void KeyUp(byte row, byte col)
-    {
-        keyboardMatrix[row] |= (byte)(1 << col);
-    }
-
-    // Dictionary to track key states
-    private Dictionary<int, bool> keyStates = new();
-
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int vKey);
 
@@ -60,8 +43,15 @@ public class Keyboard(Board board)
     private const byte SHIFT_ROW = 1;
     private const byte SHIFT_COL = 7;
 
+    // Posizione nella matrice del C64 (riga = bit della porta A della CIA1, colonna = bit della porta B);
+    // Shift = il tasto del C64 va premuto insieme allo Shift sinistro
+    private readonly record struct C64Key(byte Row, byte Col, bool Shift = false)
+    {
+        public static implicit operator C64Key((byte Row, byte Col) position) => new(position.Row, position.Col);
+    }
+
     // Map of PC virtual keys to C64 keyboard matrix positions
-    private static readonly Dictionary<int, (byte Row, byte Col)> KeyMap = new()
+    private static readonly Dictionary<int, C64Key> KeyMap = new()
     {
         // Letters
         { 'A', (1, 2) },
@@ -109,11 +99,21 @@ public class Keyboard(Board board)
         { 8, (0, 0) },      // Backspace/Delete
         { 27, (7, 7) },     // Escape/Run Stop
         
-        // Arrow keys
-        { 37, (0, 2) },     // Left
-        { 38, (6, 4) },     // Up 
-        { 39, (6, 7) },     // Right (corrected from 0,2)
-        { 40, (0, 7) },     // Down
+        // Tasti cursore: il C64 ha solo CRSR destra e CRSR giù, sinistra e su si ottengono con Shift
+        { 0x27, new C64Key(0, 2) },              // Right
+        { 0x25, new C64Key(0, 2, Shift: true) }, // Left
+        { 0x28, new C64Key(0, 7) },              // Down
+        { 0x26, new C64Key(0, 7, Shift: true) }, // Up
+
+        // Tasti funzione: F1, F3, F5, F7 sono tasti fisici, F2, F4, F6, F8 sono gli stessi con Shift
+        { 0x70, new C64Key(0, 4) },              // F1
+        { 0x71, new C64Key(0, 4, Shift: true) }, // F2
+        { 0x72, new C64Key(0, 5) },              // F3
+        { 0x73, new C64Key(0, 5, Shift: true) }, // F4
+        { 0x74, new C64Key(0, 6) },              // F5
+        { 0x75, new C64Key(0, 6, Shift: true) }, // F6
+        { 0x76, new C64Key(0, 3) },              // F7
+        { 0x77, new C64Key(0, 3, Shift: true) }, // F8
         
         // Punctuation
         { 190, (5, 4) },    // . (Period)
@@ -126,116 +126,39 @@ public class Keyboard(Board board)
         { 220, (6, 6) },    // \ (Backslash mapped to ^ on C64)
     };
 
-    // Common special keys to poll
-    private static readonly int[] keysToCheck = {
-        // Letters
-        'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-        'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-        
-        // Numbers
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-        
-        // Special keys
-        32, 13, 8, 27, 37, 38, 39, 40,
-        
-        // Punctuation & others
-        187, 189, 186, 222, 188, 190, 191, 220
-    };
-
     // Process keyboard signals for the upcoming cycle
     internal void ProcessSignals(int currentCycle)
     {
         // Lo stato dei tasti del PC viene letto una volta per frame (50 Hz): interrogare
         // GetAsyncKeyState per ogni tasto ogni pochi cicli rallentava l'emulazione di oltre 10 volte
         keyScanCycleCounter++;
-        if (keyScanCycleCounter >= KEY_SCAN_INTERVAL_CYCLES)
+        if (keyScanCycleCounter < KEY_SCAN_INTERVAL_CYCLES) return;
+        keyScanCycleCounter = 0;
+
+        ScanHostKeyboard();
+    }
+
+    // La matrice viene ricostruita da zero: lo Shift del C64 è premuto se lo è quello del PC
+    // o se un tasto premuto lo richiede (F2, cursore su, ...)
+    internal void ScanHostKeyboard()
+    {
+        var matrix = new byte[8] { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+        bool shift = HostKeyDown(VK_SHIFT) || HostKeyDown(VK_LSHIFT) || HostKeyDown(VK_RSHIFT);
+
+        foreach (var (virtualKey, key) in KeyMap)
         {
-            keyScanCycleCounter = 0;
-            keyPollingNeeded = true;
-            
-            // Reset pending changes
-            pendingKeyChanges = new bool[8, 8];
-            pendingShiftKeyChange = false;
-            
-            // Check shift key state
-            bool isShiftPressed = 
-                (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0 ||
-                (GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0 ||
-                (GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0;
-                
-            // Determine if shift key state is changing
-            bool currentShiftState = ((keyboardMatrix[SHIFT_ROW] & (1 << SHIFT_COL)) == 0);
-            if (isShiftPressed != currentShiftState)
-            {
-                pendingShiftKeyChange = true;
-                pendingShiftKeyState = isShiftPressed;
-            }
-            
-            // Check all other keys
-            foreach (int key in keysToCheck)
-            {
-                short keyState = GetAsyncKeyState(key);
-                bool isPressed = (keyState & 0x8000) != 0;
-                
-                // Initialize state if this is the first check
-                if (!keyStates.ContainsKey(key))
-                    keyStates[key] = false;
-                
-                // Key state is changing
-                if (isPressed != keyStates[key])
-                {
-                    // Find the matrix position for this key
-                    if (KeyMap.TryGetValue(key, out var position))
-                    {
-                        pendingKeyChanges[position.Row, position.Col] = true;
-                        pendingKeyStates[position.Row, position.Col] = isPressed;
-                    }
-                }
-            }
+            if (!HostKeyDown(virtualKey)) continue;
+            matrix[key.Row] &= (byte)~(1 << key.Col);
+            shift |= key.Shift;
         }
+
+        if (shift) matrix[SHIFT_ROW] &= unchecked((byte)~(1 << SHIFT_COL));
+
+        keyboardMatrix = matrix;
     }
 
     // Execute a single clock cycle
     public void Clock()
     {
-        // Only apply keyboard changes when polling is needed
-        if (keyPollingNeeded)
-        {
-            // First handle shift key
-            if (pendingShiftKeyChange)
-            {
-                if (pendingShiftKeyState)
-                    KeyDown(SHIFT_ROW, SHIFT_COL);
-                else
-                    KeyUp(SHIFT_ROW, SHIFT_COL);
-            }
-            
-            // Then handle all other keys
-            for (byte row = 0; row < 8; row++)
-            {
-                for (byte col = 0; col < 8; col++)
-                {
-                    if (pendingKeyChanges[row, col])
-                    {
-                        if (pendingKeyStates[row, col])
-                            KeyDown(row, col);
-                        else
-                            KeyUp(row, col);
-                            
-                        // Update the tracked state in keyStates
-                        foreach (var kvp in KeyMap)
-                        {
-                            if (kvp.Value.Row == row && kvp.Value.Col == col)
-                            {
-                                keyStates[kvp.Key] = pendingKeyStates[row, col];
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            
-            keyPollingNeeded = false;
-        }
     }
 }

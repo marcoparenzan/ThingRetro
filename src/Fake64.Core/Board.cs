@@ -29,6 +29,7 @@ public partial class Board
     internal MOS6510 Cpu => cpu;
     internal MOS6526 Cia1 => cia1;
     internal MOS6526 Cia2 => cia2;
+    internal Keyboard Keyboard => keyboard;
     internal long TotalCycles => totalCycles;
 
     // Cicli in cui la CPU è stata fermata dal VIC-II (bad line)
