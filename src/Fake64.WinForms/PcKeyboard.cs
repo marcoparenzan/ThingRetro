@@ -21,6 +21,11 @@ public sealed class PcKeyboard : IDisposable
     // Orologio in millisecondi, sostituibile nei test
     internal Func<long> Now { get; set; } = () => Environment.TickCount64;
 
+    // Tasti riservati ad altro (per esempio al joystick da tastiera): non arrivano alla tastiera del C64
+    public Func<Keys, bool>? Excluded { get; set; }
+
+    bool Handles(Keys key) => PcKeyboardLayout.IsMapped(key) && Excluded?.Invoke(key) != true;
+
     public PcKeyboard(Control source, Keyboard target)
     {
         this.source = source;
@@ -33,7 +38,7 @@ public sealed class PcKeyboard : IDisposable
 
     void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        if (!PcKeyboardLayout.IsMapped(e.KeyCode)) return;
+        if (!Handles(e.KeyCode)) return;
         e.Handled = true;
         e.SuppressKeyPress = true; // F10 e simili non attivano il menu della form
         releaseDueAt.Remove(e.KeyCode);
@@ -44,7 +49,7 @@ public sealed class PcKeyboard : IDisposable
 
     void OnKeyUp(object? sender, KeyEventArgs e)
     {
-        if (!PcKeyboardLayout.IsMapped(e.KeyCode) || !pressed.Contains(e.KeyCode)) return;
+        if (!pressed.Contains(e.KeyCode)) return;
         e.Handled = true;
 
         long releaseAt = pressedAt[e.KeyCode] + (long)MinimumHold.TotalMilliseconds;

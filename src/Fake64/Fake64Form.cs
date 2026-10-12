@@ -4,13 +4,16 @@ using Fake64.C64;
 namespace Fake64;
 
 // Finestra dell'app: ospita un C64Monitor e collega i pezzi. Lo stesso schema (Board, monitor,
-// MonitorCable, PcKeyboard) funziona in qualunque form, anche insieme ad altri controlli
+// MonitorCable, PcKeyboard, ControlPortSelector) funziona in qualunque form, anche insieme ad altri controlli.
+// Clic destro sul monitor: cosa è collegato alle porte di controllo, scambio delle porte, reset
 public partial class Fake64Form : Form
 {
     readonly Board board;
     readonly C64Monitor monitor = new() { Dock = DockStyle.Fill };
     readonly MonitorCable monitorCable;
     readonly PcKeyboard keyboardCable;
+    readonly ControlPortSelector controlPorts;
+    readonly AppSettings settings = AppSettings.Load();
 
     public Fake64Form(SystemRoms roms, string? startupFile = null)
     {
@@ -23,6 +26,20 @@ public partial class Fake64Form : Form
         // I collegamenti espliciti: uscita video -> monitor, tastiera del PC (sul monitor) -> tastiera del C64
         monitorCable = new MonitorCable(board.VideoOut, monitor);
         keyboardCable = new PcKeyboard(monitor, board.Keyboard);
+
+        // Porte di controllo: joystick dalla tastiera o USB, paddle dal mouse; i tasti del joystick
+        // non arrivano alla tastiera del C64
+        controlPorts = new ControlPortSelector(board, monitor);
+        controlPorts.Select(1, settings.Port1);
+        controlPorts.Select(2, settings.Port2);
+        controlPorts.Changed += SaveControlPorts;
+        keyboardCable.Excluded = controlPorts.UsesKey;
+
+        var menu = new ContextMenuStrip();
+        controlPorts.AddMenuItems(menu.Items);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem("Reset", null, (_, _) => board.Enqueue(board.Reset)));
+        monitor.ContextMenuStrip = menu;
 
         monitor.AllowDrop = true;
         monitor.DragEnter += (_, e) =>
@@ -63,8 +80,16 @@ public partial class Fake64Form : Form
         monitor.Focus();
     }
 
+    void SaveControlPorts()
+    {
+        settings.Port1 = controlPorts[1];
+        settings.Port2 = controlPorts[2];
+        settings.Save();
+    }
+
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        controlPorts.Dispose();
         keyboardCable.Dispose();
         monitorCable.Dispose();
         base.OnFormClosed(e);
