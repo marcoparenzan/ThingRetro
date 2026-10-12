@@ -33,6 +33,7 @@ static class TestHelpers
         public MOS6526 Cia1 => (MOS6526)board.Cia1Socket.Chip!;
         public MOS6526 Cia2 => (MOS6526)board.Cia2Socket.Chip!;
         public MOS6569 Vic => (MOS6569)board.VicSocket.Chip!;
+        public MOS6581 Sid => (MOS6581)board.SidSocket.Chip!;
 
         // Esegue cicli fino al completamento dell'istruzione corrente e all'inizio della successiva
         public void StepInstruction()

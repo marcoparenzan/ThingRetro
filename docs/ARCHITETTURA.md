@@ -38,7 +38,7 @@ oggetto che la implementa "entra" nello zoccolo, come un chip compatibile elettr
 | `I6510Pinout` (DIP-40) | `MOS6510` | bus (A0-A15, D0-D7, R/W), /IRQ, /NMI, RDY, AEC, porta P0-P5, /RES, φ2 |
 | `I6526Pinout` (DIP-40) | `MOS6526` | registri (RS0-RS3), porte PA e PB, /IRQ, /RES, φ2 |
 | `I6569Pinout` (DIP-40) | `MOS6569` | registri (A0-A5), bus video (A0-A13, D0-D11), /IRQ, BA, AEC, uscita video |
-| `I6581Pinout` (DIP-28) | `MOS6581` | registri (A0-A4), uscita audio, /RES, φ2 |
+| `I6581Pinout` (DIP-28) | `MOS6581` | registri (A0-A4), POT X/Y, uscita audio (livello istantaneo), /RES, φ2 |
 
 Il modello è **a transazioni**: indirizzo, dati, R/W e chip select sono raggruppati in `Read`/`Write` (il chip
 viene interpellato solo quando è selezionato); il clock è `Tick`; le linee di controllo sono proprietà, con le
@@ -111,7 +111,7 @@ flowchart TB
 `Board.ExecuteCycle` esegue un ciclo di φ2:
 
 1. legge **BA** del VIC-II, che riguarda il ciclo in corso;
-2. `Tick` di CIA 1, CIA 2 e SID;
+2. `Tick` di CIA 1, CIA 2 e SID; il livello dell'uscita audio del SID va alla presa audio (`AudioPort`);
 3. `Tick` della CPU, che si ferma da sola se RDY o AEC lo richiedono;
 4. `Tick` del VIC-II, che chiude il ciclo: alla fine dell'ultimo ciclo di una riga completa la riga,
    aggiorna il raster, gestisce il raster interrupt e, a fine frame, invia l'immagine all'uscita video.
@@ -153,6 +153,24 @@ Gli altri thread agiscono sulla macchina con `Board.Enqueue`, che esegue l'azion
 - **Uscita video**: a fine frame il VIC-II chiama `FrameCompleted`; la scheda passa l'immagine a `VideoPort`,
   che la copia nel monitor collegato con il `MonitorCable` (`IScreen.BeginRender`/`EndRender`, 32 bit BGRA).
 
+## Il SID
+
+- **Voci** (`MOS6581.Voice.cs`): a ogni ciclo l'accumulatore a 24 bit avanza della frequenza; le forme d'onda a
+  12 bit derivano dall'accumulatore (dente di sega: i 12 bit alti; triangolo: ripiegato con il bit 23, in XOR con
+  la voce precedente se c'è la modulazione ad anello; impulso: confronto con la larghezza) o dal registro a
+  scorrimento del rumore, che avanza sul fronte del bit 19. SYNC azzera l'accumulatore quando quello della voce
+  precedente ricomincia. Il bit TEST tiene fermo l'oscillatore.
+- **Inviluppo**: un contatore a 15 bit confrontato per uguaglianza con il periodo della fase (9-31251 cicli per
+  passo); attacco lineare, decadimento e rilascio con passi sempre più lunghi sotto `$5D`, `$36`, `$1A`, `$0E`,
+  `$06`. L'uguaglianza riproduce l'"ADSR bug": se il periodo si accorcia, il contatore fa tutto il giro.
+- **Filtro e mixer**: filtro a variabili di stato aggiornato a ogni ciclo, come in reSID; le voci instradate nel
+  filtro escono dal passa basso, banda o alto scelto, le altre vanno dirette (la voce 3 può essere spenta con
+  "3 OFF"). Il mixer ha una componente continua che il volume scala insieme alle voci: per questo scrivere
+  `$D418` produce suono, il trucco dei campioni a 4 bit.
+- **Uscita** (`AudioPort` della scheda): media i cicli di ogni campione (ricampionamento esatto a interi),
+  toglie la componente continua con un passa alto a 16 Hz, come il condensatore d'uscita, e invia blocchi
+  di 10 ms all'`ISpeaker` collegato con un `AudioCable`. Senza altoparlante il campionamento non costa nulla.
+
 ## Fuori dalla scheda
 
 - **`Fake64.Prg`**: `LoadPrg` scrive il programma direttamente in RAM (anche sotto le ROM, tramite `Board.Ram`) e,
@@ -168,7 +186,9 @@ Gli altri thread agiscono sulla macchina con `Board.Enqueue`, che esegue l'azion
 - **`Fake64.WinForms`**: `C64Monitor` implementa `IScreen` con una bitmap a dimensione fissa protetta da un lock
   (scritta dal thread di emulazione, disegnata dal thread della UI); `PcKeyboard` traduce i tasti del PC con
   `PcKeyboardLayout` e li passa a `Keyboard.SetPressedKeys`, tenendo premuti almeno 40 ms i tocchi brevissimi
-  perché il KERNAL li veda.
+  perché il KERNAL li veda. `PcSpeakers` implementa `ISpeaker` con `waveOut` (`winmm`): parte quando la coda
+  ha ~50 ms di audio e la tiene a quel livello togliendo o ripetendo un campione per blocco, perché l'orologio
+  dell'emulazione e quello della scheda audio non coincidono mai del tutto.
 - **Simulatori** (`Fake64.WinForms`): comandano un dispositivo della porta di controllo con l'input del PC.
   `KeyboardJoystick` (tastierino o frecce + Ctrl), `UsbJoystick` (API joystick di Windows, `winmm`, letta ogni
   10 ms) e `MousePaddles` (movimento orizzontale del mouse catturato). `ControlPortSelector` decide cosa è

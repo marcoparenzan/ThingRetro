@@ -10,6 +10,7 @@ sealed class AppSettings
     // Predefinito: joystick dal tastierino nella porta 2, quella usata da quasi tutti i giochi
     public ControlPortChoice Port1 { get; set; } = ControlPortChoice.None;
     public ControlPortChoice Port2 { get; set; } = new(ControlPortSource.KeypadJoystick);
+    public bool Audio { get; set; } = true;
 
     static readonly string FilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Fake64", "settings.json");

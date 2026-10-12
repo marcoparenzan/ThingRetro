@@ -14,6 +14,7 @@ pensati per essere letti. I programmi BASIC e quelli con lo stub `10 SYS2061` pa
 | `keys.prg` | [keys.bas](src/keys.bas) | Tasti funzione e tasti cursore con `GET` (F1-F8 = codici 133-140). `Q` per uscire |
 | `joystick.prg` | [joystick.bas](src/joystick.bas) | Joystick nella porta 2 (`PEEK(56320)`): lo smile si muove, con il fuoco cambia colore |
 | `paddle.prg` | [paddle.bas](src/paddle.bas) | Paddle nella porta 1 (nell'app: "Paddle: mouse"): lo smile segue la manopola (`PEEK(54297)`) |
+| `sound.prg` | [sound.bas](src/sound.bas) | Una scala con la voce 1 del SID: frequenza, inviluppo, GATE |
 
 ## Linguaggio macchina: CPU e interrupt
 
@@ -24,6 +25,12 @@ pensati per essere letti. I programmi BASIC e quelli con lo stub `10 SYS2061` pa
 | `irq.prg` | [irq.asm](src/irq.asm) | Agganciarsi all'IRQ del timer della CIA 1 (vettore `$0314`) senza fermare il KERNAL |
 | `nmi.prg` | [nmi.asm](src/nmi.asm) | NMI dal timer della CIA 2 (vettore `$0318`): fronte di discesa e conferma dell'interrupt |
 | `decimal.prg` | [decimal.asm](src/decimal.asm) | Modo decimale (BCD): un contatore a 4 cifre senza divisioni. Non torna al BASIC |
+
+## Linguaggio macchina: SID
+
+| File | Sorgente | Cosa mostra |
+| --- | --- | --- |
+| `music.prg` | [music.asm](src/music.asm) | Musica a tre voci suonata dall'IRQ: melodia con PWM, basso nel filtro passa basso con risonanza, rumore. Torna al BASIC e continua a suonare |
 
 ## Linguaggio macchina: VIC-II
 

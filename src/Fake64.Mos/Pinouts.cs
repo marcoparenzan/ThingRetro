@@ -70,7 +70,7 @@ public interface I6581Pinout
     void Write(int register, byte value);
     Func<byte> PotXInput { get; set; }   // POT X: resistenza collegata, come valore 0-255 ($FF = nulla)
     Func<byte> PotYInput { get; set; }   // POT Y
-    int[] GetAudioData();                // AUDIO OUT
+    double AudioOutput { get; }          // AUDIO OUT: livello istantaneo, aggiornato a ogni ciclo
     void Reset();                        // /RES
     void Tick();                         // φ2
 }

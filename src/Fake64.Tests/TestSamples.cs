@@ -178,6 +178,59 @@ public sealed class SampleTests
 
     #endregion
 
+    #region SID
+
+    // Un altoparlante che conserva i campioni ricevuti
+    sealed class Recorder : ISpeaker
+    {
+        public readonly List<short> Samples = [];
+        public int SampleRate => 44100;
+        public void Play(ReadOnlySpan<short> samples) => Samples.AddRange(samples.ToArray());
+
+        // Livello (RMS) di un tratto, in secondi dall'inizio della registrazione
+        public double Level(double from, double to)
+        {
+            var part = Samples.Skip((int)(from * SampleRate)).Take((int)((to - from) * SampleRate)).ToArray();
+            return Math.Sqrt(part.Average(s => (double)s * s));
+        }
+    }
+
+    static (Board Board, Recorder Speaker) RunWithSpeaker(string fileName, double seconds)
+    {
+        var board = NewBoard();
+        board.RunCycles(3 * CYCLES_PER_SECOND);
+        board.LoadPrg(Get(fileName).Content);
+        var speaker = new Recorder();
+        _ = new AudioCable(board.AudioOut, speaker);
+        board.TypeText("RUN\r");
+        board.RunCycles((long)(seconds * CYCLES_PER_SECOND));
+        return (board, speaker);
+    }
+
+    [TestMethod]
+    public void Sound_ShouldPlayEightNotes()
+    {
+        var (board, speaker) = RunWithSpeaker("sound.prg", seconds: 4);
+
+        CollectionAssert.Contains(board.ScreenLines(), "DO RE MI FA SOL LA SI DO");
+        Assert.IsTrue(speaker.Level(0.5, 1.5) > 1000, $"livello {speaker.Level(0.5, 1.5):F0}");
+    }
+
+    [TestMethod]
+    public void Music_ShouldPlayFromTheInterruptAndKeepBasicAlive()
+    {
+        var (board, speaker) = RunWithSpeaker("music.prg", seconds: 3);
+
+        StringAssert.StartsWith(board.ScreenLines()[0], "MUSICA DAL SID, SUONATA DALL'IRQ");
+        Assert.IsTrue(speaker.Level(1, 3) > 1000, $"livello {speaker.Level(1, 3):F0}");
+        Assert.AreEqual(0x08, (int)board.Peek(0x0315));                         // il vettore IRQ punta al programma
+        board.TypeText("?1+1\r");
+        board.RunCycles(CYCLES_PER_SECOND / 2);
+        StringAssert.Contains(Screen(board), "?1+1\n 2\n");
+    }
+
+    #endregion
+
     #region Interrupt e CPU
 
     [TestMethod]

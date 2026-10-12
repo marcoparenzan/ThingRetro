@@ -1,128 +1,62 @@
 namespace Fake64.Mos;
 
-public class MOS6581 : I6581Pinout
+// MOS 6581 SID: tre voci (oscillatore, forme d'onda, inviluppo), un filtro multimodo e il volume generale.
+// Tutto avanza di un passo a ogni ciclo di φ2 (985248 Hz sul C64 PAL). AUDIO OUT è il livello istantaneo
+// dell'uscita: la scheda lo campiona a ogni ciclo e lo manda alla presa audio (vedi Board.AudioOut).
+// Il modello è digitale come quello di reSID per oscillatori e inviluppi; filtro e mixer, che sul chip sono
+// analogici, sono approssimati (curva del filtro dal datasheet, combinazioni di forme d'onda come AND)
+public partial class MOS6581 : I6581Pinout
 {
+    const int CLOCK_HZ = 985248;
 
-    private const int REG_COUNT = 0x1F;
+    // Registri del filtro e del volume
+    const int FC_LO = 0x15;         // bit 0-2 della frequenza di taglio (11 bit)
+    const int FC_HI = 0x16;         // bit 3-10
+    const int RES_FILT = 0x17;      // bit 4-7 risonanza, bit 0-2 voci nel filtro, bit 3 ingresso esterno
+    const int MODE_VOL = 0x18;      // bit 4 passa basso, 5 passa banda, 6 passa alto, 7 voce 3 spenta; bit 0-3 volume
 
-    // Voice registers for 3 voices (0, 1, 2)
-    private const int VOICE_OFFSET = 7;
+    readonly Voice[] voices = [new(), new(), new()];
 
-    // Voice register offsets
-    private const int FREQ_LO = 0;        // Frequency control (low byte)
-    private const int FREQ_HI = 1;        // Frequency control (high byte)
-    private const int PW_LO = 2;          // Pulse width (low byte)
-    private const int PW_HI = 3;          // Pulse width (high byte)
-    private const int CONTROL = 4;        // Control register
-    private const int ATTACK_DECAY = 5;   // Attack/decay register
-    private const int SUSTAIN_RELEASE = 6; // Sustain/release register
+    int cutoff;                     // 0-2047
+    int resonance;                  // 0-15
+    int filterRouting;              // bit 0-2: voci che passano dal filtro
+    byte modeVolume;
+    byte busValue;                  // ultimo valore scritto: i registri di sola scrittura rileggono il bus
 
-    // Control register bits
-    private const byte GATE = 0x01;
-    private const byte SYNC = 0x02;
-    private const byte RING_MOD = 0x04;
-    private const byte TEST = 0x08;
-    private const byte TRIANGLE = 0x10;
-    private const byte SAWTOOTH = 0x20;
-    private const byte PULSE = 0x40;
-    private const byte NOISE = 0x80;
+    // Filtro a variabili di stato (passa alto, banda, basso) aggiornato a ogni ciclo
+    double w0, inverseQ;
+    double highPass, bandPass, lowPass;
 
-    // Filter/volume registers
-    private const int FILTER_FC_LO = 0x15;  // Filter cutoff frequency (low byte)
-    private const int FILTER_FC_HI = 0x16;  // Filter cutoff frequency (high byte)
-    private const int FILTER_RES_FILT = 0x17; // Filter resonance and routing
-    private const int FILTER_MODE_VOL = 0x18; // Filter mode and volume
+    // Il mixer del 6581 ha una componente continua: il volume la scala insieme alle voci, quindi anche senza
+    // voci attive scrivere $D418 sposta l'uscita. È così che i giochi suonano campioni ("digi") a 4 bit
+    const double MIXER_DC = 0.5;
 
-    // Voice state for sound generation
-    private class Voice
-    {
-        public int Phase;         // Current phase of oscillator
-        public int PhaseIncrement; // Per-cycle phase increment
-        public int PulseWidth;     // Current pulse width value
-        public byte Control;       // Current control register value
-        public byte AttackDecay;   // Current attack/decay register
-        public byte SustainRelease; // Current sustain/release register
-        public int EnvelopeValue;  // Current ADSR envelope value (0-255)
-        public int EnvelopeState;  // 0=release, 1=attack, 2=decay, 3=sustain
-        public int EnvelopeCounter; // Counter for envelope timing
-
-        // For cycle-exact processing
-        public bool GateTransitionPending;   // Gate bit is changing
-        public bool ControlChangePending;    // Control register changed
-        public bool FrequencyChangePending;  // Frequency value changed
-        public bool PulseWidthChangePending; // Pulse width changed
-        public bool EnvelopeChangePending;   // ADSR settings changed
-    }
-
-    private Voice[] voices = new Voice[3];
-    private byte[] registers = new byte[REG_COUNT];
-    private int cycleCount;
-
-    // Cycle-exact timing constants
-    private const int SID_CLOCK_DIVIDER = 16; // SID runs at ~1MHz (PAL C64 clock / 16)
-    private int sidCycleCounter;
-
-    // Audio output values
-    private int[] outputBuffer;
-    private int outputIndex;
-    private int sampleRate;
-    private int cyclesPerSample;
-
-    // Register change tracking
-    private bool[] registerChanged = new bool[REG_COUNT];
-    private bool filterChangePending;
-    private bool volumeChangePending;
+    // Scala delle voci: una forma d'onda a piena ampiezza e inviluppo 255 vale circa 1
+    const double VOICE_SCALE = 1.0 / (0x800 * 255);
 
     public MOS6581()
     {
-
-        // Initialize voices
-        for (int i = 0; i < 3; i++)
-        {
-            voices[i] = new Voice();
-        }
-
-        // Initialize audio buffer
-        sampleRate = 44100; // Default sample rate
-        cyclesPerSample = 985248 / sampleRate; // C64 clock rate / sample rate
-        outputBuffer = new int[sampleRate / 60]; // 1/60th second buffer
-
+        voices[0].SyncSource = voices[2];
+        voices[1].SyncSource = voices[0];
+        voices[2].SyncSource = voices[1];
         Reset();
     }
 
     public void Reset()
     {
-        // Clear all registers
-        Array.Clear(registers, 0, registers.Length);
-        Array.Clear(registerChanged, 0, registerChanged.Length);
-
-        // Reset voice states
-        for (int i = 0; i < 3; i++)
-        {
-            voices[i].Phase = 0;
-            voices[i].PhaseIncrement = 0;
-            voices[i].PulseWidth = 0;
-            voices[i].Control = 0;
-            voices[i].AttackDecay = 0;
-            voices[i].SustainRelease = 0;
-            voices[i].EnvelopeValue = 0;
-            voices[i].EnvelopeState = 0;
-            voices[i].EnvelopeCounter = 0;
-            voices[i].GateTransitionPending = false;
-            voices[i].ControlChangePending = false;
-            voices[i].FrequencyChangePending = false;
-            voices[i].PulseWidthChangePending = false;
-            voices[i].EnvelopeChangePending = false;
-        }
-
-        cycleCount = 0;
-        sidCycleCounter = 0;
+        foreach (var voice in voices) voice.Reset();
+        cutoff = resonance = filterRouting = 0;
+        modeVolume = 0;
+        busValue = 0;
+        highPass = bandPass = lowPass = 0;
+        UpdateFilter();
+        AudioOutput = 0;
         potCycle = 0;
         potX = potY = 0xFF;
-        outputIndex = 0;
-        filterChangePending = false;
-        volumeChangePending = false;
     }
+
+    // AUDIO OUT (pin 27): livello dell'uscita all'ultimo ciclo, circa fra -1 e 1 per ogni voce a pieno volume
+    public double AudioOutput { get; private set; }
 
     // POT X / POT Y: il SID scarica e ricarica un condensatore attraverso la resistenza esterna e conta
     // i cicli; il risultato (0-255) è disponibile in $19 / $1A e si aggiorna ogni 512 cicli
@@ -132,14 +66,22 @@ public class MOS6581 : I6581Pinout
     byte potX = 0xFF, potY = 0xFF;
     int potCycle;
 
-    // φ2: ProcessSignals e Clock sono la logica interna di temporizzazione (l'audio non viene ancora riprodotto)
-    private int tickCount;
-
+    // φ2: un ciclo di oscillatori, inviluppi, filtro e mixer
     public void Tick()
     {
-        ProcessSignals(tickCount);
-        Clock();
-        tickCount = (tickCount + 1) % SID_CLOCK_DIVIDER;
+        foreach (var voice in voices) voice.ClockOscillator();
+        foreach (var voice in voices) voice.ApplySync();
+        foreach (var voice in voices) voice.ClockEnvelope();
+
+        double filterInput = 0, direct = 0;
+        for (int v = 0; v < 3; v++)
+        {
+            double output = voices[v].Output() * VOICE_SCALE;
+            if ((filterRouting & (1 << v)) != 0) filterInput += output;
+            else if (v != 2 || (modeVolume & 0x80) == 0) direct += output; // "3 OFF" spegne la voce 3 se non è filtrata
+        }
+
+        AudioOutput = (direct + Filter(filterInput) + MIXER_DC) * (modeVolume & 0x0F) / 15.0;
 
         if (++potCycle == POT_MEASUREMENT_CYCLES)
         {
@@ -149,346 +91,66 @@ public class MOS6581 : I6581Pinout
         }
     }
 
-    // Process signals for upcoming cycle changes
-    private void ProcessSignals(int currentCycle)
+    // Un passo del filtro a variabili di stato (come in reSID). Le uscite sono invertite, come sul chip
+    double Filter(double input)
     {
-        // SID is clocked at 1MHz (every 16th cycle in PAL C64's ~16MHz system)
-        // We'll only process on every 16th cycle
-        if ((currentCycle % SID_CLOCK_DIVIDER) != 0)
-            return;
+        bandPass -= w0 * highPass;
+        lowPass -= w0 * bandPass;
+        highPass = bandPass * inverseQ - lowPass - input;
 
-        // Check for register changes that need to be processed in the next cycle
-        for (int v = 0; v < 3; v++)
-        {
-            Voice voice = voices[v];
-            int offset = v * VOICE_OFFSET;
-
-            // Check for frequency changes
-            if (registerChanged[offset + FREQ_LO] || registerChanged[offset + FREQ_HI])
-            {
-                voice.FrequencyChangePending = true;
-                registerChanged[offset + FREQ_LO] = false;
-                registerChanged[offset + FREQ_HI] = false;
-            }
-
-            // Check for pulse width changes
-            if (registerChanged[offset + PW_LO] || registerChanged[offset + PW_HI])
-            {
-                voice.PulseWidthChangePending = true;
-                registerChanged[offset + PW_LO] = false;
-                registerChanged[offset + PW_HI] = false;
-            }
-
-            // Check for control register changes
-            if (registerChanged[offset + CONTROL])
-            {
-                voice.ControlChangePending = true;
-
-                // Check specifically for GATE bit transitions
-                byte newControl = registers[offset + CONTROL];
-                bool newGate = (newControl & GATE) != 0;
-                bool oldGate = (voice.Control & GATE) != 0;
-
-                if (newGate != oldGate)
-                {
-                    voice.GateTransitionPending = true;
-                }
-
-                registerChanged[offset + CONTROL] = false;
-            }
-
-            // Check for envelope parameter changes
-            if (registerChanged[offset + ATTACK_DECAY] || registerChanged[offset + SUSTAIN_RELEASE])
-            {
-                voice.EnvelopeChangePending = true;
-                registerChanged[offset + ATTACK_DECAY] = false;
-                registerChanged[offset + SUSTAIN_RELEASE] = false;
-            }
-        }
-
-        // Check for filter changes
-        if (registerChanged[FILTER_FC_LO] || registerChanged[FILTER_FC_HI] || registerChanged[FILTER_RES_FILT])
-        {
-            filterChangePending = true;
-            registerChanged[FILTER_FC_LO] = false;
-            registerChanged[FILTER_FC_HI] = false;
-            registerChanged[FILTER_RES_FILT] = false;
-        }
-
-        // Check for volume changes
-        if (registerChanged[FILTER_MODE_VOL])
-        {
-            volumeChangePending = true;
-            registerChanged[FILTER_MODE_VOL] = false;
-        }
-
-        // Check if we need to generate a sample in the next cycle
-        cycleCount++;
-        if (cycleCount >= cyclesPerSample - 1)
-        {
-            // Next cycle will generate a sample
-        }
+        double output = 0;
+        if ((modeVolume & 0x10) != 0) output += lowPass;
+        if ((modeVolume & 0x20) != 0) output += bandPass;
+        if ((modeVolume & 0x40) != 0) output += highPass;
+        return output;
     }
 
-    private void Clock()
+    // Frequenza di taglio dal datasheet: circa 30 Hz + 5,8 Hz per passo (30 Hz - 12 kHz). Sul 6581 la curva reale
+    // varia molto da un esemplare all'altro e non è lineare
+    void UpdateFilter()
     {
-        // Only process on every 16th cycle (1MHz for SID)
-        sidCycleCounter++;
-        if (sidCycleCounter < SID_CLOCK_DIVIDER)
-            return;
-
-        sidCycleCounter = 0;
-
-        // Handle voices
-        for (int v = 0; v < 3; v++)
-        {
-            Voice voice = voices[v];
-            int offset = v * VOICE_OFFSET;
-
-            // Apply pending changes
-            if (voice.FrequencyChangePending)
-            {
-                int freq = registers[offset + FREQ_LO] | (registers[offset + FREQ_HI] << 8);
-                voice.PhaseIncrement = freq;
-                voice.FrequencyChangePending = false;
-            }
-
-            if (voice.PulseWidthChangePending)
-            {
-                voice.PulseWidth = (registers[offset + PW_LO] | ((registers[offset + PW_HI] & 0x0F) << 8)) << 12;
-                voice.PulseWidthChangePending = false;
-            }
-
-            if (voice.ControlChangePending)
-            {
-                byte newControl = registers[offset + CONTROL];
-
-                // Handle gate transition
-                if (voice.GateTransitionPending)
-                {
-                    bool gateOn = (newControl & GATE) != 0;
-
-                    if (gateOn && (voice.Control & GATE) == 0)
-                    {
-                        // Gate turning on - start attack
-                        voice.EnvelopeState = 1; // Attack
-                    }
-                    else if (!gateOn && (voice.Control & GATE) != 0)
-                    {
-                        // Gate turning off - start release
-                        voice.EnvelopeState = 0; // Release
-                    }
-
-                    voice.GateTransitionPending = false;
-                }
-
-                voice.Control = newControl;
-                voice.ControlChangePending = false;
-            }
-
-            if (voice.EnvelopeChangePending)
-            {
-                voice.AttackDecay = registers[offset + ATTACK_DECAY];
-                voice.SustainRelease = registers[offset + SUSTAIN_RELEASE];
-                voice.EnvelopeChangePending = false;
-            }
-
-            // Update oscillator phase
-            voice.Phase = (voice.Phase + voice.PhaseIncrement) & 0xFFFFFF;
-
-            // Update envelope
-            UpdateEnvelope(voice);
-        }
-
-        // Apply filter changes
-        if (filterChangePending)
-        {
-            // Update filter parameters
-            // (In a full implementation, you would update your filter algorithm here)
-            filterChangePending = false;
-        }
-
-        // Apply volume changes
-        if (volumeChangePending)
-        {
-            // Volume is applied during sample generation
-            volumeChangePending = false;
-        }
-
-        // Generate audio sample when needed
-        if (cycleCount >= cyclesPerSample)
-        {
-            cycleCount = 0;
-            GenerateSample();
-        }
+        double hertz = 30 + 5.8 * cutoff;
+        w0 = 2 * Math.PI * hertz / CLOCK_HZ;
+        inverseQ = 1 / (0.707 + resonance / 15.0);
     }
 
-
-    // Rest of the methods remain unchanged
-    private void UpdateEnvelope(Voice voice)
+    // A0-A4: i 32 registri si ripetono in tutta l'area selezionata da /CS. Solo $19-$1C si leggono
+    public byte Read(int register) => (register & 0x1F) switch
     {
-        // Simple ADSR envelope processing
-        // This is a simplified version - a full implementation would require more complex timing
-        voice.EnvelopeCounter++;
+        0x19 => potX,
+        0x1A => potY,
+        0x1B => (byte)(voices[2].Waveform() >> 4),   // OSC3: gli 8 bit alti della forma d'onda della voce 3
+        0x1C => (byte)voices[2].Envelope,             // ENV3: l'inviluppo della voce 3
+        _ => busValue,
+    };
 
-        int rate = 0;
-        switch (voice.EnvelopeState)
-        {
-            case 0: // Release
-                rate = voice.SustainRelease & 0x0F;
-                if (voice.EnvelopeCounter >= rate * 8)
-                {
-                    voice.EnvelopeCounter = 0;
-                    if (voice.EnvelopeValue > 0) voice.EnvelopeValue--;
-                }
-                break;
-
-            case 1: // Attack
-                rate = (voice.AttackDecay >> 4) & 0x0F;
-                if (voice.EnvelopeCounter >= rate * 8)
-                {
-                    voice.EnvelopeCounter = 0;
-                    if (voice.EnvelopeValue < 255) voice.EnvelopeValue++;
-                    if (voice.EnvelopeValue >= 255)
-                    {
-                        voice.EnvelopeValue = 255;
-                        voice.EnvelopeState = 2; // Move to decay
-                    }
-                }
-                break;
-
-            case 2: // Decay
-                rate = voice.AttackDecay & 0x0F;
-                int sustain = ((voice.SustainRelease >> 4) & 0x0F) * 17;
-                if (voice.EnvelopeCounter >= rate * 8)
-                {
-                    voice.EnvelopeCounter = 0;
-                    if (voice.EnvelopeValue > sustain) voice.EnvelopeValue--;
-                    if (voice.EnvelopeValue <= sustain)
-                    {
-                        voice.EnvelopeValue = sustain;
-                        voice.EnvelopeState = 3; // Move to sustain
-                    }
-                }
-                break;
-
-            case 3: // Sustain
-                // Maintain current level
-                break;
-        }
-    }
-
-    private void GenerateSample()
-    {
-        // Generate waveforms for each voice
-        int output = 0;
-
-        for (int v = 0; v < 3; v++)
-        {
-            Voice voice = voices[v];
-            int sample = 0;
-
-            // Generate waveform based on control register
-            if ((voice.Control & TRIANGLE) != 0)
-            {
-                sample = GenerateTriangle(voice);
-            }
-            else if ((voice.Control & SAWTOOTH) != 0)
-            {
-                sample = GenerateSawtooth(voice);
-            }
-            else if ((voice.Control & PULSE) != 0)
-            {
-                sample = GeneratePulse(voice);
-            }
-            else if ((voice.Control & NOISE) != 0)
-            {
-                sample = GenerateNoise(voice);
-            }
-
-            // Apply envelope
-            sample = (sample * voice.EnvelopeValue) >> 8;
-
-            // Mix voice output
-            output += sample;
-        }
-
-        // Apply volume control
-        int volume = registers[FILTER_MODE_VOL] & 0x0F;
-        output = (output * volume) >> 4;
-
-        // Store in output buffer
-        if (outputIndex < outputBuffer.Length)
-        {
-            outputBuffer[outputIndex++] = output;
-        }
-    }
-
-    private int GenerateTriangle(Voice voice)
-    {
-        // Triangle wave generation
-        int phase = voice.Phase >> 11; // 0-8191
-        if ((phase & 0x800) != 0)
-            return (~phase) & 0x7FF;
-        return phase & 0x7FF;
-    }
-
-    private int GenerateSawtooth(Voice voice)
-    {
-        // Sawtooth wave generation
-        return (voice.Phase >> 12) & 0xFFF;
-    }
-
-    private int GeneratePulse(Voice voice)
-    {
-        // Pulse wave generation with variable pulse width
-        return (voice.Phase > voice.PulseWidth) ? 0xFFF : 0x000;
-    }
-
-    private int GenerateNoise(Voice voice)
-    {
-        // Simple noise generation - for a proper implementation,
-        // this should use a linear feedback shift register
-        return (int)((voice.Phase * 13) ^ (voice.Phase * 7)) & 0xFFF;
-    }
-
-    // Original memory access functions
-    byte[] bytes = new byte[0x0400];
-
-
-    // A0-A4: i 32 registri si ripetono in tutta l'area selezionata da /CS
-    public byte Read(int register)
-    {
-        int addr = register & 0x1F;
-        if (addr == 0x19) return potX;
-        if (addr == 0x1A) return potY;
-        if (addr >= REG_COUNT) return 0xFF; // nessun registro: bus aperto
-        // Handle special read registers (random values for oscillators, etc.)
-        if (addr == 0x1B) // Voice 3 oscillator
-            return (byte)(voices[2].Phase >> 16);
-        if (addr == 0x1C) // Voice 3 envelope
-            return (byte)voices[2].EnvelopeValue;
-        return registers[addr];
-    }
-
-    // Update the register value and mark it as changed for the next cycle
     public void Write(int register, byte value)
     {
-        int addr = register & 0x1F;
-        if (addr < REG_COUNT)
+        int address = register & 0x1F;
+        busValue = value;
+
+        if (address < 0x15)
         {
-            registers[addr] = value;
-            registerChanged[addr] = true;
+            var voice = voices[address / 7];
+            switch (address % 7)
+            {
+                case 0: voice.Frequency = (voice.Frequency & 0xFF00) | value; break;
+                case 1: voice.Frequency = (voice.Frequency & 0x00FF) | value << 8; break;
+                case 2: voice.PulseWidth = (voice.PulseWidth & 0xF00) | value; break;
+                case 3: voice.PulseWidth = (voice.PulseWidth & 0x0FF) | (value & 0x0F) << 8; break;
+                case 4: voice.WriteControl(value); break;
+                case 5: voice.Attack = value >> 4; voice.Decay = value & 0x0F; break;
+                case 6: voice.Sustain = value >> 4; voice.Release = value & 0x0F; break;
+            }
+            return;
         }
-    }
 
-
-    // Get audio data for playback
-    public int[] GetAudioData()
-    {
-        int[] result = new int[outputIndex];
-        Array.Copy(outputBuffer, result, outputIndex);
-        outputIndex = 0;
-        return result;
+        switch (address)
+        {
+            case FC_LO: cutoff = (cutoff & 0x7F8) | (value & 0x07); UpdateFilter(); break;
+            case FC_HI: cutoff = (cutoff & 0x007) | value << 3; UpdateFilter(); break;
+            case RES_FILT: resonance = value >> 4; filterRouting = value & 0x07; UpdateFilter(); break;
+            case MODE_VOL: modeVolume = value; break;
+        }
     }
 }

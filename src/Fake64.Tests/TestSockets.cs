@@ -18,7 +18,7 @@ public sealed class SocketTests
         public Func<byte> PotYInput { get; set; } = () => 0xFF;
         public byte Read(int register) => (byte)(0x40 + register);
         public void Write(int register, byte value) => Writes.Add((register, value));
-        public int[] GetAudioData() => [];
+        public double AudioOutput => 0;
         public void Reset() { }
         public void Tick() => Ticks++;
     }

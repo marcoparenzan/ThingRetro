@@ -18,6 +18,7 @@ public static class SampleSet
         Basic("keys.prg", "Tasti funzione e tasti cursore", "keys.bas"),
         Basic("joystick.prg", "Joystick nella porta 2", "joystick.bas"),
         Basic("paddle.prg", "Paddle nella porta 1", "paddle.bas"),
+        Basic("sound.prg", "Una scala suonata dal SID", "sound.bas"),
 
         // Linguaggio macchina: interrupt e CPU
         Program("sys.prg", "Linguaggio macchina a $C000, avviato con SYS 49152", "sys.asm"),
@@ -25,6 +26,9 @@ public static class SampleSet
         Program("irq.prg", "Interrupt del timer della CIA 1 agganciato al KERNAL", "irq.asm"),
         Program("nmi.prg", "NMI dal timer della CIA 2", "nmi.asm"),
         Program("decimal.prg", "Modo decimale (BCD): un contatore a 4 cifre", "decimal.asm"),
+
+        // Linguaggio macchina: SID
+        Program("music.prg", "Tre voci del SID suonate dall'interrupt: PWM, filtro, rumore", "music.asm"),
 
         // Linguaggio macchina: VIC-II
         Program("multicolor.prg", "Testo multicolor con un set di caratteri in RAM", "multicolor.asm"),

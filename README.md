@@ -18,6 +18,10 @@ vera, con i chip MOS negli zoccoli, le piste che li collegano e i cavi verso mon
   bordi 38/40 colonne e 24/25 righe, scroll fine, 8 sprite con espansione, multicolor, priorità e collisioni,
   raster interrupt, bad line con i 3 cicli di preavviso di BA. I cambi di registro a metà riga (split raster)
   cadono nel punto giusto con la precisione di un ciclo.
+- **SID 6581**: tre voci con oscillatori a 24 bit, triangolo, dente di sega, impulso, rumore (registro a
+  scorrimento a 23 bit), sync e modulazione ad anello, inviluppi ADSR con i tempi del chip (compreso l'"ADSR bug"),
+  filtro passa basso/banda/alto con risonanza, `OSC3`/`ENV3`, campioni a 4 bit scrivendo il volume. Tutto avanza
+  a ogni ciclo; la scheda ricampiona l'uscita a 44,1 kHz e l'app la suona sulle casse del PC.
 - **CIA 6526**: timer A e B (anche in cascata), TOD, interrupt, porte parallele; tastiera e banco del VIC-II
   collegati come sulla scheda.
 - **Programmi `.prg`** (da riga di comando o trascinandoli sulla finestra): i programmi BASIC partono da soli.
@@ -28,7 +32,7 @@ vera, con i chip MOS negli zoccoli, le piste che li collegano e i cavi verso mon
   le linee POT al SID attraverso il commutatore analogico comandato dalla CIA 1. Nell'app il joystick si comanda
   dalla tastiera del PC o da un joystick/gamepad USB, i paddle dal mouse del PC.
 
-Non ancora: audio del SID, drive 1541 e immagini disco/nastro (`.d64`, `.t64`), accessi DMA degli
+Non ancora: drive 1541 e immagini disco/nastro (`.d64`, `.t64`), accessi DMA degli
 sprite. Vedi [Limiti noti](#limiti-noti).
 
 ## Struttura
@@ -36,10 +40,10 @@ sprite. Vedi [Limiti noti](#limiti-noti).
 | Progetto | Contenuto |
 |---|---|
 | `src/Fake64.Mos` | I chip MOS come componenti autonomi: `MOS6502` (nucleo della CPU), `MOS6510` (CPU con porta di I/O), `MOS6526` (CIA), `MOS6569` (VIC-II PAL), `MOS6581` (SID). Ogni chip implementa la propria **piedinatura** (`I6510Pinout`, `I6526Pinout`, `I6569Pinout`, `I6581Pinout`) e non sa in quale computer è montato |
-| `src/Fake64.C64` | La **scheda madre**: zoccoli, PLA, RAM, color RAM, ROM, matrice della tastiera, porta di espansione, uscita video |
+| `src/Fake64.C64` | La **scheda madre**: zoccoli, PLA, RAM, color RAM, ROM, matrice della tastiera, porta di espansione, uscite video e audio |
 | `src/Fake64.Prg` | Caricamento dei file `.prg` e scrittura nel buffer di tastiera del KERNAL |
 | `src/Fake64.Crt` | Formato `.crt` e tipi di cartuccia |
-| `src/Fake64.WinForms` | `C64Monitor` (lo schermo, uno UserControl) e `PcKeyboard` (il cavo della tastiera) |
+| `src/Fake64.WinForms` | `C64Monitor` (lo schermo, uno UserControl), `PcKeyboard` (il cavo della tastiera), `PcSpeakers` (le casse), simulatori di joystick e paddle |
 | `src/Fake64` | L'app Windows: una finestra che ospita il monitor |
 | `src/Fake64.Samples` | Generatore degli esempi: tokenizzatore BASIC V2, assembler 6502, writer `.crt` |
 | `src/Fake64.Tests` | Test (MSTest) |
@@ -61,6 +65,7 @@ var monitor = new C64Monitor { Dock = DockStyle.Fill };
 form.Controls.Add(monitor);
 var video = new MonitorCable(board.VideoOut, monitor);   // il cavo del monitor
 var keys  = new PcKeyboard(monitor, board.Keyboard);     // il cavo della tastiera
+var audio = new AudioCable(board.AudioOut, new PcSpeakers()); // il cavo audio verso le casse del PC
 ```
 
 Uno zoccolo vuoto si comporta come sul C64: il bus legge `$FF` e le linee restano inattive (il C64 si avvia
@@ -184,7 +189,10 @@ singolo chip.
 
 ## Limiti noti
 
-- **SID**: i registri ci sono, l'audio non viene riprodotto.
+- **SID**: filtro e mixer, che sul 6581 sono analogici, sono approssimati: la frequenza di taglio segue la
+  formula lineare del datasheet (la curva reale varia da chip a chip), le forme d'onda combinate sono l'AND dei
+  bit (sul chip sono più deboli), manca la distorsione del filtro. Non sono modellati l'ingresso EXT IN e
+  l'8580.
 - **Porte di controllo**: il mouse del PC non simula ancora il 1351; la penna ottica e il modo joystick del
   1351 non sono modellati. Il joystick USB è verificato solo nei test (conversione delle letture), non con
   tutti i dispositivi.

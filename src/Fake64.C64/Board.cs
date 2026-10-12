@@ -13,9 +13,10 @@ public partial class Board
     readonly Ram64KbChip ram64 = new();
     readonly ColorRamChip colorRam = new();
 
-    // Prese esterne: uscita video (vi si collega un monitor con un MonitorCable), tastiera
-    // e le due porte di controllo (joystick, paddle, mouse)
+    // Prese esterne: uscita video (vi si collega un monitor con un MonitorCable), uscita audio
+    // (altoparlanti, con un AudioCable), tastiera e le due porte di controllo (joystick, paddle, mouse)
     public VideoPort VideoOut { get; } = new();
+    public AudioPort AudioOut { get; } = new(MASTER_CLOCK_HZ);
     public Keyboard Keyboard => keyboard;
     public ControlPort ControlPort1 { get; } = new("porta di controllo 1");
     public ControlPort ControlPort2 { get; } = new("porta di controllo 2");
@@ -106,6 +107,7 @@ public partial class Board
         cia1?.Tick();
         cia2?.Tick();
         sid?.Tick();
+        AudioOut.Sample(sid?.AudioOutput ?? 0);
         cpu?.Tick(); // RDY e AEC sono collegati al VIC-II: la CPU si ferma da sola quando serve
         if (!busAvailable) StolenCycles++;
         vic?.Tick();
@@ -113,12 +115,10 @@ public partial class Board
         totalCycles++;
     }
 
-    // Fine di un frame del VIC-II: l'immagine va alla presa video, l'audio del SID (non ancora riprodotto)
-    // viene scaricato per non riempire il buffer
+    // Fine di un frame del VIC-II: l'immagine va alla presa video
     void OnFrameCompleted()
     {
         if (vic is not null) VideoOut.Present(vic);
-        sid?.GetAudioData();
     }
 
     // Accensione / pulsante di reset: /RES arriva a tutti i chip, la CPU riparte dal vettore di reset

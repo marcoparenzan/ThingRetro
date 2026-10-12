@@ -4,14 +4,16 @@ using Fake64.C64;
 namespace Fake64;
 
 // Finestra dell'app: ospita un C64Monitor e collega i pezzi. Lo stesso schema (Board, monitor,
-// MonitorCable, PcKeyboard, ControlPortSelector) funziona in qualunque form, anche insieme ad altri controlli.
-// Clic destro sul monitor: cosa è collegato alle porte di controllo, scambio delle porte, reset
+// MonitorCable, PcKeyboard, PcSpeakers con AudioCable, ControlPortSelector) funziona in qualunque form, anche insieme
+// ad altri controlli. Clic destro sul monitor: porte di controllo, scambio delle porte, audio, reset
 public partial class Fake64Form : Form
 {
     readonly Board board;
     readonly C64Monitor monitor = new() { Dock = DockStyle.Fill };
     readonly MonitorCable monitorCable;
     readonly PcKeyboard keyboardCable;
+    readonly PcSpeakers? speakers;
+    readonly AudioCable? audioCable;
     readonly ControlPortSelector controlPorts;
     readonly AppSettings settings = AppSettings.Load();
 
@@ -27,6 +29,14 @@ public partial class Fake64Form : Form
         monitorCable = new MonitorCable(board.VideoOut, monitor);
         keyboardCable = new PcKeyboard(monitor, board.Keyboard);
 
+        // Uscita audio -> casse del PC. Senza un dispositivo audio l'emulatore funziona lo stesso, muto
+        try
+        {
+            speakers = new PcSpeakers { Muted = !settings.Audio };
+            audioCable = new AudioCable(board.AudioOut, speakers);
+        }
+        catch (InvalidOperationException) { }
+
         // Porte di controllo: joystick dalla tastiera o USB, paddle dal mouse; i tasti del joystick
         // non arrivano alla tastiera del C64
         controlPorts = new ControlPortSelector(board, monitor);
@@ -38,6 +48,14 @@ public partial class Fake64Form : Form
         var menu = new ContextMenuStrip();
         controlPorts.AddMenuItems(menu.Items);
         menu.Items.Add(new ToolStripSeparator());
+        var audio = new ToolStripMenuItem("Audio") { CheckOnClick = true, Checked = settings.Audio, Enabled = speakers is not null };
+        audio.CheckedChanged += (_, _) =>
+        {
+            if (speakers is not null) speakers.Muted = !audio.Checked;
+            settings.Audio = audio.Checked;
+            settings.Save();
+        };
+        menu.Items.Add(audio);
         menu.Items.Add(new ToolStripMenuItem("Reset", null, (_, _) => board.Enqueue(board.Reset)));
         monitor.ContextMenuStrip = menu;
 
@@ -91,6 +109,8 @@ public partial class Fake64Form : Form
     {
         controlPorts.Dispose();
         keyboardCable.Dispose();
+        audioCable?.Dispose();
+        speakers?.Dispose();
         monitorCable.Dispose();
         base.OnFormClosed(e);
     }
