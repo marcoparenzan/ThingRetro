@@ -17,6 +17,11 @@
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
   </ItemGroup>
 
+  <!-- Le stesse ROM dell'app, copiate in roms accanto ai test -->
+  <ItemGroup>
+    <Content Include="..\Fake64\roms\*" Link="roms\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Fake64.Core\Fake64.Core.csproj" />
     <ProjectReference Include="..\Fake64.Crt\Fake64.Crt.csproj" />

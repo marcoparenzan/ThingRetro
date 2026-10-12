@@ -29,6 +29,18 @@ public sealed class BootTests
     }
 
     [TestMethod]
+    public void SystemRoms_ShouldRejectWrongSizes()
+    {
+        var rom8k = new byte[0x2000];
+        var rom4k = new byte[0x1000];
+
+        Assert.ThrowsException<ArgumentException>(() => new SystemRoms(rom4k, rom8k, rom4k));
+        Assert.ThrowsException<ArgumentException>(() => new SystemRoms(rom8k, rom4k, rom4k));
+        Assert.ThrowsException<ArgumentException>(() => new SystemRoms(rom8k, rom8k, rom8k));
+        Assert.ThrowsException<ArgumentNullException>(() => new SystemRoms(null!, rom8k, rom4k));
+    }
+
+    [TestMethod]
     public void Boot_ShouldShowBannerAndReady()
     {
         var board = BootedBoard();

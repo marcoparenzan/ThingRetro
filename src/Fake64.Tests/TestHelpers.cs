@@ -13,8 +13,18 @@ static class TestHelpers
     public const byte FLAG_V = 0x40;
     public const byte FLAG_N = 0x80;
 
+    // Le ROM vere, copiate dalla cartella roms dell'app accanto ai test; lette una volta sola
+    static readonly Lazy<SystemRoms> Roms = new(() =>
+    {
+        string folder = Path.Combine(AppContext.BaseDirectory, "roms");
+        return new SystemRoms(
+            kernal: File.ReadAllBytes(Path.Combine(folder, "kernal")),
+            basic: File.ReadAllBytes(Path.Combine(folder, "basic")),
+            chargen: File.ReadAllBytes(Path.Combine(folder, "chargen")));
+    });
+
     // Board senza clock in tempo reale: i test avanzano con RunCycles/StepInstruction
-    public static Board NewBoard() => new Board(startClock: false);
+    public static Board NewBoard() => new Board(Roms.Value, startClock: false);
 
     public static void Poke(this Board board, ushort addr, params byte[] bytes)
     {

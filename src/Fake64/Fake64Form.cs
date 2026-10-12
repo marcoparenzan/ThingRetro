@@ -6,13 +6,14 @@ namespace Fake64;
 // MonitorCable, PcKeyboard) funziona in qualunque form, anche insieme ad altri controlli
 public partial class Fake64Form : Form
 {
-    readonly Board board = new();
+    readonly Board board;
     readonly C64Monitor monitor = new() { Dock = DockStyle.Fill };
     readonly MonitorCable monitorCable;
     readonly PcKeyboard keyboardCable;
 
-    public Fake64Form(string? startupFile = null)
+    public Fake64Form(SystemRoms roms, string? startupFile = null)
     {
+        board = new Board(roms);
         Text = "Fake64";
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = monitor.Size;

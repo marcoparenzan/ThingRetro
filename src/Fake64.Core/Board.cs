@@ -20,8 +20,6 @@ public partial class Board
 
     Ram64KbChip ram64;
 
-    byte[] Rom(string name) => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "roms", name));
-
     public MOS6569 VICII => vicii;
 
     // Prese esterne: uscita video (vi si collega un monitor con un MonitorCable) e tastiera
@@ -54,12 +52,14 @@ public partial class Board
     private int currentLine;
     private int currentCycle;
 
-    public Board(string kernalName = null, string chargenName = null, string basicName = null, bool startClock = true)
+    // Le ROM arrivano da fuori: la Board non sa dove sono i file (vedi SystemRoms)
+    public Board(SystemRoms roms, bool startClock = true)
     {
+        ArgumentNullException.ThrowIfNull(roms);
         keyboard = new Keyboard();
-        kernal = Rom(kernalName ?? nameof(kernal));
-        chargen = Rom(chargenName ?? nameof(chargen));
-        basic = Rom(basicName ?? nameof(basic));
+        kernal = roms.Kernal;
+        chargen = roms.Chargen;
+        basic = roms.Basic;
         ram64 = new(this);
         colorRam = new ColorRamChip(this);
         // In Board.cs constructor or initialization

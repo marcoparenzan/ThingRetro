@@ -16,6 +16,11 @@
     <ProjectReference Include="..\Fake64.WinForms\Fake64.WinForms.csproj" />
   </ItemGroup>
 
+  <!-- ROM del C64 (KERNAL, BASIC, caratteri): l'app le legge dalla cartella roms accanto all'eseguibile -->
+  <ItemGroup>
+    <Content Include="roms\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <Compile Update="Fake64Form.cs">
       <SubType>Form</SubType>

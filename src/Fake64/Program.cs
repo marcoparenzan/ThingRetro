@@ -10,7 +10,19 @@ namespace Fake64
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            Application.Run(new Fake64Form(args.FirstOrDefault()));
+            SystemRoms roms;
+            try
+            {
+                roms = RomFolder.Load();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                MessageBox.Show($"Impossibile leggere le ROM del C64 da {RomFolder.DefaultPath}:\n{e.Message}",
+                    "Fake64", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            Application.Run(new Fake64Form(roms, args.FirstOrDefault()));
         }
     }
 }
