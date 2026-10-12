@@ -1,8 +1,10 @@
-namespace Fake64.Cartridges;
+namespace Fake64.Crt;
 
 // Cartuccia con banchi ROML/ROMH selezionabili; i tipi concreti decidono come si cambia banco
 public abstract class BankedCartridge : Cartridge
 {
+    public const int BANK_SIZE = 0x2000;
+
     protected readonly byte[][] roml;
     protected readonly byte[][] romh;
     protected int bank;

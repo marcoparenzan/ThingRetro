@@ -1,99 +1,182 @@
+using Fake64.WinForms;
 using static Fake64.Tests.TestHelpers;
 
 namespace Fake64.Tests;
 
+// Matrice della tastiera del C64 (core) e corrispondenza con i tasti del PC (Fake64.WinForms)
 [TestClass]
 public sealed class KeyboardTests
 {
     const long CYCLES_PER_SECOND = 985248;
     const int FRAME_CYCLES = 312 * 63;
 
-    // Codici virtual key di Windows
-    const int VK_SHIFT = 0x10, VK_LEFT = 0x25, VK_UP = 0x26, VK_RIGHT = 0x27, VK_DOWN = 0x28;
-    const int VK_F1 = 0x70, VK_F2 = 0x71, VK_F3 = 0x72, VK_F4 = 0x73, VK_F5 = 0x74, VK_F6 = 0x75, VK_F7 = 0x76, VK_F8 = 0x77;
-
-    // Righe della matrice del C64: una riga si seleziona mettendo a 0 il suo bit della porta A della CIA1
+    // Righe della matrice: una riga si seleziona mettendo a 0 il suo bit della porta A della CIA1
     static byte Row(Board board, int row) => board.Keyboard.GetKeyboardState((byte)~(1 << row));
 
-    static void HoldKeys(Board board, params int[] virtualKeys)
-    {
-        board.Keyboard.HostKeyDown = vk => virtualKeys.Contains(vk);
-        board.Keyboard.ScanHostKeyboard();
-    }
+    #region Matrice (core)
 
     [TestMethod]
-    [DataRow(VK_F1, 4, false)]
-    [DataRow(VK_F2, 4, true)]
-    [DataRow(VK_F3, 5, false)]
-    [DataRow(VK_F4, 5, true)]
-    [DataRow(VK_F5, 6, false)]
-    [DataRow(VK_F6, 6, true)]
-    [DataRow(VK_F7, 3, false)]
-    [DataRow(VK_F8, 3, true)]
-    public void FunctionKeys_ShouldPressMatrixKeyAndShiftForEvenKeys(int virtualKey, int column, bool shifted)
+    [DataRow(C64Key.F1, 0, 4)]
+    [DataRow(C64Key.F7, 0, 3)]
+    [DataRow(C64Key.A, 1, 2)]
+    [DataRow(C64Key.LeftShift, 1, 7)]
+    [DataRow(C64Key.Q, 7, 6)]
+    [DataRow(C64Key.RunStop, 7, 7)]
+    public void PressedKey_ShouldClearItsMatrixBit(C64Key key, int row, int column)
     {
         var board = NewBoard();
 
-        HoldKeys(board, virtualKey);
+        board.Keyboard.SetPressedKeys([key]);
 
-        Assert.AreEqual(0xFF & ~(1 << column), (int)Row(board, 0));
-        Assert.AreEqual(shifted, (Row(board, 1) & 0x80) == 0); // Shift sinistro: riga 1, colonna 7
+        Assert.AreEqual(0xFF & ~(1 << column), (int)Row(board, row));
+        Assert.IsTrue(board.Keyboard.IsPressed(key));
     }
 
     [TestMethod]
-    [DataRow(VK_RIGHT, 2, false)]
-    [DataRow(VK_LEFT, 2, true)]
-    [DataRow(VK_DOWN, 7, false)]
-    [DataRow(VK_UP, 7, true)]
-    public void CursorKeys_ShouldUseCrsrKeysWithShiftForLeftAndUp(int virtualKey, int column, bool shifted)
+    public void SetPressedKeys_ShouldReplacePreviousState()
     {
         var board = NewBoard();
+        board.Keyboard.SetPressedKeys([C64Key.F1, C64Key.LeftShift]);
 
-        HoldKeys(board, virtualKey);
+        board.Keyboard.SetPressedKeys([C64Key.Space]);
 
-        Assert.AreEqual(0xFF & ~(1 << column), (int)Row(board, 0));
-        Assert.AreEqual(shifted, (Row(board, 1) & 0x80) == 0);
-        Assert.AreEqual(0xFF, (int)Row(board, 6)); // niente più '/' o freccia su
-    }
+        Assert.IsFalse(board.Keyboard.IsPressed(C64Key.F1));
+        Assert.IsFalse(board.Keyboard.IsPressed(C64Key.LeftShift));
+        Assert.IsTrue(board.Keyboard.IsPressed(C64Key.Space));
 
-    [TestMethod]
-    public void ReleasingKeys_ShouldClearMatrixAndShift()
-    {
-        var board = NewBoard();
-        HoldKeys(board, VK_F2);
-
-        HoldKeys(board);
-
+        board.Keyboard.ReleaseAll();
         for (int row = 0; row < 8; row++)
             Assert.AreEqual(0xFF, (int)Row(board, row));
+    }
+
+    #endregion
+
+    #region Tastiera del PC (Fake64.WinForms)
+
+    [TestMethod]
+    [DataRow(Keys.F1, C64Key.F1, false)]
+    [DataRow(Keys.F2, C64Key.F1, true)]
+    [DataRow(Keys.F3, C64Key.F3, false)]
+    [DataRow(Keys.F4, C64Key.F3, true)]
+    [DataRow(Keys.F5, C64Key.F5, false)]
+    [DataRow(Keys.F6, C64Key.F5, true)]
+    [DataRow(Keys.F7, C64Key.F7, false)]
+    [DataRow(Keys.F8, C64Key.F7, true)]
+    [DataRow(Keys.Right, C64Key.CursorRight, false)]
+    [DataRow(Keys.Left, C64Key.CursorRight, true)]
+    [DataRow(Keys.Down, C64Key.CursorDown, false)]
+    [DataRow(Keys.Up, C64Key.CursorDown, true)]
+    [DataRow(Keys.A, C64Key.A, false)]
+    [DataRow(Keys.D7, C64Key.D7, false)]
+    [DataRow(Keys.Enter, C64Key.Return, false)]
+    public void PcKey_ShouldMapToC64KeyWithShiftWhenNeeded(Keys pcKey, C64Key expected, bool shifted)
+    {
+        var keys = PcKeyboardLayout.ToC64Keys([pcKey]);
+
+        CollectionAssert.Contains(keys.ToList(), expected);
+        Assert.AreEqual(shifted, keys.Contains(C64Key.LeftShift));
+        Assert.AreEqual(shifted ? 2 : 1, keys.Count);
     }
 
     [TestMethod]
     public void PcShiftWithF1_ShouldBeF2()
     {
-        var board = NewBoard();
+        var keys = PcKeyboardLayout.ToC64Keys([Keys.ShiftKey, Keys.F1]);
 
-        HoldKeys(board, VK_SHIFT, VK_F1);
-
-        Assert.AreEqual(0xFF & ~(1 << 4), (int)Row(board, 0));
-        Assert.AreEqual(0, Row(board, 1) & 0x80);
+        CollectionAssert.AreEquivalent(new[] { C64Key.F1, C64Key.LeftShift }, keys.ToList());
     }
+
+    [TestMethod]
+    public void UnmappedPcKeys_ShouldBeIgnored()
+    {
+        Assert.IsFalse(PcKeyboardLayout.IsMapped(Keys.Tab));
+        Assert.AreEqual(0, PcKeyboardLayout.ToC64Keys([Keys.Tab, Keys.F12]).Count);
+    }
+
+    #endregion
+
+    #region Adattatore PcKeyboard
+
+    // Controllo che genera gli eventi di tastiera come se avesse il focus
+    sealed class KeySource : Control
+    {
+        public void Down(Keys key) => OnKeyDown(new KeyEventArgs(key));
+        public void Up(Keys key) => OnKeyUp(new KeyEventArgs(key));
+        public void Blur() => OnLostFocus(EventArgs.Empty);
+    }
+
+    [TestMethod]
+    public void PcKeyboard_ShouldForwardKeysFromItsControl()
+    {
+        var board = NewBoard();
+        using var source = new KeySource();
+        using var cable = new PcKeyboard(source, board.Keyboard);
+        long now = 0;
+        cable.Now = () => now;
+
+        source.Down(Keys.F2);
+        Assert.IsTrue(board.Keyboard.IsPressed(C64Key.F1));
+        Assert.IsTrue(board.Keyboard.IsPressed(C64Key.LeftShift));
+
+        now = 100;
+        source.Up(Keys.F2);
+        Assert.IsFalse(board.Keyboard.IsPressed(C64Key.F1));
+        Assert.IsFalse(board.Keyboard.IsPressed(C64Key.LeftShift));
+    }
+
+    [TestMethod]
+    public void PcKeyboard_ShortTap_ShouldStayPressedForMinimumHold()
+    {
+        var board = NewBoard();
+        using var source = new KeySource();
+        using var cable = new PcKeyboard(source, board.Keyboard);
+        long now = 1000;
+        cable.Now = () => now;
+
+        source.Down(Keys.A);
+        source.Up(Keys.A); // rilasciato subito, come con SendKeys
+
+        Assert.IsTrue(board.Keyboard.IsPressed(C64Key.A));
+        now += (long)PcKeyboard.MinimumHold.TotalMilliseconds - 1;
+        cable.ReleaseDueKeys();
+        Assert.IsTrue(board.Keyboard.IsPressed(C64Key.A));
+        now += 1;
+        cable.ReleaseDueKeys();
+        Assert.IsFalse(board.Keyboard.IsPressed(C64Key.A));
+    }
+
+    [TestMethod]
+    public void PcKeyboard_LosingFocus_ShouldReleaseEverything()
+    {
+        var board = NewBoard();
+        using var source = new KeySource();
+        using var cable = new PcKeyboard(source, board.Keyboard);
+
+        source.Down(Keys.A);
+        source.Down(Keys.ShiftKey);
+        source.Blur();
+
+        Assert.IsFalse(board.Keyboard.IsPressed(C64Key.A));
+        Assert.IsFalse(board.Keyboard.IsPressed(C64Key.LeftShift));
+    }
+
+    #endregion
 
     // Integrazione: il KERNAL scandisce la matrice nell'IRQ e mette il codice PETSCII nel buffer a $0277
     [TestMethod]
-    [DataRow(VK_F1, 133)]
-    [DataRow(VK_F3, 134)]
-    [DataRow(VK_F5, 135)]
-    [DataRow(VK_F7, 136)]
-    [DataRow(VK_F2, 137)]
-    [DataRow(VK_F4, 138)]
-    [DataRow(VK_F6, 139)]
-    [DataRow(VK_F8, 140)]
-    [DataRow(VK_DOWN, 17)]
-    [DataRow(VK_UP, 145)]
-    [DataRow(VK_RIGHT, 29)]
-    [DataRow(VK_LEFT, 157)]
-    public void Kernal_ShouldDecodeKeyToPetscii(int virtualKey, int petscii)
+    [DataRow(Keys.F1, 133)]
+    [DataRow(Keys.F3, 134)]
+    [DataRow(Keys.F5, 135)]
+    [DataRow(Keys.F7, 136)]
+    [DataRow(Keys.F2, 137)]
+    [DataRow(Keys.F4, 138)]
+    [DataRow(Keys.F6, 139)]
+    [DataRow(Keys.F8, 140)]
+    [DataRow(Keys.Down, 17)]
+    [DataRow(Keys.Up, 145)]
+    [DataRow(Keys.Right, 29)]
+    [DataRow(Keys.Left, 157)]
+    public void Kernal_ShouldDecodePcKeyToPetscii(Keys pcKey, int petscii)
     {
         var board = NewBoard();
         board.RunCycles(3 * CYCLES_PER_SECOND);
@@ -103,9 +186,9 @@ public sealed class KeyboardTests
         board.Cpu.Status = 0x20;
         board.Poke(0x00C6, 0);
 
-        board.Keyboard.HostKeyDown = vk => vk == virtualKey;
+        board.Keyboard.SetPressedKeys(PcKeyboardLayout.ToC64Keys([pcKey]));
         board.RunCycles(3 * FRAME_CYCLES);
-        board.Keyboard.HostKeyDown = _ => false;
+        board.Keyboard.ReleaseAll();
         board.RunCycles(3 * FRAME_CYCLES);
 
         Assert.IsTrue(board.Peek(0x00C6) >= 1, "nessun tasto nel buffer");

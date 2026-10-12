@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace Fake64.Cartridges;
+namespace Fake64.Crt;
 
 // Lettura del formato .crt (VICE): intestazione "C64 CARTRIDGE   " seguita da pacchetti "CHIP" con le ROM.
 // Tutti i campi numerici sono big-endian
@@ -76,7 +76,7 @@ public static class CrtFile
         var banks = new byte[count][];
         for (int i = 0; i < count; i++)
         {
-            banks[i] = new byte[Cartridge.BANK_SIZE];
+            banks[i] = new byte[BankedCartridge.BANK_SIZE];
             Array.Fill(banks[i], (byte)0xFF);
         }
         return banks;
@@ -109,7 +109,7 @@ public static class CrtFile
     {
         var banks = NewBanks(chips);
         foreach (var chip in chips)
-            Array.Copy(chip.Data, banks[chip.Bank], Math.Min(chip.Data.Length, Cartridge.BANK_SIZE));
+            Array.Copy(chip.Data, banks[chip.Bank], Math.Min(chip.Data.Length, BankedCartridge.BANK_SIZE));
         return banks;
     }
 }

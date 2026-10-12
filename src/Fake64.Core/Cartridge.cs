@@ -1,11 +1,10 @@
-namespace Fake64.Cartridges;
+namespace Fake64;
 
-// Cartuccia collegata alla porta di espansione. Le ROM sono divise in banchi da 8 KB:
-// ROML compare a $8000-$9FFF, ROMH a $A000-$BFFF (modo 16K) o a $E000-$FFFF (Ultimax)
+// Dispositivo collegato alla porta di espansione: il contratto elettrico che la Board conosce.
+// ROML compare a $8000-$9FFF, ROMH a $A000-$BFFF (modo 16K) o a $E000-$FFFF (Ultimax).
+// I tipi concreti e il formato dei file (.crt) stanno fuori dal core, nel progetto Fake64.Crt
 public abstract class Cartridge
 {
-    public const int BANK_SIZE = 0x2000;
-
     protected Cartridge(string name, bool exrom, bool game)
     {
         Name = name;
@@ -51,12 +50,4 @@ public abstract class Cartridge
     public virtual byte? ReadIo2(int offset) => null;
     public virtual void WriteIo1(int offset, byte value) { }
     public virtual void WriteIo2(int offset, byte value) { }
-
-    // Banco di ROM da 8 KB non presente nel file: legge $FF come una EPROM vuota
-    protected static byte[] EmptyBank()
-    {
-        var bank = new byte[BANK_SIZE];
-        Array.Fill(bank, (byte)0xFF);
-        return bank;
-    }
 }

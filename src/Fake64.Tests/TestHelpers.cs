@@ -1,4 +1,5 @@
 using System.Text;
+using Fake64.Prg;
 
 namespace Fake64.Tests;
 
@@ -13,7 +14,7 @@ static class TestHelpers
     public const byte FLAG_N = 0x80;
 
     // Board senza clock in tempo reale: i test avanzano con RunCycles/StepInstruction
-    public static Board NewBoard() => new Board(null, startClock: false);
+    public static Board NewBoard() => new Board(startClock: false);
 
     public static void Poke(this Board board, ushort addr, params byte[] bytes)
     {

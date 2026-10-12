@@ -11,6 +11,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Fake64.Core\Fake64.Core.csproj" />
+    <ProjectReference Include="..\Fake64.Crt\Fake64.Crt.csproj" />
+    <ProjectReference Include="..\Fake64.Prg\Fake64.Prg.csproj" />
+    <ProjectReference Include="..\Fake64.WinForms\Fake64.WinForms.csproj" />
   </ItemGroup>
 
   <ItemGroup>

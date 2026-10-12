@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
-using Fake64.Cartridges;
+using Fake64.Crt;
 using static Fake64.Tests.TestHelpers;
 
 namespace Fake64.Tests;

@@ -6,7 +6,6 @@ public partial class Board
 {
     Task clock;
 
-    IScreen screen;
     Keyboard keyboard;
 
     MOS6510 cpu;
@@ -25,11 +24,18 @@ public partial class Board
 
     public MOS6569 VICII => vicii;
 
+    // Prese esterne: uscita video (vi si collega un monitor con un MonitorCable) e tastiera
+    public VideoPort VideoOut { get; }
+    public Keyboard Keyboard => keyboard;
+
+    // Accesso diretto alla RAM, senza passare per la mappa di memoria (come un DMA): permette di
+    // scrivere anche sotto le ROM. Da usare dal thread di emulazione, ad esempio tramite Enqueue
+    public Ram64KbChip Ram => ram64;
+
     // Accesso ai chip per i test (InternalsVisibleTo Fake64.Tests)
     internal MOS6510 Cpu => cpu;
     internal MOS6526 Cia1 => cia1;
     internal MOS6526 Cia2 => cia2;
-    internal Keyboard Keyboard => keyboard;
     internal long TotalCycles => totalCycles;
 
     // Cicli in cui la CPU è stata fermata dal VIC-II (bad line)
@@ -48,10 +54,9 @@ public partial class Board
     private int currentLine;
     private int currentCycle;
 
-    public Board(IScreen screen, string kernalName = null, string chargenName = null, string basicName = null, bool startClock = true)
+    public Board(string kernalName = null, string chargenName = null, string basicName = null, bool startClock = true)
     {
-        this.screen = screen;
-        keyboard = new Keyboard(this);
+        keyboard = new Keyboard();
         kernal = Rom(kernalName ?? nameof(kernal));
         chargen = Rom(chargenName ?? nameof(chargen));
         basic = Rom(basicName ?? nameof(basic));
@@ -95,6 +100,7 @@ public partial class Board
         vicii = new MOS6569(this, () => {
             Render();
         });
+        VideoOut = new VideoPort(vicii);
         cpu = new MOS6510(this);
         MemoryMap();
 
@@ -155,7 +161,6 @@ public partial class Board
         // Phase 1: Process all signals and state changes for this cycle
         // Process interrupts and other signals between components
         // This is where components indicate their need to interact with others
-        keyboard.ProcessSignals(currentCycle);
         cia1.ProcessSignals(currentCycle);
         cia2.ProcessSignals(currentCycle);
         vicii.ProcessSignals(currentCycle);
@@ -174,7 +179,6 @@ public partial class Board
         cia2.Clock(totalCycles);
         if (cpuStalled) StolenCycles++;
         else cpu.Clock(totalCycles);    // CPU executes instructions
-        keyboard.Clock();          // Poll keyboard state
 
         // Update cycle counters
         totalCycles++;
@@ -208,13 +212,7 @@ public partial class Board
         }
     }
 
-    unsafe void Render()
-    {
-        if (screen is null) return;
-        var scan0 = screen.BeginRender();
-        vicii.Render(scan0);
-        screen.EndRender();
-    }
+    void Render() => VideoOut.Present();
 
     public void Reset()
     {

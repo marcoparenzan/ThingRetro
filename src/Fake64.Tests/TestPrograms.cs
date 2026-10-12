@@ -1,3 +1,4 @@
+using Fake64.Prg;
 using static Fake64.Tests.TestHelpers;
 
 namespace Fake64.Tests;

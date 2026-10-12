@@ -1,78 +1,70 @@
-using System.Drawing.Drawing2D;
-using System.Drawing.Imaging;
+using Fake64.WinForms;
 
 namespace Fake64;
 
-public partial class Fake64Form : Form, IScreen
+// Finestra dell'app: ospita un C64Monitor e collega i pezzi. Lo stesso schema (Board, monitor,
+// MonitorCable, PcKeyboard) funziona in qualunque form, anche insieme ad altri controlli
+public partial class Fake64Form : Form
 {
-    // La bitmap ha sempre la dimensione del frame del VIC-II: Render scrive righe contigue di
-    // SCREEN_WIDTH pixel, quindi non deve dipendere dalla dimensione (o dal DPI) della finestra
-    readonly Bitmap bitmap = new(MOS6569.SCREEN_WIDTH, MOS6569.SCREEN_HEIGHT, PixelFormat.Format32bppArgb);
-    readonly object bitmapLock = new();
-    BitmapData bitmapData;
+    readonly Board board = new();
+    readonly C64Monitor monitor = new() { Dock = DockStyle.Fill };
+    readonly MonitorCable monitorCable;
+    readonly PcKeyboard keyboardCable;
 
-    public Fake64Form(int scale = 2)
+    public Fake64Form(string? startupFile = null)
     {
-        this.Text = "Fake64";
-        this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
-        this.StartPosition = FormStartPosition.CenterScreen;
-        this.BackColor = System.Drawing.Color.Black;
-        this.ClientSize = new System.Drawing.Size(MOS6569.SCREEN_WIDTH * scale, MOS6569.SCREEN_HEIGHT * scale);
+        Text = "Fake64";
+        StartPosition = FormStartPosition.CenterScreen;
+        ClientSize = monitor.Size;
+        Controls.Add(monitor);
 
-        this.DoubleBuffered = true;
-        this.SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+        // I collegamenti espliciti: uscita video -> monitor, tastiera del PC (sul monitor) -> tastiera del C64
+        monitorCable = new MonitorCable(board.VideoOut, monitor);
+        keyboardCable = new PcKeyboard(monitor, board.Keyboard);
 
-        this.AllowDrop = true;
+        monitor.AllowDrop = true;
+        monitor.DragEnter += (_, e) =>
+        {
+            if (DroppedFile(e) is not null) e.Effect = DragDropEffects.Copy;
+        };
+        monitor.DragDrop += (_, e) =>
+        {
+            if (DroppedFile(e) is string path) Open(path);
+        };
+
+        Shown += async (_, _) =>
+        {
+            monitor.Focus();
+            if (startupFile is null) return;
+            // Una cartuccia riavvia la macchina; un programma va caricato quando il BASIC è pronto
+            if (!MediaLoader.IsCartridge(startupFile)) await Task.Delay(MediaLoader.BootTime);
+            Open(startupFile);
+        };
     }
 
-    // Percorso di un file .prg o .crt trascinato sulla finestra
-    public event Action<string> FileDropped;
-
-    static readonly string[] SupportedExtensions = [".prg", ".crt"];
-
-    protected override void OnDragEnter(DragEventArgs e)
-    {
-        base.OnDragEnter(e);
-        if (DroppedFile(e) is not null) e.Effect = DragDropEffects.Copy;
-    }
-
-    protected override void OnDragDrop(DragEventArgs e)
-    {
-        base.OnDragDrop(e);
-        if (DroppedFile(e) is string path) FileDropped?.Invoke(path);
-    }
-
-    static string DroppedFile(DragEventArgs e) =>
-        e.Data?.GetData(DataFormats.FileDrop) is string[] files &&
-        files.Length == 1 &&
-        SupportedExtensions.Contains(Path.GetExtension(files[0]), StringComparer.OrdinalIgnoreCase)
+    static string? DroppedFile(DragEventArgs e) =>
+        e.Data?.GetData(DataFormats.FileDrop) is string[] files && files.Length == 1 && MediaLoader.IsSupported(files[0])
             ? files[0]
             : null;
 
-    // Chiamati dal thread di emulazione a fine frame: il lock resta preso fra BeginRender ed EndRender
-    unsafe public byte* BeginRender()
+    void Open(string path)
     {
-        Monitor.Enter(bitmapLock);
-        bitmapData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
-        return (byte*)bitmapData.Scan0;
-    }
-
-    public void EndRender()
-    {
-        bitmap.UnlockBits(bitmapData);
-        Monitor.Exit(bitmapLock);
-
-        // Invalidate è sicuro da qualunque thread: il disegno avviene poi sul thread della UI
-        if (IsHandleCreated) Invalidate();
-    }
-
-    protected override void OnPaint(PaintEventArgs e)
-    {
-        e.Graphics.InterpolationMode = InterpolationMode.NearestNeighbor;
-        e.Graphics.PixelOffsetMode = PixelOffsetMode.Half;
-        lock (bitmapLock)
+        try
         {
-            e.Graphics.DrawImage(bitmap, ClientRectangle);
+            var description = MediaLoader.Open(board, path);
+            Text = $"Fake64 - {description}";
         }
+        catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException or ArgumentException)
+        {
+            MessageBox.Show(this, e.Message, $"Fake64 - {Path.GetFileName(path)}", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        monitor.Focus();
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        keyboardCable.Dispose();
+        monitorCable.Dispose();
+        base.OnFormClosed(e);
     }
 }

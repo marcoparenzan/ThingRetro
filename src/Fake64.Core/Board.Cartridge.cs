@@ -1,9 +1,8 @@
-using Fake64.Cartridges;
-
 namespace Fake64;
 
 // Porta di espansione: inserire o togliere una cartuccia equivale a farlo a macchina spenta,
-// quindi segue un reset (il KERNAL cerca la firma "CBM80" a $8004 all'avvio)
+// quindi segue un reset (il KERNAL cerca la firma "CBM80" a $8004 all'avvio).
+// Per caricare un file .crt vedere Fake64.Crt.CrtFile
 public partial class Board
 {
     Cartridge? cartridge;
@@ -16,13 +15,6 @@ public partial class Board
         cartridge = newCartridge;
         cartridge.LinesChanged = MemoryMap;
         Reset();
-    }
-
-    public Cartridge InsertCartridge(string crtPath)
-    {
-        var loaded = CrtFile.Load(crtPath);
-        InsertCartridge(loaded);
-        return loaded;
     }
 
     public void RemoveCartridge()
