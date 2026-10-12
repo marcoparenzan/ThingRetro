@@ -38,7 +38,9 @@ sprite. Vedi [Limiti noti](#limiti-noti).
 | `src/Fake64.Crt` | Formato `.crt` e tipi di cartuccia |
 | `src/Fake64.WinForms` | `C64Monitor` (lo schermo, uno UserControl) e `PcKeyboard` (il cavo della tastiera) |
 | `src/Fake64` | L'app Windows: una finestra che ospita il monitor |
+| `src/Fake64.Samples` | Generatore dei programmi di esempio (tokenizzatore BASIC V2, writer `.crt`) |
 | `src/Fake64.Tests` | Test (MSTest) |
+| `samples` | Programmi di esempio pronti da caricare |
 | `tools` | Script di supporto (download delle suite di test della CPU) |
 
 L'architettura è descritta in [docs/ARCHITETTURA.md](docs/ARCHITETTURA.md).
@@ -75,6 +77,15 @@ dotnet run --project src/Fake64 -- cartuccia.crt     # avvia con una cartuccia i
 
 Le ROM stanno in `src/Fake64/roms` (`kernal`, `basic`, `chargen`) e vengono copiate accanto all'eseguibile.
 Sono le ROM originali del C64, protette da copyright.
+
+### Esempi
+
+La cartella [samples](samples/README.md) contiene programmi pronti da trascinare sulla finestra: testo a colori,
+raster interrupt, uno sprite che rimbalza, i tasti funzione, il modo bitmap e una cartuccia con avvio automatico.
+
+```powershell
+dotnet run --project src/Fake64 -- samples/rasterbars.prg
+```
 
 ### Uso
 
@@ -116,8 +127,8 @@ board.Enqueue(() => board.InsertCartridge(CrtFile.Load("cartuccia.crt")));
 dotnet test src/Fake64.Tests
 ```
 
-Circa 160 test propri: CPU (anche da sola, su un bus finto che registra ogni ciclo), CIA, VIC-II e grafica pixel
-per pixel, zoccoli e piste, tastiera, monitor, programmi, cartucce, e avvio completo con KERNAL e BASIC.
+Circa 170 test propri: CPU (anche da sola, su un bus finto che registra ogni ciclo), CIA, VIC-II e grafica pixel
+per pixel, zoccoli e piste, tastiera, monitor, programmi, cartucce, esempi, e avvio completo con KERNAL e BASIC.
 
 Due suite esterne verificano la CPU contro il chip vero. Non sono nel repository (licenze GPL-3.0 e MIT); si
 scaricano con:

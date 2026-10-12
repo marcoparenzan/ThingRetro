@@ -13,6 +13,7 @@ flowchart LR
     Crt[Fake64.Crt<br/>file .crt]
     WinForms[Fake64.WinForms<br/>monitor e tastiera]
     App[Fake64<br/>applicazione]
+    Samples[Fake64.Samples<br/>generatore degli esempi]
     C64 --> Mos
     Prg --> C64
     Crt --> C64
@@ -148,6 +149,8 @@ Gli altri thread agiscono sulla macchina con `Board.Enqueue`, che esegue l'azion
 - **`Fake64.Crt`**: `CrtFile` legge intestazione e pacchetti `CHIP` e crea il tipo di cartuccia giusto
   (`BankedCartridge` e derivate). La scheda conosce solo la classe astratta `Cartridge`: linee GAME/EXROM,
   ROML, ROMH, I/O 1, I/O 2.
+- **`Fake64.Samples`**: genera i programmi di `samples/` (non dipende dall'emulatore). `BasicTokenizer` trasforma
+  il BASIC in testo nel formato del C64 con le regole del KERNAL; `CrtImage` scrive i file `.crt`.
 - **`Fake64.WinForms`**: `C64Monitor` implementa `IScreen` con una bitmap a dimensione fissa protetta da un lock
   (scritta dal thread di emulazione, disegnata dal thread della UI); `PcKeyboard` traduce i tasti del PC con
   `PcKeyboardLayout` e li passa a `Keyboard.SetPressedKeys`, tenendo premuti almeno 40 ms i tocchi brevissimi
