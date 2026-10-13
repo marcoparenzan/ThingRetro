@@ -232,6 +232,8 @@ web computer, in WebAssembly, in a tab next to the files (or in a window of its 
   RalfAI reads it before working and keeps it up to date.
 - **RalfAI**, on the right, is an assistant that works on the project: it reads and writes its files, builds it
   (and fixes the errors it gets) and runs it in the C64. The conversation is kept in the project (`.ralfai/`).
+  Files can be attached to a message (the button, dropped on the chat, pictures pasted): they are saved in
+  `.ralfai/attachments/`; text goes into the message, pictures are looked at with the `Image_Look` tool.
 - **The C64 tab** keeps running while a file is shown. *Own window* moves the C64 to a window of its own (a second
   monitor); closing that window brings it back into the tab.
 

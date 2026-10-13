@@ -15,13 +15,14 @@ public static partial class CharmapFile
     [GeneratedRegex(@"^\$[0-9A-Fa-f]{1,2}\s*")]
     private static partial Regex CodePrefix();
 
-    // The characters after the charset label, one per 8 values; a line of exactly 8 values lends them its comment
+    // The characters after the charset label, up to the next label (an end label, other data) or the end of the
+    // region, one per 8 values; a line of exactly 8 values lends them its comment
     public static List<Character> Read(string[] lines, AsmRegion region, string charsetLabel, ProgramImage? image)
     {
-        int start = LabelLine(lines, region, charsetLabel);
+        var (start, end) = Span(lines, region, charsetLabel);
         var characters = new List<Character>();
         var pending = new List<int>();
-        for (int i = start + 1; i < region.EndLine; i++)
+        for (int i = start + 1; i < end; i++)
         {
             if (AsmRegion.LineValues(lines[i], image) is not { } values) continue;
             if (pending.Count == 0 && values.Count == 8)
@@ -39,19 +40,26 @@ public static partial class CharmapFile
         return characters;
     }
 
-    // The lines from the charset label to the end of the region written again: one character per line
+    // The .byte lines of the characters written again, one character per line where they were; the other lines
+    // between the charset label and the next one (comments) stay after them, and so does everything from the next
+    // label on (an end label like "charactersEnd:", which the program may use to compute the length)
     public static string[] Write(string[] lines, AsmRegion region, string charsetLabel, IReadOnlyList<Character> characters, int first)
     {
-        int start = LabelLine(lines, region, charsetLabel);
+        var (start, end) = Span(lines, region, charsetLabel);
         var (indent, keyword) = region.ByteStyle(lines);
         var written = characters.Select((c, i) =>
             $"{indent}{keyword} {string.Join(",", c.Bytes.Select(b => "$" + b.ToString("X2", CultureInfo.InvariantCulture)))} ; ${first + i:X2}"
             + (c.Description.Length > 0 ? " " + c.Description : ""));
-        return [.. lines[..(start + 1)], .. written, .. lines[region.EndLine..]];
+        var others = Enumerable.Range(start + 1, end - start - 1).Where(i => AsmRegion.LineValues(lines[i], null) is null).Select(i => lines[i]);
+        return [.. lines[..(start + 1)], .. written, .. others, .. lines[end..]];
     }
 
-    static int LabelLine(string[] lines, AsmRegion region, string label) =>
-        region.LabelLines(lines).FirstOrDefault(l => l.Label == label) is { Label: not null } found
-            ? found.Line
-            : throw new FormatException($"The label {label} is not in the region");
+    // The charset label's line, and where its data ends: the next label (its ;@ lines) or the end of the region
+    static (int Start, int End) Span(string[] lines, AsmRegion region, string label)
+    {
+        var labels = region.LabelLines(lines).ToList();
+        int index = labels.FindIndex(l => l.Label == label);
+        if (index < 0) throw new FormatException($"The label {label} is not in the region");
+        return (labels[index].Line, index + 1 < labels.Count ? labels[index + 1].Top : region.EndLine);
+    }
 }

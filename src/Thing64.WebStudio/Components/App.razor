@@ -57,6 +57,17 @@
         }
     </style>
 
+    @* Scroll bars: thin, no arrows, in the colors of the logo (Monaco has its own, in the thing64 theme) *@
+    <style>
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: #2b3590 transparent;
+        }
+        *:hover {
+            scrollbar-color: #4a56d6 transparent;
+        }
+    </style>
+
     @* Monaco (the editor of Visual Studio Code) from the CDN, and the 6502 language of Thing64.Asm *@
     <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
     <script src="js/asm6502.js"></script>

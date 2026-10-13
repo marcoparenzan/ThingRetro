@@ -111,12 +111,14 @@ window.thing64Studio = (() => {
         await target.invokeMethodAsync('PasteImage', await toPng(file));
     });
 
-    async function toPng(blob) {
+    // A picture as PNG bytes, no larger than maxSide pixels when given
+    async function toPng(blob, maxSide) {
         const bitmap = await createImageBitmap(blob);
+        const scale = maxSide ? Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height)) : 1;
         const canvas = document.createElement('canvas');
-        canvas.width = bitmap.width;
-        canvas.height = bitmap.height;
-        canvas.getContext('2d').drawImage(bitmap, 0, 0);
+        canvas.width = Math.round(bitmap.width * scale);
+        canvas.height = Math.round(bitmap.height * scale);
+        canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
         const png = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
         return new Uint8Array(await png.arrayBuffer());
     }
@@ -152,6 +154,7 @@ window.thing64Studio = (() => {
                 minimap: { enabled: true },
                 renderWhitespace: 'selection',
                 mouseWheelZoom: true,
+                scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, useShadows: false },
             });
         },
 
@@ -240,6 +243,37 @@ window.thing64Studio = (() => {
                 if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
                 e.preventDefault();
                 document.getElementById(sendId)?.click();
+            });
+        },
+
+        // Attachments for RalfAI: files dropped on the chat, pictures pasted in its text (not passed on to the
+        // sprite editor's paste). Pictures over 3 MB are made smaller first: a message to the server has a limit
+        chatAttachments(panelId, inputId, dotnet) {
+            const panel = document.getElementById(panelId), input = document.getElementById(inputId);
+            if (!panel || !input) return;
+            const send = async files => {
+                for (const file of files) {
+                    let bytes = new Uint8Array(await file.arrayBuffer());
+                    let name = file.name || 'pasted.png';
+                    if (bytes.length > 3_000_000) {
+                        if (!file.type.startsWith('image/')) { alert(`${name} is too large to drop: use the Attach button`); continue; }
+                        bytes = await toPng(file, 1600);
+                        name = name.replace(/\.[^.]*$/, '') + '.png';
+                    }
+                    await dotnet.invokeMethodAsync('AttachDropped', name, bytes);
+                }
+            };
+            panel.addEventListener('dragover', e => e.preventDefault());
+            panel.addEventListener('drop', e => {
+                e.preventDefault();
+                send([...e.dataTransfer.files]);
+            });
+            input.addEventListener('paste', e => {
+                const files = [...(e.clipboardData?.files ?? [])];
+                if (files.length === 0) return;
+                e.preventDefault();
+                e.stopPropagation();
+                send(files);
             });
         },
 

@@ -15,6 +15,8 @@
         <button class="rounded border border-night-600 px-2 py-1" @onclick="Invert" title="Swap the pixels and the background">◐ Invert</button>
         <button class="rounded border border-night-600 px-2 py-1" @onclick="Mirror" title="Mirror left and right">⇋ Mirror</button>
         <button class="rounded border border-night-600 px-2 py-1" @onclick="Flip" title="Upside down">⇵ Flip</button>
+        <button class="rounded border border-night-600 px-2 py-1 disabled:opacity-40" disabled="@(charmap is null || selectedChar < 0 || Multicolor)" @onclick="Rotate"
+                title="Rotate a quarter turn clockwise (hires characters: a multicolor one is 4x8)">↻ Rotate</button>
         <span class="flex items-center gap-0.5" title="Slide the pixels; what leaves one side comes back on the other">
             slide
             <button class="rounded border border-night-600 px-1.5 py-1" @onclick="() => Slide(-1, 0)">←</button>
@@ -36,6 +38,18 @@
     {
         <div class="flex min-h-0 flex-1">
             <div class="w-56 shrink-0 overflow-y-auto border-r border-night-800 bg-night-950 p-2 text-xs">
+                <div class="mb-2 flex flex-wrap gap-1">
+                    <button class="tool border border-night-700" @onclick='() => StartNaming("add")' title="A new tile at the end, with its constant">＋ Tile</button>
+                    <button class="tool border border-night-700" @onclick='() => StartNaming("duplicate")' title="A new tile at the end with the selected tile's character and color">⧉ Duplicate</button>
+                    <button class="tool border border-night-700" @onclick="RemoveTile" title="Remove the selected tile (not when a map uses it)">🗑 Remove</button>
+                </div>
+                @if (naming is not null)
+                {
+                    <form class="mb-2" @onsubmit="ApplyNaming">
+                        <label class="mb-1 block text-night-300">Name of the new tile (its constant: @Prefix…)</label>
+                        <input class="field w-full font-mono" @bind="name" @bind:event="oninput" @ref="nameInput" @onkeydown="NamingKey" />
+                    </form>
+                }
                 @for (int t = 0; t < charmap.Count; t++)
                 {
                     int tile = t;
@@ -74,10 +88,13 @@
 
                 @if (selectedChar < 0)
                 {
-                    <p class="mb-3 text-night-400">
-                        $@charmap.ScreenCode(values, selectedTile).ToString("X2") is a character of the ROM: the studio does not have it, so it
-                        cannot be drawn here. Pick a character of the region below, or type its screen code above.
+                    <p class="mb-2 text-night-400">
+                        $@charmap.ScreenCode(values, selectedTile).ToString("X2") is not one of the characters of this region (it is the ROM's):
+                        it cannot be drawn here. Give @charmap.Names[selectedTile] a new character to draw, pick one below, or type a screen code above.
                     </p>
+                    <button class="tool mb-3 border border-chip-400 text-chip-300" @onclick="NewCharacterForTile">
+                        ＋ New character for @charmap.Names[selectedTile] ($@((charmap.First + charmap.Characters).ToString("X2")))
+                    </button>
                 }
                 else
                 {
@@ -169,7 +186,7 @@
         try
         {
             string[] lines = Lines();
-            var region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"There is no region {Index + 1} in {File}");
+            region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"There is no region {Index + 1} in {File}");
             image = null;
             try { image = ProgramImage.Assemble(Project); }
             catch (FormatException) { status = "The program does not assemble: no tile names"; }
@@ -258,6 +275,17 @@
     {
         Change(() => values[charmap!.ColorsAt + selectedTile] = (CurrentColor & 7) | (Multicolor ? 0 : 8));
         Decode();
+    }
+
+    // A tile whose screen code is not in the region: a new empty character at the end of the set becomes its own
+    async Task NewCharacterForTile()
+    {
+        int tile = selectedTile, code = charmap!.First + charmap.Characters;
+        Change(() => values[charmap.TilesAt + tile] = code);
+        await AddCharacter();   // saves the tile's new screen code first, then adds the character
+        if (charmap is null || charmap.Characters <= code - charmap.First) return;   // the status says what went wrong
+        SelectTile(tile);
+        status = $"{charmap.Names[tile]} has the new character ${code:X2}";
     }
 
     void UseForTile()
@@ -349,6 +377,7 @@
     }
 
     void Mirror() => Transform((x, y) => y * Across + Across - 1 - x);
+    void Rotate() => Transform((x, y) => (7 - x) * 8 + y);   // clockwise: the left column becomes the top row
     void Flip() => Transform((x, y) => (7 - y) * Across + x);
     void Slide(int dx, int dy) => Transform((x, y) => (y - dy + 8) % 8 * Across + (x - dx + Across) % Across);
     void Clear() => Transform((x, y) => -1);
@@ -370,6 +399,123 @@
 
     // Characters added, duplicated, deleted and moved. Each one is (where it was, what it is); the tiles table then
     // follows every character to its new screen code
+    // Tiles added, duplicated and removed. A tile is a number used by the maps and by constants (TILE_...), so
+    // TileFile changes those too; a tile a map uses is not removed
+    string? naming;          // add, duplicate
+    string name = "";
+    ElementReference nameInput;
+    bool focusName;
+
+    string Prefix => region?.Parameters.GetValueOrDefault("names", "TILE_") ?? "TILE_";
+    string TilesLabel => region!.Parameters["tiles"];
+    AsmRegion? region;
+
+    void StartNaming(string mode)
+    {
+        naming = mode;
+        name = mode == "duplicate" ? charmap!.Names[selectedTile] + "_2" : "";
+        focusName = true;
+    }
+
+    void NamingKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") naming = null;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (focusName && naming is not null)
+        {
+            focusName = false;
+            await nameInput.FocusAsync();
+        }
+    }
+
+    async Task ApplyNaming()
+    {
+        string tileName = name.Trim().ToUpperInvariant();
+        if (!AsmRegion.IsIdentifier(Prefix + tileName)) { status = $"\"{tileName}\" is not a valid name"; return; }
+        if (charmap!.Names.Contains(tileName)) { status = $"{Prefix}{tileName} already exists"; return; }
+        bool duplicate = naming == "duplicate";
+        naming = null;
+        // A new tile gets a new empty character at the end of the set, ready to draw; a copy shares its character
+        int code = duplicate ? charmap.ScreenCode(values, selectedTile) : charmap.First + charmap.Characters;
+        int color = duplicate ? charmap.Color(values, selectedTile) : 1;
+        int tile = charmap.Count;
+        await ChangeTiles(list => list.Add((code, color)), () => TileFile.AddConstant(Project, Prefix, tileName, tile, tile + 1),
+            $"{Prefix}{tileName} = {tile} added");
+        if (!duplicate) await AddCharacter();
+        if (charmap is null || charmap.Count <= tile) return;   // something went wrong: the status says what
+        SelectTile(tile);
+        status = $"{Prefix}{tileName} = {tile} added" + (duplicate ? "" : $", with the new character ${code:X2}");
+    }
+
+    async Task RemoveTile()
+    {
+        int tile = selectedTile;
+        string tileName = charmap!.Names[tile];
+        List<string> users;
+        try { users = TileFile.MapsUsing(Project, TilesLabel, tile); }
+        catch (FormatException e) { status = "The maps could not be read: " + e.Message; return; }
+        if (users.Count > 0) { status = $"{tileName} is used in {string.Join(", ", users)}: remove it from the maps first"; return; }
+        if (!await JS.InvokeAsync<bool>("confirm", $"Remove the tile {tileName}? The tiles after it, in the maps and in the constants, move down by one.")) return;
+        await ChangeTiles(list => list.RemoveAt(tile), () =>
+        {
+            TileFile.RemapMaps(Project, TilesLabel, v => v > tile ? v - 1 : v);
+            TileFile.RemoveConstant(Project, Prefix, tile, charmap!.Count - 1);
+        }, $"{tileName} removed");
+        if (charmap is not null) SelectTile(Math.Max(0, Math.Min(tile, charmap.Count - 1)));
+    }
+
+    // The file as it is now (not as the editor last read it): its lines, the region, its values and their meaning
+    (string[] Lines, AsmRegion Region, int[] Values, Charmap Map) Current()
+    {
+        string[] lines = Lines();
+        var current = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"The region {Index + 1} of {File} is gone");
+        int[] fileValues = current.ReadBytes(lines, image).ToArray();
+        return (lines, current, fileValues, new Charmap(current, lines, image, fileValues.Length));
+    }
+
+    // A change to the structure: an error (the file changed meanwhile, a label is gone) is shown, not thrown
+    async Task Guarded(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception e) when (e is FormatException or IOException or UnauthorizedAccessException or KeyNotFoundException
+                                       or IndexOutOfRangeException or ArgumentOutOfRangeException or InvalidOperationException)
+        {
+            Load();
+            status = "Not done: " + e.Message;
+        }
+    }
+
+    // The two tables rewritten from a list of (screen code, color), then the rest of the project
+    Task ChangeTiles(Action<List<(int Code, int Color)>> change, Action project, string done) => Guarded(async () =>
+    {
+        if (dirty && !await Save()) return;
+        if (!await Host.CanWriteAsync(File)) return;
+        var involved = TileFile.FilesInvolved(Project, Prefix, TilesLabel);
+        foreach (string path in involved)
+            if (!await Host.CanWriteAsync(path)) return;
+
+        var (lines, current, fileValues, map) = Current();
+        var list = Enumerable.Range(0, map.Count).Select(t => (Code: map.ScreenCode(fileValues, t), Color: map.Color(fileValues, t))).ToList();
+        change(list);
+        lines = TileFile.WriteTable(lines, current, current.Parameters["tiles"], list.Select(t => t.Code).ToList());
+        current = AsmRegion.Find(lines).ElementAt(Index);
+        lines = TileFile.WriteTable(lines, current, current.Parameters["colors"], list.Select(t => t.Color).ToList());
+        string newline = Project.ReadText(File).Contains("\r\n") ? "\r\n" : "\n";
+        Project.WriteText(File, string.Join(newline, lines));
+        project();
+
+        await Host.WrittenAsync(File);
+        foreach (string path in involved) await Host.WrittenAsync(path);
+        Load();
+        status = done;
+    });
+
     // "$70 platform": the screen code and the comment of its line
     string CharacterTitle(int character) =>
         $"${charmap!.First + character:X2} {descriptions.ElementAtOrDefault(character)}".TrimEnd();
@@ -403,28 +549,27 @@
         }, _ => to, $"Character moved to ${charmap!.First + to:X2}");
     }
 
-    async Task Rearrange(Action<List<(int Was, CharmapFile.Character Character)>> change, Func<List<(int Was, CharmapFile.Character Character)>, int> select, string done)
+    Task Rearrange(Action<List<(int Was, CharmapFile.Character Character)>> change, Func<List<(int Was, CharmapFile.Character Character)>, int> select, string done) => Guarded(async () =>
     {
         if (dirty && !await Save()) return;
         if (!await Host.CanWriteAsync(File)) return;
-        string[] lines = Lines();
-        var region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"The region {Index + 1} of {File} is gone");
+        var (lines, region, fileValues, map) = Current();
         string label = region.Parameters["charset"];
         var list = CharmapFile.Read(lines, region, label, image).Select((c, i) => (Was: i, Character: c)).ToList();
         change(list);
 
-        // Where each old character went
+        // Where each old character went: the tiles follow them
         var moved = new Dictionary<int, int>();
         for (int i = 0; i < list.Count; i++) if (list[i].Was >= 0) moved[list[i].Was] = i;
-        var tables = values[..charmap!.CharsetAt];
-        for (int tile = 0; tile < charmap.Count; tile++)
+        var tables = fileValues[..map.CharsetAt];
+        for (int tile = 0; tile < map.Count; tile++)
         {
-            int old = tables[charmap.TilesAt + tile] - charmap.First;
-            if (moved.TryGetValue(old, out int now)) tables[charmap.TilesAt + tile] = charmap.First + now;
+            int old = tables[map.TilesAt + tile] - map.First;
+            if (moved.TryGetValue(old, out int now)) tables[map.TilesAt + tile] = map.First + now;
         }
 
         // The characters written one per line, then all the values (tables and characters) in place
-        string[] written = CharmapFile.Write(lines, region, label, list.Select(c => c.Character).ToList(), charmap.First);
+        string[] written = CharmapFile.Write(lines, region, label, list.Select(c => c.Character).ToList(), map.First);
         var rewritten = AsmRegion.Find(written).ElementAtOrDefault(Index)!;
         int[] all = [.. tables, .. list.SelectMany(c => c.Character.Bytes)];
         string newline = Project.ReadText(File).Contains("\r\n") ? "\r\n" : "\n";
@@ -432,9 +577,9 @@
         await Host.WrittenAsync(File);
         int selection = select(list);
         Load();
-        SelectCharacter(Math.Min(selection, charmap!.Characters - 1));
+        if (charmap is not null) SelectCharacter(Math.Min(selection, charmap.Characters - 1));
         status = done + " · code that uses these screen codes directly (not through the charmap) must follow";
-    }
+    });
 
     static string Url(RgbImage image) => "data:image/png;base64," + Convert.ToBase64String(Png.Write(image));
 }

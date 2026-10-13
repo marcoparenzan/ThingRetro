@@ -1,4 +1,5 @@
 using RalfAI;
+using RalfAI.Providers;
 
 namespace Thing64.WebStudio.Assistant;
 
@@ -24,8 +25,11 @@ public sealed class AssistantSession
             .AddConfiguration(RalfAIConfig.Load(settings.ConfigPath))
             .AddInMemoryCollection(new Dictionary<string, string?> { ["AzureSpeech:ApiKey"] = "" })
             .Build();
+        // A second client of the same model, for the pictures the user attaches (Image_Look): the engine's own
+        // conversation takes text only
+        var (vision, _) = ChatClientFactory.Create(configuration, settings.ContextKey);
         var engine = await AgentEngine.CreateAsync(configuration, project.Folder, settings.ContextKey,
-            new Thing64AgentContext(project, host), cancel);
+            new Thing64AgentContext(project, host, vision), cancel);
         return new AssistantSession { Engine = engine };
     }
 }

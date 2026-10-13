@@ -104,6 +104,10 @@ function registerAsm6502(mnemonics, directives, descriptions) {
             'editor.selectionBackground': '#2b3590',
             'editorCursor.foreground': '#7c8af7',
             'minimap.background': '#05083a',
+            'scrollbar.shadow': '#00000000',
+            'scrollbarSlider.background': '#2b359088',
+            'scrollbarSlider.hoverBackground': '#4a56d6aa',
+            'scrollbarSlider.activeBackground': '#7c8af7cc',
         },
     });
 

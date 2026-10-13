@@ -438,7 +438,7 @@
                 string[] directives = Current is { } c && (c.Multicolor || c.Color != DefaultColor) ? [$"multicolor={(c.Multicolor ? 1 : 0)} color={c.Color}"] : [];
                 int after = selected;
                 await Restructure((lines, region) => SpriteFile.Insert(lines, region, after, newName, bytes, directives), $"{newName} added");
-                Select(Math.Min(after + 1, sheet!.Sprites.Count - 1));
+                if (sheet is not null) Select(Math.Min(after + 1, sheet.Sprites.Count - 1));
                 break;
             }
             case "rename":
@@ -473,7 +473,7 @@
         if (!await JS.InvokeAsync<bool>("confirm", $"Delete the sprite {sprite.Name}? References to its label elsewhere will not assemble.")) return;
         int index = selected;
         await Restructure((lines, region) => SpriteFile.Delete(lines, region, index), $"{sprite.Name} deleted");
-        Select(Math.Max(0, index - 1));
+        if (sheet is not null) Select(Math.Max(0, index - 1));
     }
 
     Task AddFrame(int animation) =>
@@ -501,18 +501,27 @@
         return Restructure((lines, region) => SpriteFile.WriteAnimations(lines, region, list.Select(a => (a.Name, a.Frames.AsEnumerable(), a.Speed))), done);
     }
 
-    // A change to the file's structure: the pixels not saved yet are saved first, then the file is changed and read again
+    // A change to the file's structure: the pixels not saved yet are saved first, then the file is changed and read
+    // again. An error (the file changed meanwhile, a label is gone) is shown, not thrown
     async Task Restructure(Func<string[], AsmRegion, string[]> change, string done)
     {
-        if (dirty && !await Save()) return;
-        if (!await Host.CanWriteAsync(File)) return;
-        string[] lines = Lines();
-        var region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"The region {Index + 1} of {File} is gone");
-        string newline = Project.ReadText(File).Contains("\r\n") ? "\r\n" : "\n";
-        Project.WriteText(File, string.Join(newline, change(lines, region)));
-        await Host.WrittenAsync(File);
-        Load();
-        status = done;
+        try
+        {
+            if (dirty && !await Save()) return;
+            if (!await Host.CanWriteAsync(File)) return;
+            string[] lines = Lines();
+            var region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"The region {Index + 1} of {File} is gone");
+            string newline = Project.ReadText(File).Contains("\r\n") ? "\r\n" : "\n";
+            Project.WriteText(File, string.Join(newline, change(lines, region)));
+            await Host.WrittenAsync(File);
+            Load();
+            status = done;
+        }
+        catch (Exception e) when (e is FormatException or IOException or UnauthorizedAccessException or IndexOutOfRangeException or ArgumentOutOfRangeException)
+        {
+            Load();
+            status = "Not done: " + e.Message;
+        }
     }
 
     static string Url(RgbImage image) => "data:image/png;base64," + Convert.ToBase64String(Png.Write(image));

@@ -16,7 +16,7 @@ public interface IStudioHost
 // RalfAI in the studio: a C64 programmer that works on one project. Its tools are the studio's own: the files of the
 // project (always through Project, so never outside the folder), the build with errors by file and line, the
 // assembler's reference, and the C64 to run the result
-public sealed class Thing64AgentContext(Project project, IStudioHost host) : IAgentContext
+public sealed class Thing64AgentContext(Project project, IStudioHost host, IChatClient vision) : IAgentContext
 {
     public string Name => "thing64";
     public string Description => "Commodore 64 programming in a Thing64 project: 6502 assembly (ACME syntax), BASIC V2, builds and runs";
@@ -57,6 +57,11 @@ public sealed class Thing64AgentContext(Project project, IStudioHost host) : IAg
           charset=<character bitmaps> first=<screen code of the first one> background=<color>" around a map of
           logical tile numbers in .byte rows. Keep the .byte rows inside the region; the editor rewrites them.
 
+        ## Attachments
+        - Files the user attaches are saved in .ralfai/attachments/ and listed at the end of the message: text files
+          with their content, pictures by path. To see a picture call Image_Look with its path and what you need to
+          know (for example: "describe the sprite: size, colors, where the transparent background is").
+
         ## How to work
         - Read the files you are about to change, and keep their style: comments explain the C64, in English.
         - After changing sources, call Project_Build. If it fails, read the errors (file(line): reason), fix them and
@@ -74,6 +79,7 @@ public sealed class Thing64AgentContext(Project project, IStudioHost host) : IAg
         AIFunctionFactory.Create(Build, "Project_Build"),
         AIFunctionFactory.Create(Run, "Project_Run"),
         AIFunctionFactory.Create(Instruction, "Asm_Instruction"),
+        AIFunctionFactory.Create(LookAtImage, "Image_Look"),
     ];
 
     [Description("Lists the files of the project (or of one of its folders), one relative path per line.")]
@@ -134,6 +140,24 @@ public sealed class Thing64AgentContext(Project project, IStudioHost host) : IAg
             return "Build failed" + Environment.NewLine + string.Join(Environment.NewLine, report.Messages.Select(m => m.Text));
         await host.RunAsync(report.Run);
         return $"Running {report.Run} in the C64";
+    }
+
+    [Description("Looks at a picture of the project (PNG, JPEG, GIF, WebP) and answers a question about it.")]
+    async Task<string> LookAtImage(
+        [Description("Path of the picture, relative to the project")] string path,
+        [Description("What to look for or describe")] string question)
+    {
+        string mediaType = Path.GetExtension(path).ToLowerInvariant() switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            _ => throw new NotSupportedException($"{path} is not a picture (PNG, JPEG, GIF or WebP)"),
+        };
+        var message = new ChatMessage(ChatRole.User, [new TextContent(question), new DataContent(project.ReadBytes(path), mediaType)]);
+        var response = await vision.GetResponseAsync([message]);
+        return response.Text;
     }
 
     [Description("What a 6502 instruction does and which flags it changes.")]

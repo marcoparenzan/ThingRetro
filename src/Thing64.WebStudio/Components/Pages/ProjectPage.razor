@@ -558,7 +558,7 @@ else
             dirty.Remove(path);
             return true;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException)
         {
             Report(e.Message);
             return false;

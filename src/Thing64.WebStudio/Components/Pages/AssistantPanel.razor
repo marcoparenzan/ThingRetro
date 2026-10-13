@@ -7,7 +7,7 @@
 
 @* RalfAI, the assistant of the project: a chat whose tools are the studio's (files, build, run). While it works,
    the tools it calls appear in the conversation *@
-<aside class="flex w-96 shrink-0 flex-col border-l border-night-800 bg-night-950 text-sm text-night-100">
+<aside id="assistant-panel" class="flex w-96 shrink-0 flex-col border-l border-night-800 bg-night-950 text-sm text-night-100">
     <div class="flex items-center gap-2 border-b border-night-800 px-3 py-1.5">
         <span class="text-xs font-semibold tracking-wider text-chip-400 uppercase">RalfAI</span>
         <span class="truncate text-xs text-night-400">@session?.Engine.ModelId</span>
@@ -39,7 +39,15 @@
             @switch (entry.Kind)
             {
                 case EntryKind.User:
-                    <div class="ml-8 rounded-lg bg-night-700 px-3 py-2 whitespace-pre-wrap text-white">@entry.Text</div>
+                    <div class="ml-8 rounded-lg bg-night-700 px-3 py-2 whitespace-pre-wrap text-white">
+                        @entry.Text
+                        @if (entry.Files is { Count: > 0 } files)
+                        {
+                            <div class="mt-2 flex flex-wrap gap-1.5 whitespace-normal">
+                                @foreach (var file in files) { @Chip(file, null) }
+                            </div>
+                        }
+                    </div>
                     break;
                 case EntryKind.Assistant:
                     <div class="assistant-text leading-relaxed">@((MarkupString)entry.Text)</div>
@@ -56,10 +64,22 @@
     </div>
 
     <form class="border-t border-night-800 p-2" @onsubmit="Send">
+        @if (pending.Count > 0)
+        {
+            <div class="mb-1.5 flex flex-wrap gap-1.5">
+                @foreach (var file in pending) { @Chip(file, () => pending.Remove(file)) }
+            </div>
+        }
+        @if (attachError is not null) { <div class="mb-1 text-xs text-red-400">@attachError</div> }
         <textarea id="assistant-input" @bind="input" @bind:event="oninput" rows="3" disabled="@(session is null)"
                   placeholder="Ask RalfAI (Enter sends, Shift+Enter new line)"
                   class="w-full resize-none rounded border border-night-600 bg-night-800 px-2 py-1.5 text-white placeholder:text-night-400 focus:border-chip-400 focus:outline-none"></textarea>
         <div class="mt-1.5 flex justify-end gap-2">
+            <label class="mr-auto cursor-pointer rounded-md border border-night-600 px-2 py-1 text-xs hover:border-chip-400"
+                   title="Attach files (or drop them on the chat, or paste a picture with Ctrl+V)">
+                📎 Attach
+                <InputFile OnChange="AttachChosen" multiple class="hidden" />
+            </label>
             @if (busy)
             {
                 <button type="button" @onclick="Stop" class="rounded-md border border-night-600 px-3 py-1 text-xs hover:border-red-400">Stop</button>
@@ -75,7 +95,66 @@
     [Parameter, EditorRequired] public IStudioHost Host { get; set; } = default!;
 
     enum EntryKind { User, Assistant, Tool, Error }
-    sealed record Entry(EntryKind Kind, string Text);
+    sealed record Entry(EntryKind Kind, string Text, IReadOnlyList<Attachment>? Files = null);
+
+    // Files attached to the next message: from the button, dropped on the chat, or pictures pasted
+    readonly List<Attachment> pending = [];
+    string? attachError;
+    DotNetObjectReference<AssistantPanel>? self;
+    const long MaxAttachment = 10 * 1024 * 1024;
+
+    // A picture's thumbnail, or the file's name; with a remove button while it is pending
+    RenderFragment Chip(Attachment file, Action? remove) => __builder =>
+    {
+        <span class="flex items-center gap-1 rounded border border-night-600 bg-night-900 px-1 py-0.5 text-xs text-night-200" title="@file.Path">
+            @if (file.Preview is not null)
+            {
+                <img src="@file.Preview" alt="" class="h-8 max-w-16 rounded-sm object-contain" />
+            }
+            else
+            {
+                <span>📄</span>
+            }
+            <span class="max-w-28 truncate">@file.Name</span>
+            @if (remove is not null)
+            {
+                <button type="button" class="text-night-400 hover:text-white" @onclick="remove">✕</button>
+            }
+        </span>
+    };
+
+    async Task AttachChosen(InputFileChangeEventArgs e)
+    {
+        attachError = null;
+        foreach (var file in e.GetMultipleFiles(20))
+        {
+            if (file.Size > MaxAttachment) { attachError = $"{file.Name} is larger than 10 MB"; continue; }
+            using var stream = file.OpenReadStream(MaxAttachment);
+            using var copy = new MemoryStream();
+            await stream.CopyToAsync(copy);
+            Attach(file.Name, copy.ToArray());
+        }
+    }
+
+    // From studio.js: files dropped on the chat, pictures pasted in the text
+    [JSInvokable]
+    public void AttachDropped(string name, byte[] bytes)
+    {
+        Attach(name, bytes);
+        StateHasChanged();
+    }
+
+    void Attach(string name, byte[] bytes)
+    {
+        try
+        {
+            pending.Add(Attachments.Save(Project, name, bytes));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            attachError = $"{name}: {e.Message}";
+        }
+    }
 
     static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().DisableHtml().Build();
 
@@ -94,6 +173,8 @@
         if (firstRender)
         {
             await JS.InvokeVoidAsync("thing64Studio.chatInput", "assistant-input", "assistant-send");
+            self = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("thing64Studio.chatAttachments", "assistant-panel", "assistant-input", self);
             if (Settings.Available) await Start();
         }
         if (scroll)
@@ -134,10 +215,14 @@
 
     async Task Send()
     {
-        if (session is null || busy || string.IsNullOrWhiteSpace(input)) return;
+        if (session is null || busy || (string.IsNullOrWhiteSpace(input) && pending.Count == 0)) return;
         string text = input.Trim();
+        var files = pending.ToList();
         input = "";
-        entries.Add(new Entry(EntryKind.User, text));
+        pending.Clear();
+        attachError = null;
+        entries.Add(new Entry(EntryKind.User, text, files));
+        text += Attachments.Describe(files);
         busy = true;
         progress = "Thinking...";
         scroll = true;
@@ -169,5 +254,6 @@
     {
         cancel?.Cancel();
         cancel?.Dispose();
+        self?.Dispose();
     }
 }

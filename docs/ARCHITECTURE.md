@@ -324,8 +324,10 @@ A Blazor Server app: the server owns the files and the builds, the browser shows
 - **RalfAI** (`Assistant/`, `AssistantPanel.razor`): the `AgentEngine` of the RalfAI packages with a
   `Thing64AgentContext`, an `IAgentContext` whose system prompt describes the C64, the assembler and the project,
   and whose tools are the studio's: `Files_List/Read/Write/Delete` (through `Project`, so inside the folder),
-  `Project_Build` (the errors as `file(line): reason`, so the agent can fix them and build again), `Project_Run`
-  and `Asm_Instruction`. The page is the agent's `IStudioHost`: it runs programs and reloads the open files the agent
+  `Project_Build` (the errors as `file(line): reason`, so the agent can fix them and build again), `Project_Run`,
+  `Asm_Instruction` and `Image_Look`. The engine's conversation is text only, so attachments are saved in
+  `.ralfai/attachments/` and described at the end of the message (small text files with their content); pictures
+  are seen through `Image_Look`, which sends the picture and a question to a second client of the same model. The page is the agent's `IStudioHost`: it runs programs and reloads the open files the agent
   changed (a file with unsaved changes is left alone, with a warning). The engine keeps the conversation and the
   costs in the project's `.ralfai/` folder; the voice tools are switched off, since the studio is a server.
 - **The 6502 language** (`Thing64.Asm/Editor/asm6502.js`: colors, hover help, completion, go to definition) is

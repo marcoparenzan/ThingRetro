@@ -97,6 +97,12 @@ public sealed partial class AsmRegion
     {
         if (CountValues(lines) == values.Count) return WriteInPlace(lines, values);
 
+        // Rewriting the lines as one block would merge data that labels keep apart (tables, characters, sprites):
+        // a different number of values there means the file changed under the editor
+        var labels = LabelLines(lines);
+        if (labels.Count > 1)
+            throw new FormatException($"The region has {CountValues(lines)} values and the editor {values.Count}: the file changed outside the editor. Reload it");
+
         int first = -1, last = -1;
         var comments = new List<string>();
         for (int i = StartLine + 1; i < EndLine; i++)
