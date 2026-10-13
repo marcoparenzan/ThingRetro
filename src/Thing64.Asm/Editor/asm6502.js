@@ -40,6 +40,7 @@ function registerAsm6502(mnemonics, directives, descriptions) {
         directives: directives,
         tokenizer: {
             root: [
+                [/;@.*$/, 'region'],                                                                  // ;@ editor regions
                 [/;.*$/, 'comment'],
                 [/^\s*[A-Za-z_.@]\w*(?=:)/, 'label'],
                 [/^[A-Za-z_.@]\w*/, { cases: { '@mnemonics': 'mnemonic', '@default': 'label' } }],   // ACME: labels without colon
@@ -80,6 +81,7 @@ function registerAsm6502(mnemonics, directives, descriptions) {
         inherit: true,
         rules: [
             { token: 'comment', foreground: '6A9955', fontStyle: 'italic' },
+            { token: 'region', foreground: '7C8AF7', fontStyle: 'bold' },
             { token: 'mnemonic', foreground: '569CD6', fontStyle: 'bold' },
             { token: 'directive', foreground: 'C586C0' },
             { token: 'label', foreground: 'DCDCAA' },

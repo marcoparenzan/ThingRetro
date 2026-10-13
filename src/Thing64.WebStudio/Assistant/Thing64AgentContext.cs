@@ -43,6 +43,20 @@ public sealed class Thing64AgentContext(Project project, IStudioHost host) : IAg
           the studio builds and runs the first output. Without a manifest the open source is built by itself.
         - Built files (.prg, .crt) are outputs: never edit them, rebuild them.
 
+        ## _structure.md
+        - The project's map: what the program does, its files and their roles, the memory map, data formats and
+          conventions, the regions with an editor. Read it first (Files_Read "_structure.md") when it exists, follow
+          its conventions, and update it whenever you add, move or repurpose files, memory or regions. If it does
+          not exist, create it after looking at the project.
+
+        ## Editor regions ("code behind")
+        - Data the studio edits visually is marked by comment lines: ";@ <editor> name=value ..." (more ";@" lines
+          add parameters), the data, then ";@ end". For the assembler they are comments. Parameter values are
+          numbers or symbols of the program.
+        - ";@ tilemap width=40 height=25 tiles=<tile->screen code table> colors=<tile->color table> count=<tiles>
+          charset=<character bitmaps> first=<screen code of the first one> background=<color>" around a map of
+          logical tile numbers in .byte rows. Keep the .byte rows inside the region; the editor rewrites them.
+
         ## How to work
         - Read the files you are about to change, and keep their style: comments explain the C64, in English.
         - After changing sources, call Project_Build. If it fails, read the errors (file(line): reason), fix them and

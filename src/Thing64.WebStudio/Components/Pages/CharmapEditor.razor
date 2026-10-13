@@ -1,0 +1,381 @@
+@using System.Globalization
+@using Thing64.Graphics
+@using Thing64.WebStudio.CodeBehind
+@implements IRegionEditor
+@inject IJSRuntime JS
+
+@* The editor of a ;@ charmap region: the tiles on the left (their character and color are the two tables of the
+   region), the selected character in big pixels, and the whole character set below to pick from. Saving rewrites
+   the values of the region in place *@
+<div class="absolute inset-0 flex flex-col overflow-hidden @(Visible ? null : "invisible")">
+    <div class="flex flex-wrap items-center gap-2 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
+        <span class="mr-2 font-mono text-chip-300">@File · charmap</span>
+        <button class="@(fill ? "border-night-600" : "border-chip-400 bg-night-700 text-white") rounded border px-2 py-1" @onclick="() => fill = false">✎ Pencil</button>
+        <button class="@(fill ? "border-chip-400 bg-night-700 text-white" : "border-night-600") rounded border px-2 py-1" @onclick="() => fill = true">◩ Fill</button>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Invert" title="Swap the pixels and the background">◐ Invert</button>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Mirror" title="Mirror left and right">⇋ Mirror</button>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Flip" title="Upside down">⇵ Flip</button>
+        <span class="flex items-center gap-0.5" title="Slide the pixels; what leaves one side comes back on the other">
+            slide
+            <button class="rounded border border-night-600 px-1.5 py-1" @onclick="() => Slide(-1, 0)">←</button>
+            <button class="rounded border border-night-600 px-1.5 py-1" @onclick="() => Slide(1, 0)">→</button>
+            <button class="rounded border border-night-600 px-1.5 py-1" @onclick="() => Slide(0, -1)">↑</button>
+            <button class="rounded border border-night-600 px-1.5 py-1" @onclick="() => Slide(0, 1)">↓</button>
+        </span>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Clear">⌫ Clear</button>
+        <button class="rounded border border-night-600 px-2 py-1 disabled:opacity-40" disabled="@(undo.Count == 0)" @onclick="Undo">↶ Undo</button>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Load" title="Read the file and the program again">⟳ Reload</button>
+        <span class="ml-auto text-night-300">@status</span>
+    </div>
+
+    @if (error is not null)
+    {
+        <p class="m-3 rounded border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">@error</p>
+    }
+    @if (charmap is not null)
+    {
+        <div class="flex min-h-0 flex-1">
+            <div class="w-56 shrink-0 overflow-y-auto border-r border-night-800 bg-night-950 p-2 text-xs">
+                @for (int t = 0; t < charmap.Count; t++)
+                {
+                    int tile = t;
+                    <button class="@(selectedTile == tile ? "bg-night-700 ring-1 ring-chip-400" : "hover:bg-night-800") mb-1 flex w-full items-center gap-2 rounded px-1.5 py-1 text-left"
+                            @onclick="() => SelectTile(tile)">
+                        <img src="@TileImage(tile)" alt="" class="pixelated h-8 w-8 shrink-0 border border-night-700" />
+                        <span class="w-6 font-mono text-night-400">@tile</span>
+                        <span class="min-w-0 flex-1 truncate text-night-100">@charmap.Names[tile]</span>
+                        <span class="font-mono text-night-400">$@charmap.ScreenCode(values, tile).ToString("X2")</span>
+                    </button>
+                }
+            </div>
+
+            <div class="min-w-0 flex-1 overflow-auto p-4 text-xs text-night-200">
+                <div class="mb-3 flex flex-wrap items-center gap-3">
+                    <span class="text-sm text-white">@charmap.Names[selectedTile]</span>
+                    <label class="flex items-center gap-1">character
+                        <input class="field w-16 font-mono" value="@($"${charmap.ScreenCode(values, selectedTile):X2}")" @onchange="SetScreenCode" />
+                    </label>
+                    <span class="flex items-center gap-1">color
+                        @for (int c = 0; c < 16; c++)
+                        {
+                            int color = c;
+                            <button class="@((charmap.Color(values, selectedTile) & 15) == color ? "ring-2 ring-chip-400" : "") h-5 w-5 rounded-sm border border-night-700"
+                                    title="@color: @C64Palette.Names[color]" style="background: #@charmap.Palette.Rgb[color].ToString("X6")"
+                                    @onclick="() => SetColor(color)"></button>
+                        }
+                    </span>
+                    @if (charmap.MulticolorMode)
+                    {
+                        <label class="flex items-center gap-1" title="Bit 3 of the color: the character shows in multicolor, with colors 0-7">
+                            <input type="checkbox" checked="@Multicolor" @onchange="ToggleMulticolor" /> multicolor
+                        </label>
+                    }
+                </div>
+
+                @if (selectedChar < 0)
+                {
+                    <p class="mb-3 text-night-400">
+                        $@charmap.ScreenCode(values, selectedTile).ToString("X2") is a character of the ROM: the studio does not have it, so it
+                        cannot be drawn here. Pick a character of the region below, or type its screen code above.
+                    </p>
+                }
+                else
+                {
+                    <div class="mb-1 text-night-300">Character $@((charmap.First + selectedChar).ToString("X2"))@(Multicolor ? " (multicolor 4x8)" : " (hires 8x8)") · left button paints, right erases</div>
+                    @if (Multicolor)
+                    {
+                        <div class="mb-2 flex gap-2">
+                            @for (int c = 1; c < 4; c++)
+                            {
+                                int code = c;
+                                <button class="@(paintCode == code ? "ring-2 ring-chip-400" : "") flex items-center gap-1 rounded border border-night-600 px-2 py-1" @onclick="() => paintCode = code">
+                                    <span class="h-4 w-4 rounded-sm border border-night-700" style="background: #@charmap.Palette.Rgb[charmap.ColorOfCode(code, CurrentColor, true)].ToString("X6")"></span>
+                                    @(code switch { 1 => "multicolor 1", 2 => "multicolor 2", _ => "tile color" })
+                                </button>
+                            }
+                        </div>
+                    }
+                    <div class="relative inline-block select-none" style="width: @(8 * Zoom)px; height: @(8 * Zoom)px"
+                         @onmousedown="Down" @onmousemove="Move" @onmouseup="Up" @onmouseleave="Up" @oncontextmenu:preventDefault>
+                        <img src="@charImage" alt="" draggable="false" class="pixelated pointer-events-none absolute inset-0 h-full w-full" />
+                        <div class="pointer-events-none absolute inset-0"
+                             style="background-image: linear-gradient(to right, rgba(124,138,247,.35) 1px, transparent 1px), linear-gradient(to bottom, rgba(124,138,247,.35) 1px, transparent 1px); background-size: @(Zoom * (Multicolor ? 2 : 1))px @(Zoom)px"></div>
+                    </div>
+                }
+
+                <div class="mt-5 mb-1 flex items-center gap-2">
+                    <span class="text-[11px] font-semibold tracking-wider text-night-300 uppercase">Characters $@charmap.First.ToString("X2")-$@((charmap.First + charmap.Characters - 1).ToString("X2"))</span>
+                    <button class="tool border border-night-700" @onclick="AddCharacter" title="A new empty character after the last one">＋ Character</button>
+                    @if (selectedChar >= 0 && charmap.ScreenCode(values, selectedTile) != charmap.First + selectedChar)
+                    {
+                        <button class="tool border border-chip-400 text-chip-300" @onclick="UseForTile">Use $@((charmap.First + selectedChar).ToString("X2")) for @charmap.Names[selectedTile]</button>
+                    }
+                </div>
+                <div class="flex max-w-3xl flex-wrap gap-1">
+                    @for (int c = 0; c < charmap.Characters; c++)
+                    {
+                        int character = c;
+                        <button class="@(selectedChar == character ? "ring-2 ring-chip-400" : "hover:ring-1 hover:ring-night-300") flex flex-col items-center rounded p-0.5"
+                                @onclick="() => SelectCharacter(character)" title="$@((charmap.First + character).ToString("X2"))">
+                            <img src="@CharImage(character)" alt="" class="pixelated h-8 w-8 border border-night-700" />
+                            <span class="font-mono text-[10px] text-night-400">@((charmap.First + character).ToString("X2"))</span>
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Project Project { get; set; } = default!;
+    [Parameter, EditorRequired] public string File { get; set; } = "";
+    [Parameter, EditorRequired] public int Index { get; set; }
+    [Parameter, EditorRequired] public IRegionHost Host { get; set; } = default!;
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> OnDirty { get; set; }
+
+    const int Zoom = 32;
+
+    Charmap? charmap;
+    int[] values = [];
+    int selectedTile;
+    int selectedChar = -1;
+    int[] codes = [];
+    string? charImage;
+    string? error;
+    string status = "";
+    bool dirty, fill, painting;
+    int paintCode = 1;
+    readonly Stack<int[]> undo = new();
+
+    // The selected character shows with the selected tile's color (and so in its mode)
+    int CurrentColor => charmap!.Color(values, selectedTile);
+    bool Multicolor => charmap!.IsMulticolor(CurrentColor);
+    int Across => Multicolor ? 4 : 8;
+
+    protected override void OnInitialized() => Load();
+
+    public void Load()
+    {
+        try
+        {
+            string[] lines = Lines();
+            var region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"There is no region {Index + 1} in {File}");
+            ProgramImage? image = null;
+            try { image = ProgramImage.Assemble(Project); }
+            catch (FormatException) { status = "The program does not assemble: no tile names"; }
+            values = region.ReadBytes(lines, image).ToArray();
+            charmap = new Charmap(region, lines, image, values.Length);
+            selectedTile = Math.Min(selectedTile, charmap.Count - 1);
+            undo.Clear();
+            SetDirty(false);
+            error = null;
+            SelectTile(selectedTile);
+        }
+        catch (Exception e) when (e is FormatException or IOException or OverflowException or IndexOutOfRangeException or ArgumentOutOfRangeException)
+        {
+            error = e.Message;
+            charmap = null;
+        }
+    }
+
+    string[] Lines() => Project.ReadText(File).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+
+    public async Task<bool> Save()
+    {
+        if (charmap is null) return false;
+        if (!await Host.CanWriteAsync(File)) return false;
+        string[] lines = Lines();
+        var region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"The region {Index + 1} of {File} is gone");
+        string newline = Project.ReadText(File).Contains("\r\n") ? "\r\n" : "\n";
+        Project.WriteText(File, string.Join(newline, region.WriteBytes(lines, values, 8)));
+        SetDirty(false);
+        await Host.WrittenAsync(File);
+        return true;
+    }
+
+    void SetDirty(bool value)
+    {
+        if (dirty == value) return;
+        dirty = value;
+        _ = OnDirty.InvokeAsync(value);
+    }
+
+    void SelectTile(int tile)
+    {
+        selectedTile = tile;
+        selectedChar = charmap!.CharacterOf(charmap.ScreenCode(values, tile));
+        Decode();
+    }
+
+    void SelectCharacter(int character)
+    {
+        selectedChar = character;
+        Decode();
+    }
+
+    void Decode()
+    {
+        codes = selectedChar >= 0 ? charmap!.Decode(values, selectedChar, Multicolor) : [];
+        paintCode = Math.Min(paintCode, Multicolor ? 3 : 1);
+        Redraw();
+    }
+
+    void Redraw() => charImage = selectedChar >= 0 ? Url(charmap!.Render(values, charmap.First + selectedChar, CurrentColor, 1)) : null;
+
+    string TileImage(int tile) => Url(charmap!.Render(values, charmap.ScreenCode(values, tile), charmap.Color(values, tile), 1));
+
+    string CharImage(int character) => Url(charmap!.Render(values, charmap.First + character, CurrentColor, 1));
+
+    // The tables: the tile's screen code ($hex or decimal) and color
+    void SetScreenCode(ChangeEventArgs e)
+    {
+        string text = e.Value?.ToString()?.Trim() ?? "";
+        bool ok = text.StartsWith('$') ? int.TryParse(text[1..], NumberStyles.HexNumber, null, out int code) : int.TryParse(text, out code);
+        if (!ok || code is < 0 or > 255) { status = $"{text} is not a screen code"; return; }
+        Change(() => values[charmap!.TilesAt + selectedTile] = code);
+        SelectTile(selectedTile);
+    }
+
+    void SetColor(int color)
+    {
+        bool multicolor = Multicolor;   // a multicolor tile keeps bit 3, and its color is one of 0-7
+        Change(() => values[charmap!.ColorsAt + selectedTile] = multicolor ? (color & 7) | 8 : color);
+        Decode();
+    }
+
+    void ToggleMulticolor()
+    {
+        Change(() => values[charmap!.ColorsAt + selectedTile] = (CurrentColor & 7) | (Multicolor ? 0 : 8));
+        Decode();
+    }
+
+    void UseForTile()
+    {
+        Change(() => values[charmap!.TilesAt + selectedTile] = charmap.First + selectedChar);
+        status = $"{charmap!.Names[selectedTile]} uses ${charmap.First + selectedChar:X2}";
+    }
+
+    void Change(Action change)
+    {
+        undo.Push((int[])values.Clone());
+        change();
+        SetDirty(true);
+        Redraw();
+    }
+
+    (int X, int Y)? PixelAt(MouseEventArgs e)
+    {
+        int x = (int)(e.OffsetX / (Zoom * (Multicolor ? 2 : 1))), y = (int)(e.OffsetY / Zoom);
+        return x < 0 || y < 0 || x >= Across || y >= 8 ? null : (x, y);
+    }
+
+    void Down(MouseEventArgs e)
+    {
+        if (selectedChar < 0 || PixelAt(e) is not { } pixel) return;
+        undo.Push((int[])values.Clone());
+        int code = e.Button == 2 ? 0 : paintCode;
+        if (fill) FloodFill(pixel, code);
+        else
+        {
+            painting = true;
+            Paint(pixel, code);
+        }
+    }
+
+    void Move(MouseEventArgs e)
+    {
+        if (!painting || PixelAt(e) is not { } pixel || (e.Buttons & 3) == 0) return;
+        Paint(pixel, (e.Buttons & 2) != 0 ? 0 : paintCode);
+    }
+
+    void Up(MouseEventArgs e) => painting = false;
+
+    void Paint((int X, int Y) pixel, int code)
+    {
+        int i = pixel.Y * Across + pixel.X;
+        if (codes[i] == code) return;
+        codes[i] = code;
+        Encoded();
+    }
+
+    void FloodFill((int X, int Y) pixel, int code)
+    {
+        int start = pixel.Y * Across + pixel.X, target = codes[start];
+        if (target == code) return;
+        var pending = new Stack<int>([start]);
+        while (pending.Count > 0)
+        {
+            int i = pending.Pop();
+            if (codes[i] != target) continue;
+            codes[i] = code;
+            if (i % Across > 0) pending.Push(i - 1);
+            if (i % Across < Across - 1) pending.Push(i + 1);
+            if (i >= Across) pending.Push(i - Across);
+            if (i < Across * 7) pending.Push(i + Across);
+        }
+        Encoded();
+    }
+
+    // Whole-character operations, each one a step of undo
+    void Transform(Func<int, int, int> source)
+    {
+        if (selectedChar < 0) return;
+        undo.Push((int[])values.Clone());
+        var old = (int[])codes.Clone();
+        for (int y = 0; y < 8; y++)
+            for (int x = 0; x < Across; x++)
+                codes[y * Across + x] = source(x, y) is int from && from >= 0 ? old[from] : 0;
+        Encoded();
+    }
+
+    void Invert()
+    {
+        if (selectedChar < 0) return;
+        undo.Push((int[])values.Clone());
+        int max = Multicolor ? 3 : 1;
+        for (int i = 0; i < codes.Length; i++) codes[i] = max - codes[i];
+        Encoded();
+    }
+
+    void Mirror() => Transform((x, y) => y * Across + Across - 1 - x);
+    void Flip() => Transform((x, y) => (7 - y) * Across + x);
+    void Slide(int dx, int dy) => Transform((x, y) => (y - dy + 8) % 8 * Across + (x - dx + Across) % Across);
+    void Clear() => Transform((x, y) => -1);
+
+    void Undo()
+    {
+        if (undo.Count == 0) return;
+        values = undo.Pop();
+        SetDirty(true);
+        SelectTile(selectedTile);
+    }
+
+    void Encoded()
+    {
+        charmap!.Encode(values, selectedChar, Multicolor, codes);
+        SetDirty(true);
+        Redraw();
+    }
+
+    // A new character at the end of the region: one more .byte line, with its screen code as a comment
+    async Task AddCharacter()
+    {
+        if (dirty && !await Save()) return;
+        if (!await Host.CanWriteAsync(File)) return;
+        string[] lines = Lines();
+        var region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"The region {Index + 1} of {File} is gone");
+        var (indent, keyword) = region.ByteStyle(lines);
+        int code = charmap!.First + charmap.Characters;
+        string line = $"{indent}{keyword} {string.Join(",", Enumerable.Repeat("$00", 8))} ; ${code:X2}";
+        string newline = Project.ReadText(File).Contains("\r\n") ? "\r\n" : "\n";
+        Project.WriteText(File, string.Join(newline, [.. lines[..region.EndLine], line, .. lines[region.EndLine..]]));
+        await Host.WrittenAsync(File);
+        Load();
+        SelectCharacter(charmap!.Characters - 1);
+        status = $"Character ${code:X2} added";
+    }
+
+    static string Url(RgbImage image) => "data:image/png;base64," + Convert.ToBase64String(Png.Write(image));
+}

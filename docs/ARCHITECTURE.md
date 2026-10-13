@@ -301,6 +301,24 @@ A Blazor Server app: the server owns the files and the builds, the browser shows
   Monaco models; each change converts again off the circuit's thread (`Converter.Convert`), and the preview travels
   as a PNG data URL. The pictures are served by `/project-files/{project}/{path}`, through `Project.FullPath`.
   Imported images become PNG in the browser (`createImageBitmap` and a canvas), since the converter reads PNG only.
+- **Editor regions** (`CodeBehind/`, `TilemapEditor.razor`): `AsmRegion` finds the `;@ editor ... ;@ end` blocks
+  of a source, reads the values of their `.byte` lines and writes them back (keeping indentation, keyword and end of
+  line comments, and nothing else of the file). `ProgramImage` assembles the project and resolves the parameters
+  (numbers, symbols, symbol+number) and the bytes at an address. A region's tab is `file#n`; Monaco shows a
+  CodeLens above each region that opens it. `Tilemap` draws tiles through the program's tables (tile → screen code,
+  tile → color, the custom character bitmaps); the map is re-rendered as a PNG at each change. `SpriteSheet`
+  (`SpriteEditor.razor`) makes a sprite of each label of the region, with the ;@ lines right above it overriding
+  the region's mode and color, and reads the `;@ animation` lines of the header. Values are written back in place
+  when their number does not change, so labels, groups and comments stay, and unchanged values keep their spelling.
+  The clipboard goes through studio.js: a picture pasted (Ctrl+V or the Paste button) becomes a PNG and is converted
+  with `Converter` into the sprite, with a uniform background made transparent. Changes to the structure (sprites
+  added, duplicated, deleted, renamed, the animations) are `SpriteFile` operations on the text of the file; a
+  rename replaces the label as a whole word in every source of the project. `Charmap` (`CharmapEditor.razor`)
+  finds its three tables by the labels the parameters name inside the region. After a file is shown in Monaco the
+  CodeLenses are asked again (a file shown while the editor was hidden would get none).
+- **Viewers**: a tab is Monaco's for text files; any other file is binary: `ImageViewer.razor` for PNG (picture,
+  chunks, bytes), `HexViewer.razor` for the rest (a `Virtualize` of 16-byte rows, PETSCII and screen code columns,
+  `.prg` addresses, `.crt` CHIP packets). Viewers read the file again after every build.
 - **RalfAI** (`Assistant/`, `AssistantPanel.razor`): the `AgentEngine` of the RalfAI packages with a
   `Thing64AgentContext`, an `IAgentContext` whose system prompt describes the C64, the assembler and the project,
   and whose tools are the studio's: `Files_List/Read/Write/Delete` (through `Project`, so inside the folder),

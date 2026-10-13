@@ -193,6 +193,41 @@ web computer, in WebAssembly, in a tab next to the files (or in a window of its 
   characters, sprites), fit, dithering, palette, the shared colors, the limit of characters and the tiles. Every
   build converts the assets again and writes their data files and an include (`name.inc.asm`, with a label on each
   part and constants for the colors), so the assembly never falls behind the picture.
+- **Editor regions** ("code behind"): data in a source can be marked for a visual editor with comment lines,
+  which the assembler ignores. Above the first one Monaco shows "✎ Edit"; saving the editor rewrites only the
+  `.byte` lines of the region. The first editor is the tilemap, drawn through the program's own tables:
+  ```asm
+  ;@ tilemap  width=40 height=25 count=TILE_COUNT background=6
+  ;@          tiles=charmapChars colors=charmapColors
+  ;@          charset=charmapCharacters first=$70
+  levelMap:   .byte $00,$00,...
+  ;@ end
+  ```
+  The parameters are numbers or symbols, resolved by assembling the project: the editor sees the bytes the C64 sees.
+  The second editor is for sprites: every label of the region starts a sprite, hires and multicolor mixed, and the
+  animations declared in it play next to them. Copy puts a sprite on the clipboard as a picture, Ctrl+V converts a
+  picture from the clipboard (another sprite, or any image) into the selected one:
+  ```asm
+  ;@ sprites    color=7 background=6 multicolor1=11 multicolor2=1
+  ;@ animation  walk frames=spriteWalk1,spriteWalk2 speed=8
+  spriteWalk1:  .byte ...
+  ;@ multicolor=1 color=5
+  spriteBat:    .byte ...
+  ;@ end
+  ```
+  Sprites can be added, duplicated, renamed (in every source of the project) and deleted, slid in the four
+  directions; animations created, renamed and deleted, frames added and removed, speeds changed.
+  The third editor is the charmap: the tiles' tables (tile → screen code, tile → color) and the bitmaps of the
+  characters, all in one region; each tile's character and color, the character in big pixels, the whole set:
+  ```asm
+  ;@ charmap  tiles=charmapChars colors=charmapColors charset=charmapCharacters first=$70 background=6
+  ```
+- **Binary files** open in a hex viewer: 16 bytes per row in hex and as characters (ASCII, PETSCII or screen
+  codes), C64 addresses for a `.prg`, header and chips (bank, address) for a `.crt`, every base of the selected byte
+  and the word starting there. **PNG pictures** open as a picture (zoom, the pixel under a click and its nearest C64
+  color), as their structure (the chunks, IHDR decoded) or as bytes.
+- **`_structure.md`**: every new project has one, the map of the project (files, memory, conventions, regions);
+  RalfAI reads it before working and keeps it up to date.
 - **RalfAI**, on the right, is an assistant that works on the project: it reads and writes its files, builds it
   (and fixes the errors it gets) and runs it in the C64. The conversation is kept in the project (`.ralfai/`).
 - **The C64 tab** keeps running while a file is shown. *Own window* moves the C64 to a window of its own (a second

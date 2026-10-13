@@ -58,6 +58,45 @@ static class Templates
 
         """;
 
+    // The map of the project: what it is, its files, its memory, its conventions and its editor regions. RalfAI
+    // reads it before working and keeps it up to date
+    public static string Structure(string name) => $$"""
+        # {{name}} — structure
+
+        What the program does, in two or three lines.
+
+        ## Files
+
+        | File | Role |
+        | --- | --- |
+        | `main.asm` | Entry point (BASIC line `10 SYS 2061`), setup, main loop |
+        | `thing64.json` | Build manifest: what F7 builds, the first output is what F5 runs |
+
+        The main file is `main.asm`.
+
+        ## Memory map
+
+        | Address | Content | Where |
+        | --- | --- | --- |
+        | `$0400-$07E7` | Screen RAM | |
+        | `$0801-` | BASIC line and program | `main.asm` |
+
+        ## Data and conventions
+
+        - Comments are in English and explain the C64 side of what the code does.
+        - Data tables are explicit `.byte` rows.
+
+        ## Regions with an editor
+
+        | File | Region | Editor | Edits |
+        | --- | --- | --- | --- |
+
+        A region is marked by `;@ <editor> parameters` lines and closed by `;@ end`; the studio shows "✎ Edit" above it.
+        `;@ tilemap width= height= tiles= colors= count= charset= first= background=` edits a map of logical tiles drawn
+        through the program's own tables (parameters are numbers or symbols).
+
+        """;
+
     public static string EmptyAsm(string fileName) => $"""
         ; {fileName}
 

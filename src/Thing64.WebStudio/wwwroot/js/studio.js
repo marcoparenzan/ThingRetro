@@ -70,6 +70,60 @@ window.thing64Studio = (() => {
         await page.invokeMethodAsync('ImageImported', file.name, new Uint8Array(await png.arrayBuffer()));
     }
 
+    // Above each ";@ editor" line that opens a region (not its continuation lines, not ";@ end"), a link that
+    // opens the region's visual editor
+    // A file shown while the editor was hidden (another tab was active) gets no lenses: showing a file asks again
+    let lensesRegistered = false;
+    let lensesChanged = null;
+    function registerRegionLenses() {
+        if (lensesRegistered) return;
+        lensesRegistered = true;
+        lensesChanged = new monaco.Emitter();
+        monaco.editor.registerCommand('thing64.openRegion', (_, path, line) => page?.invokeMethodAsync('OpenRegion', path, line));
+        monaco.languages.registerCodeLensProvider('asm6502', {
+            onDidChange: lensesChanged.event,
+            provideCodeLenses(model) {
+                const path = [...models].find(([, entry]) => entry.model === model)?.[0];
+                const lenses = [];
+                if (path) {
+                    model.getLinesContent().forEach((text, i) => {
+                        const open = /^\s*;@\s*(\w+)/.exec(text);
+                        if (!open || open[1] === 'end' || (i > 0 && /^\s*;@/.test(model.getLineContent(i)))) return;
+                        lenses.push({
+                            range: new monaco.Range(i + 1, 1, i + 1, 1),
+                            command: { id: 'thing64.openRegion', title: `✎ Edit ${open[1]}`, arguments: [path, i + 1] },
+                        });
+                    });
+                }
+                return { lenses, dispose() { } };
+            },
+        });
+    }
+
+    // Pictures to and from the clipboard, for the sprite editor: Ctrl+V anywhere in the page goes to the editor
+    // that is visible (its .NET object registers itself), unless the clipboard has no picture
+    const pasteTargets = new Map();
+    document.addEventListener('paste', async e => {
+        const target = [...pasteTargets.values()][0];
+        const file = [...(e.clipboardData?.items ?? [])].find(item => item.type.startsWith('image/'))?.getAsFile();
+        if (!target || !file) return;
+        e.preventDefault();
+        await target.invokeMethodAsync('PasteImage', await toPng(file));
+    });
+
+    async function toPng(blob) {
+        const bitmap = await createImageBitmap(blob);
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        canvas.getContext('2d').drawImage(bitmap, 0, 0);
+        const png = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        return new Uint8Array(await png.arrayBuffer());
+    }
+
+    // Animation previews: an <img> showing its frames in turn
+    const animations = new Map();
+
     function languageOf(path) {
         const extension = path.slice(path.lastIndexOf('.')).toLowerCase();
         return ['.asm', '.a', '.s', '.inc'].includes(extension) ? 'asm6502'
@@ -86,6 +140,7 @@ window.thing64Studio = (() => {
             document.getElementById('import-image')?.addEventListener('change', importImage);
             await loadMonaco();
             registerAsm6502(language.mnemonics, language.directives, language.descriptions);
+            registerRegionLenses();
             editor = monaco.editor.create(document.getElementById(elementId), {
                 model: null,
                 theme: 'thing64',
@@ -120,6 +175,7 @@ window.thing64Studio = (() => {
             if (!entry) return;
             editor.setModel(entry.model);
             editor.focus();
+            setTimeout(() => { editor?.layout(); lensesChanged?.fire(); }, 150);
         },
 
         close(path) {
@@ -143,6 +199,41 @@ window.thing64Studio = (() => {
             entry.dirty = false;
         },
 
+        pasteTarget(id, dotnet) {
+            if (dotnet) pasteTargets.set(id, dotnet); else pasteTargets.delete(id);
+        },
+
+        async pasteFromClipboard(dotnet) {
+            try {
+                for (const item of await navigator.clipboard.read()) {
+                    const type = item.types.find(t => t.startsWith('image/'));
+                    if (type) {
+                        await dotnet.invokeMethodAsync('PasteImage', await toPng(await item.getType(type)));
+                        return true;
+                    }
+                }
+            } catch { }
+            return false;
+        },
+
+        async copyImage(base64) {
+            const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': new Blob([bytes], { type: 'image/png' }) })]);
+        },
+
+        animate(elementId, frames, milliseconds) {
+            clearInterval(animations.get(elementId));
+            const image = document.getElementById(elementId);
+            if (!image || frames.length === 0) return;
+            let frame = 0;
+            image.src = frames[0];
+            animations.set(elementId, setInterval(() => {
+                if (!document.body.contains(image)) { clearInterval(animations.get(elementId)); return; }
+                frame = (frame + 1) % frames.length;
+                image.src = frames[frame];
+            }, milliseconds));
+        },
+
         // The chat: Enter sends (a click on the send button), Shift+Enter is a new line
         chatInput(inputId, sendId) {
             document.getElementById(inputId)?.addEventListener('keydown', e => {
@@ -150,6 +241,11 @@ window.thing64Studio = (() => {
                 e.preventDefault();
                 document.getElementById(sendId)?.click();
             });
+        },
+
+        scrollTo(elementId, top) {
+            const element = document.getElementById(elementId);
+            if (element) element.scrollTop = Math.max(0, top - element.clientHeight / 3);
         },
 
         scrollToEnd(elementId) {

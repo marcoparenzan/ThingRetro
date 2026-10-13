@@ -41,6 +41,7 @@ public sealed class ProjectStore(IConfiguration configuration)
         Directory.CreateDirectory(folder);
         File.WriteAllText(Path.Combine(folder, "main.asm"), Templates.MainAsm(name));
         File.WriteAllText(Path.Combine(folder, Project.ManifestName), Templates.Manifest(name));
+        File.WriteAllText(Path.Combine(folder, Project.StructureName), Templates.Structure(name));
         return new Project(name, folder);
     }
 }
@@ -59,6 +60,7 @@ public sealed record BuildReport(bool Succeeded, IReadOnlyList<BuildMessage> Mes
 public sealed class Project(string name, string folder)
 {
     public const string ManifestName = "thing64.json";
+    public const string StructureName = "_structure.md";   // the map of the project, for the user and for RalfAI
     static readonly string[] SourceExtensions = [".asm", ".bas"];
 
     public string Name { get; } = name;

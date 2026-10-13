@@ -1,6 +1,7 @@
 @page "/project/{Name}"
 @implements IAsyncDisposable
 @implements Thing64.WebStudio.Assistant.IStudioHost
+@implements Thing64.WebStudio.CodeBehind.IRegionHost
 @inject ProjectStore Store
 @inject WebComputerSite Computer
 @inject IJSRuntime JS
@@ -81,7 +82,7 @@ else
                 <div class="@(tab == active && !showComputer ? "border-chip-400 bg-night-900 text-white" : "border-transparent text-night-300 hover:text-white")
                             group flex shrink-0 cursor-pointer items-center gap-2 border-t-2 px-3 py-1.5 text-sm"
                      @onclick="() => Show(tab)" title="@tab">
-                    <span>@FileName(tab)</span>
+                    <span>@TabName(tab)</span>
                     @if (dirty.Contains(tab)) { <span class="text-chip-400">●</span> }
                     <button class="text-night-400 hover:text-white" title="Close"
                             @onclick="() => CloseTab(tab)" @onclick:stopPropagation>✕</button>
@@ -90,7 +91,37 @@ else
         </div>
         <div class="relative min-h-0 flex-1">
             @* The editor and the C64 stay in the page: the hidden one is only hidden, so the C64 keeps running *@
-            <div id="editor" class="absolute inset-0 @(showComputer || IsGraphics(active) ? "invisible" : null)"></div>
+            <div id="editor" class="absolute inset-0 @(showComputer || !IsMonaco(active) ? "invisible" : null)"></div>
+            @foreach (var tab in tabs.Where(IsBinary))
+            {
+                @if (IsImage(tab))
+                {
+                    <ImageViewer @key="tab" @ref="imageViewers[tab]" Project="project!" Path="@tab" Visible="@(tab == active && !showComputer)"
+                                 OnMakeGraphics="() => OpenGraphicsFor(tab)" />
+                }
+                else
+                {
+                    <HexViewer @key="tab" @ref="hexViewers[tab]" Project="project!" Path="@tab" Visible="@(tab == active && !showComputer)" />
+                }
+            }
+            @foreach (var tab in tabs.Where(IsRegion))
+            {
+                @if (regionKinds.GetValueOrDefault(tab) == "charmap")
+                {
+                    <CharmapEditor @key="tab" @ref="regionEditors[tab]" Project="project!" File="@RegionFile(tab)" Index="@RegionIndex(tab)" Host="this"
+                                   Visible="@(tab == active && !showComputer)" OnDirty="changed => Changed(tab, changed)" />
+                }
+                else if (regionKinds.GetValueOrDefault(tab) == "sprites")
+                {
+                    <SpriteEditor @key="tab" @ref="regionEditors[tab]" Project="project!" File="@RegionFile(tab)" Index="@RegionIndex(tab)" Host="this"
+                                  Visible="@(tab == active && !showComputer)" OnDirty="changed => Changed(tab, changed)" />
+                }
+                else
+                {
+                    <TilemapEditor @key="tab" @ref="regionEditors[tab]" Project="project!" File="@RegionFile(tab)" Index="@RegionIndex(tab)" Host="this"
+                                   Visible="@(tab == active && !showComputer)" OnDirty="changed => Changed(tab, changed)" />
+                }
+            }
             @foreach (var tab in tabs.Where(IsGraphics))
             {
                 <GraphicsEditor @key="tab" @ref="graphicsEditors[tab]" Project="project!" Path="@tab" Visible="@(tab == active && !showComputer)"
@@ -268,9 +299,9 @@ else
         {
             if (!expanded.Remove(entry.Path)) expanded.Add(entry.Path);
         }
-        else if (IsText(entry.Path))
+        else
         {
-            await Open(entry.Path);
+            await Open(entry.Path);   // text in Monaco, graphics and binaries in their viewers
         }
     }
 
@@ -301,7 +332,7 @@ else
     async Task Open(string path)
     {
         if (!editorReady || project is null) return;
-        if (IsGraphics(path))
+        if (!IsMonaco(path))
         {
             if (!tabs.Contains(path)) tabs.Add(path);
             await Show(path);
@@ -322,7 +353,69 @@ else
     {
         active = path;
         showComputer = false;
-        if (!IsGraphics(path)) await JS.InvokeVoidAsync("thing64Studio.show", path);
+        if (IsMonaco(path)) await JS.InvokeVoidAsync("thing64Studio.show", path);
+    }
+
+    // Which tabs Monaco shows: text files, except graphics assets and regions, which have their own editors;
+    // anything else is binary: PNG pictures in the image viewer, the rest in the hex viewer
+    static bool IsMonaco(string? path) => path is not null && IsText(path) && !IsGraphics(path) && !IsRegion(path);
+    static bool IsBinary(string path) => !IsText(path) && !IsGraphics(path) && !IsRegion(path);
+    static bool IsImage(string path) => path.EndsWith(".png", StringComparison.OrdinalIgnoreCase);
+
+    readonly Dictionary<string, HexViewer> hexViewers = [];
+    readonly Dictionary<string, ImageViewer> imageViewers = [];
+
+    // Regions of a source with a visual editor (";@ tilemap" ... ";@ end"): their tab is "file#n", the n-th region
+    static bool IsRegion(string? path) => path?.Contains('#') == true;
+    static string RegionFile(string tab) => tab[..tab.LastIndexOf('#')];
+    static int RegionIndex(string tab) => int.Parse(tab[(tab.LastIndexOf('#') + 1)..]);
+
+    readonly Dictionary<string, Thing64.WebStudio.CodeBehind.IRegionEditor> regionEditors = [];
+    readonly Dictionary<string, string> regionNames = [];
+    readonly Dictionary<string, string> regionKinds = [];
+    static readonly string[] RegionEditors = ["tilemap", "sprites", "charmap"];
+
+    string TabName(string tab) => IsRegion(tab) ? "▦ " + regionNames.GetValueOrDefault(tab, FileName(RegionFile(tab))) : FileName(tab);
+
+    // From the CodeLens above a ;@ line in Monaco (line from 1). Everything is saved first: the editor reads the
+    // program assembled from the files on disk
+    [JSInvokable]
+    public async Task OpenRegion(string file, int line)
+    {
+        try
+        {
+            if (!await SaveAll()) return;
+            string[] lines = project!.ReadText(file).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+            var region = Thing64.WebStudio.CodeBehind.AsmRegion.Find(lines).FirstOrDefault(r => r.StartLine == line - 1);
+            if (region is null) return;
+            if (!RegionEditors.Contains(region.Editor))
+            {
+                Report($"{file}({line}): there is no editor for \";@ {region.Editor}\" ({string.Join(", ", RegionEditors)} are)");
+                return;
+            }
+            string tab = $"{file}#{region.Index}";
+            regionNames[tab] = region.Editor is "sprites" or "charmap" ? $"{region.Editor} ({FileName(file)})" : region.Label ?? region.Editor;
+            regionKinds[tab] = region.Editor;
+            await Open(tab);
+        }
+        catch (Exception e) when (e is FormatException or IOException or UnauthorizedAccessException)
+        {
+            Report(e.Message);
+        }
+        StateHasChanged();
+    }
+
+    // IRegionHost: a region editor writes its source file, which may be open in Monaco
+    Task<bool> Thing64.WebStudio.CodeBehind.IRegionHost.CanWriteAsync(string path)
+    {
+        if (!dirty.Contains(path)) return Task.FromResult(true);
+        Report($"{path} has changes not saved in its tab: save them (or close the tab) before saving the editor");
+        return Task.FromResult(false);
+    }
+
+    async Task Thing64.WebStudio.CodeBehind.IRegionHost.WrittenAsync(string path)
+    {
+        if (tabs.Contains(path)) await JS.InvokeVoidAsync("thing64Studio.reload", path, project!.ReadText(path));
     }
 
     // Graphics assets open in the graphics editor, not in Monaco
@@ -398,6 +491,8 @@ else
         if (dirty.Contains(path) && !await JS.InvokeAsync<bool>("confirm", $"{FileName(path)} has changes that are not saved. Close it anyway?"))
             return;
         if (IsGraphics(path)) graphicsEditors.Remove(path);
+        else if (IsRegion(path)) regionEditors.Remove(path);
+        else if (IsBinary(path)) { hexViewers.Remove(path); imageViewers.Remove(path); }
         else await JS.InvokeVoidAsync("thing64Studio.close", path);
         int index = tabs.IndexOf(path);
         tabs.Remove(path);
@@ -452,6 +547,12 @@ else
                 dirty.Remove(path);
                 return true;
             }
+            if (regionEditors.TryGetValue(path, out var region))
+            {
+                if (!await region.Save()) return false;
+                dirty.Remove(path);
+                return true;
+            }
             project!.WriteText(path, await JS.InvokeAsync<string>("thing64Studio.text", path));
             await JS.InvokeVoidAsync("thing64Studio.saved", path);
             dirty.Remove(path);
@@ -489,6 +590,8 @@ else
             await GoTo(first.File!, first.Line);
 
         Refresh();
+        foreach (var viewer in hexViewers.Values) viewer.Load();       // the built files may have changed
+        foreach (var viewer in imageViewers.Values) viewer.Load();
         if (report.Succeeded && run && report.Run is not null) await RunFile(report.Run);
     }
 
@@ -513,6 +616,8 @@ else
 
     Task Thing64.WebStudio.Assistant.IStudioHost.FilesChangedAsync(IReadOnlyCollection<string> paths) => InvokeAsync(async () =>
     {
+        foreach (var (tab, editor) in regionEditors)
+            if (paths.Contains(RegionFile(tab)) && !dirty.Contains(tab)) editor.Load();
         foreach (string path in paths.Where(tabs.Contains))
         {
             if (dirty.Contains(path))
@@ -528,6 +633,8 @@ else
                 await CloseTab(path);
         }
         Refresh();
+        foreach (var viewer in hexViewers.Values) viewer.Load();
+        foreach (var viewer in imageViewers.Values) viewer.Load();
         StateHasChanged();
     });
 
