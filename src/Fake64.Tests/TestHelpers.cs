@@ -23,6 +23,21 @@ static class TestHelpers
             chargen: File.ReadAllBytes(Path.Combine(folder, "chargen")));
     });
 
+    // The samples folder of the repository (samples/, next to src/) and the files in it
+    public static string SamplesFolder { get; } = FindSamples();
+
+    static string FindSamples()
+    {
+        for (var folder = new DirectoryInfo(AppContext.BaseDirectory); folder is not null; folder = folder.Parent)
+        {
+            string samples = Path.Combine(folder.FullName, "samples");
+            if (File.Exists(Path.Combine(samples, "samples.json"))) return samples;
+        }
+        throw new DirectoryNotFoundException("samples folder not found above " + AppContext.BaseDirectory);
+    }
+
+    public static byte[] SampleFile(string fileName) => File.ReadAllBytes(Path.Combine(SamplesFolder, fileName));
+
     // Board without the real-time clock: the tests advance with RunCycles/StepInstruction
     public static Board NewBoard() => new Board(Roms.Value, startClock: false);
 

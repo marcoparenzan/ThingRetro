@@ -1,4 +1,5 @@
 using Fake64.C64;
+using Fake64.Computer;
 
 namespace Fake64.Studio;
 
@@ -12,7 +13,7 @@ public sealed class StudioForm : Form
     readonly FileExplorer explorer = new() { Dock = DockStyle.Left };
     readonly MainFiles mainFiles = new(AppSettings.Current);
     readonly TabControl tabs = new() { Dock = DockStyle.Bottom, Alignment = TabAlignment.Bottom, Height = 26 };
-    readonly Dictionary<AsmEditorForm, Fake64Form> machines = [];
+    readonly Dictionary<AsmEditorForm, ComputerForm> machines = [];
     bool syncingTabs;
 
     public StudioForm(SystemRoms roms, string? startupFile = null)
@@ -146,9 +147,9 @@ public sealed class StudioForm : Form
         }
     }
 
-    Fake64Form NewMachine()
+    ComputerForm NewMachine()
     {
-        var machine = new Fake64Form(roms);
+        var machine = new ComputerForm(roms);
         ShowChild(machine);
         return machine;
     }
@@ -169,18 +170,23 @@ public sealed class StudioForm : Form
         machine.Run(prgPath);
     }
 
-    // Shift+F5: the program runs in a separate Fake64 process, a plain C64 window outside the studio
+    // Shift+F5: the program runs in a plain C64 window outside the studio, started by whoever hosts the studio
+    // (the fake64 command line starts itself again in a new process: "fake64 run file.prg")
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Action<string>? LaunchComputer { get; set; }
+
     void RunInNewWindow(string prgPath)
     {
+        if (LaunchComputer is null)
+        {
+            MessageBox.Show(this, "This studio cannot start separate C64 windows.", "Fake64", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!)
-            {
-                ArgumentList = { "--c64", prgPath },
-                UseShellExecute = false,
-            });
+            LaunchComputer(prgPath);
         }
-        catch (System.ComponentModel.Win32Exception e)
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             MessageBox.Show(this, e.Message, "Fake64", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
@@ -293,7 +299,7 @@ public sealed class StudioForm : Form
         machine.DropDownItems.AddRange(
         [
             new ToolStripMenuItem("&New C64", null, (_, _) => NewMachine()),
-            new ToolStripMenuItem("&Reset", null, (_, _) => (ActiveMdiChild as Fake64Form)?.Reset()),
+            new ToolStripMenuItem("&Reset", null, (_, _) => (ActiveMdiChild as ComputerForm)?.Reset()),
         ]);
 
         var window = new ToolStripMenuItem("&Window");
@@ -305,7 +311,7 @@ public sealed class StudioForm : Form
 
     // In a C64 tab the PC keyboard is the C64 keyboard: F5, Ctrl+S... go to the C64, not to the menu
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData) =>
-        ActiveMdiChild is not Fake64Form && base.ProcessCmdKey(ref msg, keyData);
+        ActiveMdiChild is not ComputerForm && base.ProcessCmdKey(ref msg, keyData);
 
     // Makes the file the main file of its folder, or clears it if it already is
     void ToggleMain(string path)

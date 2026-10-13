@@ -81,9 +81,13 @@ opcodes included, expressions with `+ - * /`, parentheses and `*` for the curren
 
 ## Regenerating
 
+The outputs and their sources are listed in [samples.json](samples.json), a build manifest:
+
 ```powershell
-dotnet run --project src/Fake64.Samples            # writes the .prg and .crt files into samples/
+fake64 build samples/samples.json            # writes the .prg and .crt files into samples/
 ```
 
+(or `dotnet run --project src/Fake64 -- build samples/samples.json` without the global tool.)
+
 The tests in `src/Fake64.Tests/TestSamples.cs` run every sample in the emulator and check that the files of this
-folder match the ones produced from the sources.
+folder match the ones built from the manifest.

@@ -1,4 +1,4 @@
-namespace Fake64.Samples;
+namespace Fake64.Basic;
 
 // Turns a BASIC V2 program in text into the .prg format the C64 would have in memory after it was typed in:
 // linked lines, 16-bit line numbers, keywords replaced by tokens ($80-$CB).

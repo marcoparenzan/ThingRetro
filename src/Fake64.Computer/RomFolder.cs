@@ -1,10 +1,10 @@
 using Fake64.C64;
 
-namespace Fake64;
+namespace Fake64.Computer;
 
 // The C64 ROMs live in the app's roms folder (files kernal, basic, chargen) and are copied next to the
 // executable; the Board only receives their contents
-static class RomFolder
+public static class RomFolder
 {
     public static string DefaultPath => Path.Combine(AppContext.BaseDirectory, "roms");
 

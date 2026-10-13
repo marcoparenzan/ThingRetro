@@ -2,11 +2,11 @@ using Fake64.Crt;
 using Fake64.Prg;
 using Fake64.C64;
 
-namespace Fake64;
+namespace Fake64.Computer;
 
 // Opening the files the app supports: .prg (Fake64.Prg) and .crt (Fake64.Crt). The board (Fake64.C64)
 // knows neither format: the file is read here and the result is handed to the Board
-static class MediaLoader
+public static class MediaLoader
 {
     // Time left to the KERNAL to reach READY. before a .prg is loaded
     public static readonly TimeSpan BootTime = TimeSpan.FromSeconds(3);

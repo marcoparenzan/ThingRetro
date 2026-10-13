@@ -2,11 +2,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Fake64.WinForms;
 
-namespace Fake64;
+namespace Fake64.Computer;
 
 // App settings kept between runs, in %AppData%\Fake64\settings.json. One shared instance (Current):
 // every window changes it and saves it, so nobody overwrites the others' values
-sealed class AppSettings
+public sealed class AppSettings
 {
     // Default: keypad joystick in port 2, the port almost every game uses
     public ControlPortChoice Port1 { get; set; } = ControlPortChoice.None;
@@ -54,4 +54,4 @@ sealed class AppSettings
     }
 }
 
-sealed record WindowPlacement(int X, int Y, int Width, int Height, bool Maximized);
+public sealed record WindowPlacement(int X, int Y, int Width, int Height, bool Maximized);

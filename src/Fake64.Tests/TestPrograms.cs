@@ -1,5 +1,4 @@
 using Fake64.Prg;
-using Fake64.Samples;
 using static Fake64.Tests.TestHelpers;
 
 namespace Fake64.Tests;
@@ -11,7 +10,7 @@ public sealed class ProgramLoadingTests
     const int FRAME_CYCLES = 312 * 63;
 
     // The programs come from the samples in samples/ (sources in samples/src)
-    static byte[] Sample(string fileName) => SampleSet.All.Single(sample => sample.FileName == fileName).Content;
+    static byte[] Sample(string fileName) => SampleFile(fileName);
 
     private static Board BootedBoard()
     {

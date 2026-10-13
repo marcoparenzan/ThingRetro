@@ -1,6 +1,7 @@
 using Fake64.Crt;
 using Fake64.Prg;
-using Fake64.Samples;
+using Fake64.Basic;
+using Fake64.Cli;
 using static Fake64.Tests.TestHelpers;
 
 namespace Fake64.Tests;
@@ -13,14 +14,14 @@ public sealed class SampleTests
     const int FRAME_CYCLES = 312 * 63;
     const int LEFT = 42, TOP = 42; // top left corner of the display area in the frame buffer
 
-    static Sample Get(string fileName) => SampleSet.All.Single(sample => sample.FileName == fileName);
+    static byte[] Get(string fileName) => SampleFile(fileName);
 
     // Boot, load and RUN, as the app does with a .prg dropped on the window
     static Board Run(string fileName, double seconds = 1)
     {
         var board = NewBoard();
         board.RunCycles(3 * CYCLES_PER_SECOND);
-        board.LoadPrg(Get(fileName).Content);
+        board.LoadPrg(Get(fileName));
         board.TypeText("RUN\r");
         board.RunCycles((long)(seconds * CYCLES_PER_SECOND));
         return board;
@@ -29,7 +30,7 @@ public sealed class SampleTests
     static Board Insert(string fileName, double seconds = 2)
     {
         var board = NewBoard();
-        board.InsertCartridge(CrtFile.Load(Get(fileName).Content));
+        board.InsertCartridge(CrtFile.Load(Get(fileName)));
         board.RunCycles((long)(seconds * CYCLES_PER_SECOND));
         return board;
     }
@@ -199,7 +200,7 @@ public sealed class SampleTests
     {
         var board = NewBoard();
         board.RunCycles(3 * CYCLES_PER_SECOND);
-        board.LoadPrg(Get(fileName).Content);
+        board.LoadPrg(Get(fileName));
         var speaker = new Recorder();
         _ = new AudioCable(board.AudioOut, speaker);
         board.TypeText("RUN\r");
@@ -414,13 +415,13 @@ public sealed class SampleTests
     #endregion
 
     [TestMethod]
-    public void SamplesFolder_ShouldMatchTheGenerator()
+    public void SamplesFolder_ShouldMatchItsManifest()
     {
-        // The files in samples/ must be the ones produced by the generator (dotnet run --project src/Fake64.Samples)
-        string folder = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "samples");
-        if (!Directory.Exists(folder)) Assert.Inconclusive("samples folder not found");
+        // The files in samples/ must be the ones built from samples/src (fake64 build samples/samples.json)
+        var manifest = BuildManifest.Load(Path.Combine(SamplesFolder, "samples.json"));
 
-        foreach (var sample in SampleSet.All)
-            CollectionAssert.AreEqual(sample.Content, File.ReadAllBytes(Path.Combine(folder, sample.FileName)), sample.FileName);
+        Assert.IsTrue(manifest.Outputs.Count >= 20);
+        foreach (var output in manifest.Outputs)
+            CollectionAssert.AreEqual(manifest.Build(output), SampleFile(output.File), output.File);
     }
 }

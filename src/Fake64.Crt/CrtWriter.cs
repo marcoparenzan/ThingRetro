@@ -1,11 +1,11 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace Fake64.Samples;
+namespace Fake64.Crt;
 
 // Writes a .crt file (VICE format): 64-byte header and one CHIP packet per bank.
 // Numeric fields are big-endian; EXROM and GAME give the level of the lines (0 = active)
-public static class CrtImage
+public static class CrtWriter
 {
     public const int TypeNormal = 0;
     public const int TypeMagicDesk = 19;

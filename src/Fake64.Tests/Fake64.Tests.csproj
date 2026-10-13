@@ -19,9 +19,9 @@
     <Using Include="Fake64.Mos" />
   </ItemGroup>
 
-  <!-- Le stesse ROM dell'app, copiate in roms accanto ai test -->
+  <!-- The same ROMs as the app, copied into roms next to the tests -->
   <ItemGroup>
-    <Content Include="..\Fake64\roms\*" Link="roms\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\Fake64.Computer\roms\*" Link="roms\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,7 +29,8 @@
     <ProjectReference Include="..\Fake64.C64\Fake64.C64.csproj" />
     <ProjectReference Include="..\Fake64.Crt\Fake64.Crt.csproj" />
     <ProjectReference Include="..\Fake64.Prg\Fake64.Prg.csproj" />
-    <ProjectReference Include="..\Fake64.Samples\Fake64.Samples.csproj" />
+    <ProjectReference Include="..\Fake64.Basic\Fake64.Basic.csproj" />
+    <ProjectReference Include="..\Fake64\Fake64.csproj" />
     <ProjectReference Include="..\Fake64.WinForms\Fake64.WinForms.csproj" />
   </ItemGroup>
 

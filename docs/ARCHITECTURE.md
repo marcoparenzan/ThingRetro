@@ -13,18 +13,24 @@ flowchart LR
     Prg[Fake64.Prg<br/>.prg files]
     Crt[Fake64.Crt<br/>.crt files]
     Asm[Fake64.Asm<br/>assembler]
+    Basic[Fake64.Basic<br/>BASIC tokenizer]
     WinForms[Fake64.WinForms<br/>monitor, keyboard, speakers]
-    App[Fake64<br/>studio]
-    Samples[Fake64.Samples<br/>sample generator]
+    Computer[Fake64.Computer<br/>C64 window]
+    Studio[Fake64.Studio<br/>desktop app]
+    Cli[Fake64<br/>command line]
     C64 --> Mos
     Prg --> C64
     Crt --> C64
     WinForms --> C64
-    App --> Prg
-    App --> Crt
-    App --> Asm
-    App --> WinForms
-    Samples --> Asm
+    Computer --> Prg
+    Computer --> Crt
+    Computer --> WinForms
+    Studio --> Computer
+    Studio --> Asm
+    Cli --> Asm
+    Cli --> Basic
+    Cli --> Crt
+    Cli -. starts .-> Studio
 ```
 
 - **`Fake64.Mos`** depends on nothing: a `MOS6526` could sit in a 1571 drive, a `MOS6502` in any computer.
@@ -205,9 +211,8 @@ the machine with `Board.Enqueue`, which runs the action between two cycles. `Boa
   automatic zero page, directives `.byte .word .text .screen .fill .basic`). Errors are `AssemblerException`s with
   the line and the reason, so that the editor can mark them. `Assembler.Mnemonics`, `Assembler.Directives` and
   `InstructionSet.Descriptions` feed the editor's syntax highlighting and hover help.
-- **`Fake64.Samples`**: generates the programs of `samples/` from the sources in `samples/src`, embedded as
-  resources (it does not depend on the emulator). `BasicTokenizer` turns BASIC into the C64 format with the
-  KERNAL rules; `CrtImage` writes the `.crt` files.
+- **`Fake64.Basic`**: `BasicTokenizer` turns BASIC V2 text into the C64 in-memory format with the KERNAL rules.
+- **`Fake64.Crt`** also writes `.crt` files (`CrtWriter`), used to build cartridges from assembled banks.
 - **`Fake64.WinForms`**: `C64Monitor` implements `IScreen` with a fixed-size bitmap guarded by a lock (written by
   the emulation thread, painted by the UI thread); `PcKeyboard` translates the PC keys with `PcKeyboardLayout` and
   passes them to `Keyboard.SetPressedKeys`, holding very short taps for at least 40 ms so that the KERNAL sees
@@ -220,7 +225,7 @@ the machine with `Board.Enqueue`, which runs the action between two cycles. `Boa
   creates device and simulator, provides the menu items and the keys to keep away from the C64 keyboard
   (`PcKeyboard.Excluded`).
 
-## The studio (`Fake64`)
+## The desktop app (`Fake64.Computer`, `Fake64.Studio`)
 
 - **`StudioForm`**: the main window, an MDI container. Its children (editors and C64s) are shown maximized, with
   a `TabControl` at the bottom used as the tab strip and kept in sync with the active child. Menu shortcuts are
@@ -231,7 +236,25 @@ the machine with `Board.Enqueue`, which runs the action between two cycles. `Boa
   Monaco from the CDN. The page and the form talk with web messages: the page sends the text at every change and
   the editor commands (save, assemble, run); the form sends the initial text, the language lists and the error
   markers. Assembling writes the `.prg` next to the source; running asks the studio for the editor's C64.
-- **`Fake64Form`**: one C64 (board, monitor, keyboard, speakers, control ports). As a tab it runs programs with
-  `MediaLoader.Run`: reset, KERNAL boot with `FastForward`, load, then `RUN` or `SYS`. Closing it stops the board.
-- **`AppSettings`**: one shared instance saved in `%AppData%\Fake64\settings.json` (control ports, audio, last
-  folder, window placement).
+- **`MainFiles`**: the file F5/F7 assemble: the main file set for the folder, or the file found by following the
+  `!source` lines up to the one nobody includes.
+- **`ComputerForm`** (`Fake64.Computer`): one C64 (board, monitor, keyboard, speakers, control ports), as a tab or
+  as a window of its own. It runs programs with `MediaLoader.Run`: reset, KERNAL boot with `FastForward`, load,
+  then `RUN` or `SYS`. Closing it stops the board.
+- **`AppSettings`** (`Fake64.Computer`): one shared instance saved in `%AppData%\Fake64\settings.json` (control
+  ports, audio, last folder, window placement, main files).
+- **`Program`** (`Fake64.Studio`): `Fake64.Studio.exe [path]` opens the studio, `--computer [file]` a single C64
+  window; Shift+F5 in the studio starts the same executable with `--computer`.
+
+## The command line (`Fake64`)
+
+`fake64` is built with Spectre.Console and packaged as a .NET global tool (`tools/Install-Tool.ps1`).
+
+- **`asm`, `basic`, `build`** run in the command line itself: `ProgramBuilder` turns a `.asm` or `.bas` into a
+  `.prg`; `BuildManifest` reads a JSON manifest that lists the outputs (programs, and cartridges made of assembled
+  banks) with paths relative to it. `samples/samples.json` is the manifest of the samples, and the tests check that
+  the files in `samples/` are the ones it builds.
+- **`studio`, `run`** start the desktop app as a separate process (`Desktop`), so that the terminal is free again.
+  A .NET tool cannot use Windows Forms, so the command line is `net10.0` and the tool package carries the desktop
+  app, published into its `desktop` folder when the tool is packed. While developing, the command line finds it in
+  the build output of `src/Fake64.Studio`.

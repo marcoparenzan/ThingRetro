@@ -48,10 +48,12 @@ Not yet: the 1541 drive and disk/tape images (`.d64`, `.t64`). See [Known limits
 | `src/Fake64.C64` | The **motherboard**: sockets, PLA, RAM, color RAM, ROMs, keyboard matrix, expansion port, control ports, video and audio outputs |
 | `src/Fake64.Prg` | Loading `.prg` files and writing into the KERNAL keyboard buffer |
 | `src/Fake64.Crt` | The `.crt` format and the cartridge types |
-| `src/Fake64.Asm` | 6502/6510 assembler: labels, constants, expressions, directives, errors with their line |
+| `src/Fake64.Asm` | 6502/6510 assembler, ACME-compatible: labels, macros, loops, includes, expressions, errors with their file and line |
+| `src/Fake64.Basic` | BASIC V2 tokenizer: a program in text becomes the `.prg` the C64 would have in memory |
 | `src/Fake64.WinForms` | `C64Monitor` (the screen, a UserControl), `PcKeyboard` (the keyboard cable), `PcSpeakers` (the speakers), joystick and paddle simulators |
-| `src/Fake64` | The Windows app: the studio (explorer, editors, C64 tabs) |
-| `src/Fake64.Samples` | Sample generator: BASIC V2 tokenizer, `.crt` writer |
+| `src/Fake64.Computer` | One C64 in a window (`ComputerForm`), loading of `.prg`/`.crt`, the ROMs, the settings |
+| `src/Fake64.Studio` | The desktop app: the studio (explorer, editors, C64 tabs) and the single C64 window |
+| `src/Fake64` | The `fake64` command line (Spectre.Console), a .NET global tool: `studio`, `run`, `asm`, `basic`, `build` |
 | `src/Fake64.Tests` | Tests (MSTest) |
 | `samples` | Sample programs ready to load, with the commented BASIC and assembly sources in `samples/src` |
 | `tools` | Helper scripts (download of the CPU test suites) |
@@ -96,14 +98,28 @@ assembler libraries are `net10.0`). The editor uses WebView2, which is part of W
 
 ```powershell
 dotnet build src/Fake64.sln
-dotnet run --project src/Fake64                      # the studio
-dotnet run --project src/Fake64 -- program.asm       # the studio with a source open
-dotnet run --project src/Fake64 -- game.prg          # the studio with a C64 running a program
-dotnet run --project src/Fake64 -- cartridge.crt     # the studio with a C64 and a cartridge
+./tools/Install-Tool.ps1          # packs the command line and installs it as the global tool "fake64"
 ```
 
-The ROMs are in `src/Fake64/roms` (`kernal`, `basic`, `chargen`) and are copied next to the executable.
-They are the original C64 ROMs, protected by copyright.
+Then, from any folder:
+
+```powershell
+fake64 studio                      # the studio
+fake64 studio main.asm             # the studio with a source open (or a .prg/.crt, or a folder)
+fake64 run game.prg                # one C64 window running a program (or a .crt, or a source built first)
+fake64 asm main.asm --labels main.labels   # assembles to main.prg; labels in VICE format
+fake64 basic hello.bas             # tokenizes to hello.prg
+fake64 build samples/samples.json  # builds every output of a build manifest
+fake64 --help
+```
+
+Without installing the tool, the same commands work with `dotnet run --project src/Fake64 -- ...` (after a build
+of the solution, so that the desktop app is there).
+
+A .NET tool cannot use Windows Forms, so the command line is `net10.0` and starts the desktop app
+(`Fake64.Studio.exe`), which travels inside the tool package in its `desktop` folder. The ROMs are in
+`src/Fake64.Computer/roms` (`kernal`, `basic`, `chargen`) and are copied next to the desktop app. They are the
+original C64 ROMs, protected by copyright: the tool package contains them, so keep it for yourself.
 
 ### The studio
 
@@ -120,7 +136,7 @@ The main window holds tabs (at the bottom) with assembly editors and C64s, and a
 - **Keys**: Ctrl+S saves, **F7** assembles and writes the `.prg` next to the source, **F5** assembles and runs it
   in the editor's own C64 tab: the machine restarts, the KERNAL boots at full speed, then the program starts with
   `RUN` (BASIC, or machine code with the `.basic` stub) or `SYS` to its first byte. **Shift+F5** assembles and runs it in a
-  separate Fake64 window (a new process, `Fake64.exe --c64 file.prg`). Ctrl+W closes a tab;
+  separate C64 window (a new process, like `fake64 run`). Ctrl+W closes a tab;
   a middle click on a tab closes it too.
 - **Main file**: a project is usually a main file that includes the others with `!source`. F5, F7 and Shift+F5
   assemble the main file of the folder, set with **Set as main file** (right click in the explorer, or the Build
@@ -137,7 +153,8 @@ borders, SID sound, joystick and paddles, cartridges (autostart, Ultimax, banks)
 BASIC and 6502 assembly commented line by line: they are meant for learning, and they open in the studio.
 
 ```powershell
-dotnet run --project src/Fake64 -- samples/rasterbars.prg
+fake64 run samples/rasterbars.prg
+fake64 build samples/samples.json   # rebuilds them from samples/src
 ```
 
 ### Using a C64
@@ -198,9 +215,9 @@ given time as fast as possible (the studio uses it for the KERNAL boot).
 dotnet test src/Fake64.Tests
 ```
 
-About 260 tests of its own: CPU (also alone, on a fake bus that records every cycle), CIA, VIC-II and graphics
+About 270 tests of its own: CPU (also alone, on a fake bus that records every cycle), CIA, VIC-II and graphics
 pixel by pixel, sprite DMA and open borders, SID and audio output, sockets and traces, keyboard, control ports and
-simulators, monitor, assembler, programs, cartridges, samples, and full boot with KERNAL and BASIC.
+simulators, monitor, assembler, command line, programs, cartridges, samples, and full boot with KERNAL and BASIC.
 
 Two external suites check the CPU against the real chip. They are not in the repository (GPL-3.0 and MIT
 licenses); they are downloaded with:

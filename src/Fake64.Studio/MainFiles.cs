@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Fake64.Computer;
 
 namespace Fake64.Studio;
 

@@ -1,13 +1,13 @@
 using Fake64.WinForms;
 using Fake64.C64;
 
-namespace Fake64;
+namespace Fake64.Computer;
 
 // A C64: a window hosting a C64Monitor and wiring the pieces together. It works on its own or as a tab of the
 // studio (MDI child). The same wiring (Board, monitor, MonitorCable, PcKeyboard, PcSpeakers with AudioCable,
 // ControlPortSelector) works in any form, next to other controls too.
 // Right click on the monitor: control ports, port swap, audio, reset
-public partial class Fake64Form : Form
+public class ComputerForm : Form
 {
     readonly Board board;
     readonly C64Monitor monitor = new() { Dock = DockStyle.Fill };
@@ -18,7 +18,7 @@ public partial class Fake64Form : Form
     readonly ControlPortSelector controlPorts;
     readonly AppSettings settings = AppSettings.Current;
 
-    public Fake64Form(SystemRoms roms, string? startupFile = null)
+    public ComputerForm(SystemRoms roms, string? startupFile = null)
     {
         board = new Board(roms);
         Text = "C64";

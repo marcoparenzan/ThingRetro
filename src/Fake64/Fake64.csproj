@@ -1,40 +1,48 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- The fake64 command line: assembles, tokenizes BASIC, builds projects, and starts the desktop app (studio and
+       C64 windows, Fake64.Studio). Packaged as a .NET global tool (see tools/Install-Tool.ps1); a tool cannot use
+       Windows Forms itself, so the desktop app travels inside the package, in the "desktop" folder -->
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <RootNamespace>Fake64.Cli</RootNamespace>
+
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>fake64</ToolCommandName>
+    <PackageId>Fake64</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Marco Parenzan</Authors>
+    <Description>A Commodore 64 (PAL) emulator written to be read, with a 6502 studio, an ACME-compatible assembler and a BASIC tokenizer.</Description>
+    <PackageOutputPath>..\..\artifacts</PackageOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+    <InternalsVisibleTo Include="Fake64.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Spectre.Console.Cli" Version="0.56.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Fake64.Asm\Fake64.Asm.csproj" />
-    <ProjectReference Include="..\Fake64.C64\Fake64.C64.csproj" />
+    <ProjectReference Include="..\Fake64.Basic\Fake64.Basic.csproj" />
     <ProjectReference Include="..\Fake64.Crt\Fake64.Crt.csproj" />
-    <ProjectReference Include="..\Fake64.Prg\Fake64.Prg.csproj" />
-    <ProjectReference Include="..\Fake64.WinForms\Fake64.WinForms.csproj" />
   </ItemGroup>
 
-  <!-- C64 ROMs (KERNAL, BASIC, characters): the app reads them from the roms folder next to the executable -->
-  <ItemGroup>
-    <Content Include="roms\*" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
-  <!-- The assembly editor page (Monaco in WebView2), served from the folder next to the executable -->
-  <ItemGroup>
-    <Content Include="Studio\Editor\*" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Update="Fake64Form.cs">
-      <SubType>Form</SubType>
-    </Compile>
-  </ItemGroup>
+  <!-- When the tool is packed: the desktop app is published and added to the package under "desktop" -->
+  <Target Name="PublishDesktop" BeforeTargets="ComputeResolvedFilesToPublishList" Condition="'$(PackAsTool)' == 'true'">
+    <PropertyGroup>
+      <DesktopPublishDir>$(MSBuildProjectDirectory)\obj\desktop\$(Configuration)\</DesktopPublishDir>
+    </PropertyGroup>
+    <Exec Command="dotnet publish &quot;$(MSBuildProjectDirectory)\..\Fake64.Studio\Fake64.Studio.csproj&quot; -c $(Configuration) -o &quot;$(DesktopPublishDir.TrimEnd('\'))&quot; --nologo -v q" />
+    <ItemGroup>
+      <_DesktopFile Include="$(DesktopPublishDir)**\*" />
+      <ResolvedFileToPublish Include="@(_DesktopFile)" RelativePath="desktop\%(_DesktopFile.RecursiveDir)%(_DesktopFile.Filename)%(_DesktopFile.Extension)" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
 
 </Project>

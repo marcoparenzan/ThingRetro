@@ -367,3 +367,4 @@ src/Fake64.Tests/TestData/External/
 
 # Programs assembled by the studio next to the sample sources (the published ones are in samples/)
 samples/src/*.prg
+artifacts/
