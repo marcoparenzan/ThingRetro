@@ -1,5 +1,6 @@
 // The browser side of the C64: the animation loop that drives the board, the canvas that shows its frames,
-// the keyboard, drag and drop, and the ROMs kept in localStorage. Talks to WebComputer.cs (JSExport/JSImport)
+// keyboard, gamepad, sound, drag and drop, and the ROMs kept in localStorage.
+// Talks to WebComputer.cs (JSExport/JSImport)
 
 let computer = null;      // the [JSExport] methods of WebComputer
 let canvas = null;
@@ -8,6 +9,11 @@ let image = null;
 let running = false;
 let last = 0;
 let speedSamples = [];
+let speedSince = 0;
+let gamepadBits = 0;
+let audio = null;         // AudioContext, created at the first user gesture (browsers require one)
+let speaker = null;       // AudioWorkletNode (audio-worklet.js)
+let audioWanted = localStorage.getItem('thing64.sound') !== 'off';
 
 async function exportsOf() {
     const runtime = await globalThis.getDotnetRuntime(0);
@@ -21,8 +27,9 @@ export async function start(canvasId) {
     context = canvas.getContext('2d');
     image = context.createImageData(canvas.width, canvas.height);
 
-    canvas.addEventListener('keydown', e => { if (computer.KeyDown(e.code)) e.preventDefault(); });
+    canvas.addEventListener('keydown', e => { startAudio(); if (computer.KeyDown(e.code)) e.preventDefault(); });
     canvas.addEventListener('keyup', e => { if (computer.KeyUp(e.code)) e.preventDefault(); });
+    canvas.addEventListener('pointerdown', () => startAudio());
     canvas.addEventListener('blur', () => computer.ReleaseKeys());
     canvas.addEventListener('dragover', e => e.preventDefault());
     canvas.addEventListener('drop', async e => {
@@ -33,6 +40,12 @@ export async function start(canvasId) {
         document.querySelector('.status').textContent = status;
         canvas.focus();
     });
+
+    const sound = document.getElementById('sound');
+    if (sound) {
+        showSound();
+        sound.addEventListener('click', toggleSound);
+    }
 
     running = true;
     last = performance.now();
@@ -48,17 +61,36 @@ export function focus(elementId) {
     document.getElementById(elementId)?.focus();
 }
 
-// One animation frame: the board runs the cycles of the elapsed time
+// One animation frame: gamepad, then the board runs the cycles of the elapsed time
 function tick(now) {
     if (!running) return;
+    readGamepads();
     const speed = computer.Frame(now - last);
     last = now;
     if (speed > 0) showSpeed(speed);
     requestAnimationFrame(tick);
 }
 
+// Any gamepad moves the joystick: left stick or directional pad, buttons A/B/X/Y as fire
+function readGamepads() {
+    let bits = 0;
+    for (const pad of navigator.getGamepads?.() ?? []) {
+        if (!pad) continue;
+        const x = pad.axes[0] ?? 0, y = pad.axes[1] ?? 0;
+        const pressed = i => pad.buttons[i]?.pressed;
+        if (y < -0.35 || pressed(12)) bits |= 0x01;
+        if (y > 0.35 || pressed(13)) bits |= 0x02;
+        if (x < -0.35 || pressed(14)) bits |= 0x04;
+        if (x > 0.35 || pressed(15)) bits |= 0x08;
+        if (pressed(0) || pressed(1) || pressed(2) || pressed(3)) bits |= 0x10;
+    }
+    if (bits !== gamepadBits) {
+        gamepadBits = bits;
+        computer.Gamepad(bits);
+    }
+}
+
 // How many times faster than a real C64 the emulation could run, averaged over about a second
-let speedSince = 0;
 function showSpeed(speed) {
     speedSamples.push(speed);
     const now = performance.now();
@@ -81,6 +113,44 @@ export function present(view) {
         data[i + 2] = blue;
     }
     context.putImageData(image, 0, 0);
+}
+
+// Sound: started by a user gesture on the screen, muted and unmuted with the Sound button
+async function startAudio() {
+    if (audio || !audioWanted) return;
+    audio = new AudioContext();
+    await audio.audioWorklet.addModule(new URL('audio-worklet.js', import.meta.url));
+    speaker = new AudioWorkletNode(audio, 'thing64-speaker', { outputChannelCount: [2] });
+    speaker.connect(audio.destination);
+    computer.EnableAudio(audio.sampleRate);
+    showSound();
+}
+
+async function toggleSound() {
+    audioWanted = !audioWanted;
+    localStorage.setItem('thing64.sound', audioWanted ? 'on' : 'off');
+    if (audio) {
+        if (audioWanted) await audio.resume(); else await audio.suspend();
+    } else if (audioWanted) {
+        await startAudio();
+    }
+    showSound();
+    canvas.focus();
+}
+
+function showSound() {
+    const sound = document.getElementById('sound');
+    if (sound) sound.textContent = audioWanted ? 'Sound: on' : 'Sound: off';
+}
+
+// 10 ms of 16-bit samples from the SID to the AudioWorklet, as floats
+export function playAudio(view) {
+    if (!speaker || audio.state !== 'running') return;
+    const bytes = view.slice();
+    const samples = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
+    const floats = new Float32Array(samples.length);
+    for (let i = 0; i < samples.length; i++) floats[i] = samples[i] / 32768;
+    speaker.port.postMessage(floats, [floats.buffer]);
 }
 
 export function storedRom(name) {

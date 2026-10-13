@@ -21,4 +21,9 @@
     <Content Include="roms\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- The application icon, for the windows -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\images\thing64.ico" LogicalName="thing64.ico" />
+  </ItemGroup>
+
 </Project>

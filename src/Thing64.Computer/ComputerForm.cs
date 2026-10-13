@@ -22,6 +22,7 @@ public class ComputerForm : Form
     {
         board = new Board(roms);
         Text = "C64";
+        Icon = AppIcon.Value;
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = monitor.Size;
         Controls.Add(monitor);

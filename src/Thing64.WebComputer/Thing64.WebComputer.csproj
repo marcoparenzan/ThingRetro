@@ -26,6 +26,12 @@
     <ProjectReference Include="..\Thing64.Prg\Thing64.Prg.csproj" />
   </ItemGroup>
 
+  <!-- Logo and icons from images/ of the repository, served from img/ -->
+  <ItemGroup>
+    <Content Include="..\..\images\logos\thing64-logo-600x200.png;..\..\images\icons\thing64-chip-16.png;..\..\images\icons\thing64-chip-32.png;..\..\images\icons\thing64-chip-256.png"
+             Link="wwwroot\img\%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- The C64 ROMs are copyrighted and are not published with the site: the user loads them once from disk.
        Only Debug builds embed them, for local development -->
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">

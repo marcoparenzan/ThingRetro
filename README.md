@@ -157,6 +157,9 @@ The main window holds tabs (at the bottom) with assembly editors and C64s, and a
 `src/Thing64.WebComputer` runs the same board and chips in the browser: Blazor WebAssembly hosts them, the page
 drives the board one frame at a time (`requestAnimationFrame`) and paints the frames on a canvas. Keys are
 positional as in the desktop app; programs and cartridges are loaded with a button or dropped on the screen.
+The SID plays through Web Audio (an AudioWorklet), starting at the first click or key on the screen. The joystick
+goes into port 2 (or 1) and moves with the numeric keypad, or the arrows with Ctrl as fire, and with any gamepad
+(Gamepad API).
 
 ```powershell
 dotnet run --project src/Thing64.WebComputer              # development server on http://localhost:5164
@@ -281,4 +284,4 @@ SingleStepTests.
   mains.
 - **EasyFlash**: read-only (games that save to flash do not save).
 - **Studio editor**: Monaco is loaded from the jsDelivr CDN, so the first start needs an internet connection.
-- **Browser C64**: no sound, no joystick or paddles yet, no studio; Debug builds are too slow (interpreted).
+- **Browser C64**: no paddles or mouse, no studio; Debug builds are too slow (interpreted).

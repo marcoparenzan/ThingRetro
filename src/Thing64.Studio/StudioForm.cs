@@ -20,6 +20,7 @@ public sealed class StudioForm : Form
     {
         this.roms = roms;
         Text = "Thing64";
+        Icon = AppIcon.Value;
         IsMdiContainer = true;
         KeyPreview = true;
         RestorePlacement();

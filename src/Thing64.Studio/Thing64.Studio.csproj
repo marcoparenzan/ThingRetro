@@ -4,6 +4,7 @@
        single C64 window. Started by the thing64 command line, which ships it in its tool package -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <ApplicationIcon>..\..\images\thing64.ico</ApplicationIcon>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>

@@ -261,6 +261,12 @@ A Blazor WebAssembly app with the same `Board`, chips, `.prg` and `.crt` code as
   it as a `MemoryView` (no copy across the boundary), copies it into the canvas `ImageData` and swaps the BGRA bytes
   to RGBA.
 - **Keyboard**: `KeyboardEvent.code` (the physical key) mapped by `WebKeyboardLayout`, positional as in the desktop.
+- **Joystick**: a `Joystick` in port 2 (or 1), moved by the keypad or the arrows + Ctrl (those keys do not reach
+  the C64 keyboard) and by the Gamepad API, read at every frame.
+- **Sound**: an `ISpeaker` that hands the 10 ms blocks of `AudioPort` to `playAudio()`; an AudioWorklet
+  (`audio-worklet.js`) plays them, starting with about 50 ms queued and dropping audio past 150 ms, because the
+  page clock and the sound card clock drift. The AudioContext is created at the first click or key, as browsers
+  require.
 - **Programs**: a `.prg` resets the machine and is loaded when the KERNAL boot is over (counted in cycles, since
   a fast-forward would block the page); a `.crt` is inserted.
 - **ROMs**: embedded only in Debug builds; otherwise the user loads them once and the page keeps them in
