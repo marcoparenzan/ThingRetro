@@ -1,0 +1,37 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MSTest" Version="3.8.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+    <Using Include="Thing64.C64" />
+    <Using Include="Thing64.Mos" />
+  </ItemGroup>
+
+  <!-- The same ROMs as the app, copied into roms next to the tests -->
+  <ItemGroup>
+    <Content Include="..\Thing64.Computer\roms\*" Link="roms\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Thing64.Asm\Thing64.Asm.csproj" />
+    <ProjectReference Include="..\Thing64.C64\Thing64.C64.csproj" />
+    <ProjectReference Include="..\Thing64.Crt\Thing64.Crt.csproj" />
+    <ProjectReference Include="..\Thing64.Prg\Thing64.Prg.csproj" />
+    <ProjectReference Include="..\Thing64.Basic\Thing64.Basic.csproj" />
+    <ProjectReference Include="..\Thing64\Thing64.csproj" />
+    <ProjectReference Include="..\Thing64.WinForms\Thing64.WinForms.csproj" />
+  </ItemGroup>
+
+</Project>

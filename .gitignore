@@ -363,7 +363,7 @@ MigrationBackup/
 FodyWeavers.xsd
 
 # Suite di test esterne per la CPU (scaricate con tools/Download-CpuTests.ps1, licenze GPL-3.0 e MIT)
-src/Fake64.Tests/TestData/External/
+src/Thing64.Tests/TestData/External/
 
 # Programs assembled by the studio next to the sample sources (the published ones are in samples/)
 samples/src/*.prg

@@ -1,4 +1,4 @@
-// Build manifest of the samples: fake64 build samples/samples.json
+// Build manifest of the samples: thing64 build samples/samples.json
 // Each output is built from its sources in src/ (paths relative to this file)
 {
   "outputs": [

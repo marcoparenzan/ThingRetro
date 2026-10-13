@@ -1,6 +1,6 @@
 # Samples
 
-Programs to open in Fake64 (from the studio's explorer, by dragging them onto a C64 or from the command line),
+Programs to open in Thing64 (from the studio's explorer, by dragging them onto a C64 or from the command line),
 each devoted to a Commodore 64 topic. The sources are in [src](src): BASIC (`.bas`) and commented 6502 assembly
 (`.asm`), meant to be read; the `.asm` ones open in the studio's editor, where F5 assembles and runs them.
 BASIC programs and those with the `10 SYS2061` stub start by themselves with `RUN`.
@@ -59,7 +59,7 @@ monitor).
 
 ## The assembler
 
-The `.asm` sources use the project's assembler (`src/Fake64.Asm`), small but complete:
+The `.asm` sources use the project's assembler (`src/Thing64.Asm`), small but complete:
 
 ```asm
 ; comment
@@ -84,10 +84,10 @@ opcodes included, expressions with `+ - * /`, parentheses and `*` for the curren
 The outputs and their sources are listed in [samples.json](samples.json), a build manifest:
 
 ```powershell
-fake64 build samples/samples.json            # writes the .prg and .crt files into samples/
+thing64 build samples/samples.json            # writes the .prg and .crt files into samples/
 ```
 
-(or `dotnet run --project src/Fake64 -- build samples/samples.json` without the global tool.)
+(or `dotnet run --project src/Thing64 -- build samples/samples.json` without the global tool.)
 
-The tests in `src/Fake64.Tests/TestSamples.cs` run every sample in the emulator and check that the files of this
+The tests in `src/Thing64.Tests/TestSamples.cs` run every sample in the emulator and check that the files of this
 folder match the ones built from the manifest.

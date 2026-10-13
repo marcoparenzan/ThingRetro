@@ -65,5 +65,5 @@ append:     STA LINE+39
             INC POSITION
             JMP frame
 
-message:    .screen "FAKE64: A COMMODORE 64 EMULATOR IN C#, NOW WITH FINE SCROLLING...      "
+message:    .screen "THING64: A COMMODORE 64 EMULATOR IN C#, NOW WITH FINE SCROLLING...      "
             .byte $FF

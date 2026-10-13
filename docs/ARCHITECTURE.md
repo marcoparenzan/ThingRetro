@@ -1,6 +1,6 @@
-# Fake64 architecture
+# Thing64 architecture
 
-Fake64 represents in code the physical setup of the Commodore 64: standalone MOS chips, a motherboard with sockets
+Thing64 represents in code the physical setup of the Commodore 64: standalone MOS chips, a motherboard with sockets
 and traces, cables to the monitor, the speakers and the keyboard. Each piece knows only what the real component
 would know.
 
@@ -8,16 +8,16 @@ would know.
 
 ```mermaid
 flowchart LR
-    Mos[Fake64.Mos<br/>MOS chips]
-    C64[Fake64.C64<br/>motherboard]
-    Prg[Fake64.Prg<br/>.prg files]
-    Crt[Fake64.Crt<br/>.crt files]
-    Asm[Fake64.Asm<br/>assembler]
-    Basic[Fake64.Basic<br/>BASIC tokenizer]
-    WinForms[Fake64.WinForms<br/>monitor, keyboard, speakers]
-    Computer[Fake64.Computer<br/>C64 window]
-    Studio[Fake64.Studio<br/>desktop app]
-    Cli[Fake64<br/>command line]
+    Mos[Thing64.Mos<br/>MOS chips]
+    C64[Thing64.C64<br/>motherboard]
+    Prg[Thing64.Prg<br/>.prg files]
+    Crt[Thing64.Crt<br/>.crt files]
+    Asm[Thing64.Asm<br/>assembler]
+    Basic[Thing64.Basic<br/>BASIC tokenizer]
+    WinForms[Thing64.WinForms<br/>monitor, keyboard, speakers]
+    Computer[Thing64.Computer<br/>C64 window]
+    Studio[Thing64.Studio<br/>desktop app]
+    Cli[Thing64<br/>command line]
     C64 --> Mos
     Prg --> C64
     Crt --> C64
@@ -33,11 +33,11 @@ flowchart LR
     Cli -. starts .-> Studio
 ```
 
-- **`Fake64.Mos`** depends on nothing: a `MOS6526` could sit in a 1571 drive, a `MOS6502` in any computer.
+- **`Thing64.Mos`** depends on nothing: a `MOS6526` could sit in a 1571 drive, a `MOS6502` in any computer.
   The chips are used only through their pinout.
-- **`Fake64.C64`** knows no file formats, WinForms or `System.Drawing`. It receives the ROMs as bytes
+- **`Thing64.C64`** knows no file formats, WinForms or `System.Drawing`. It receives the ROMs as bytes
   (`SystemRoms`), hands the frames to an `IScreen` and the audio samples to an `ISpeaker`.
-- **`Fake64.Asm`** depends on nothing either: it turns source text into bytes.
+- **`Thing64.Asm`** depends on nothing either: it turns source text into bytes.
 
 ## Chips and pinouts
 
@@ -201,31 +201,31 @@ the machine with `Board.Enqueue`, which runs the action between two cycles. `Boa
 
 ## Outside the board
 
-- **`Fake64.Prg`**: `LoadPrg` writes the program straight into RAM (under the ROMs too, through `Board.Ram`) and,
+- **`Thing64.Prg`**: `LoadPrg` writes the program straight into RAM (under the ROMs too, through `Board.Ram`) and,
   if the address is the start of BASIC, updates the pointers like `LOAD`; `TypeText` uses the KERNAL keyboard
   buffer.
-- **`Fake64.Crt`**: `CrtFile` reads the header and the `CHIP` packets and creates the right cartridge type
+- **`Thing64.Crt`**: `CrtFile` reads the header and the `CHIP` packets and creates the right cartridge type
   (`BankedCartridge` and derived classes). The board knows only the abstract `Cartridge` class: GAME/EXROM lines,
   ROML, ROMH, I/O 1, I/O 2.
-- **`Fake64.Asm`**: `Assembler` is a multi-pass 6502 assembler (labels, constants, expressions with precedence,
+- **`Thing64.Asm`**: `Assembler` is a multi-pass 6502 assembler (labels, constants, expressions with precedence,
   automatic zero page, directives `.byte .word .text .screen .fill .basic`). Errors are `AssemblerException`s with
   the line and the reason, so that the editor can mark them. `Assembler.Mnemonics`, `Assembler.Directives` and
   `InstructionSet.Descriptions` feed the editor's syntax highlighting and hover help.
-- **`Fake64.Basic`**: `BasicTokenizer` turns BASIC V2 text into the C64 in-memory format with the KERNAL rules.
-- **`Fake64.Crt`** also writes `.crt` files (`CrtWriter`), used to build cartridges from assembled banks.
-- **`Fake64.WinForms`**: `C64Monitor` implements `IScreen` with a fixed-size bitmap guarded by a lock (written by
+- **`Thing64.Basic`**: `BasicTokenizer` turns BASIC V2 text into the C64 in-memory format with the KERNAL rules.
+- **`Thing64.Crt`** also writes `.crt` files (`CrtWriter`), used to build cartridges from assembled banks.
+- **`Thing64.WinForms`**: `C64Monitor` implements `IScreen` with a fixed-size bitmap guarded by a lock (written by
   the emulation thread, painted by the UI thread); `PcKeyboard` translates the PC keys with `PcKeyboardLayout` and
   passes them to `Keyboard.SetPressedKeys`, holding very short taps for at least 40 ms so that the KERNAL sees
   them. `PcSpeakers` implements `ISpeaker` with `waveOut` (`winmm`): it starts when the queue holds ~50 ms of
   audio and keeps it at that level by dropping or repeating one sample per block, because the emulation clock and
   the sound card clock never quite agree.
-- **Simulators** (`Fake64.WinForms`): they drive a control port device with the PC input. `KeyboardJoystick`
+- **Simulators** (`Thing64.WinForms`): they drive a control port device with the PC input. `KeyboardJoystick`
   (keypad or arrows + Ctrl), `UsbJoystick` (Windows joystick API, `winmm`, read every 10 ms) and `MousePaddles`
   (horizontal movement of the captured mouse). `ControlPortSelector` decides what is connected to each port,
   creates device and simulator, provides the menu items and the keys to keep away from the C64 keyboard
   (`PcKeyboard.Excluded`).
 
-## The desktop app (`Fake64.Computer`, `Fake64.Studio`)
+## The desktop app (`Thing64.Computer`, `Thing64.Studio`)
 
 - **`StudioForm`**: the main window, an MDI container. Its children (editors and C64s) are shown maximized, with
   a `TabControl` at the bottom used as the tab strip and kept in sync with the active child. Menu shortcuts are
@@ -238,17 +238,17 @@ the machine with `Board.Enqueue`, which runs the action between two cycles. `Boa
   markers. Assembling writes the `.prg` next to the source; running asks the studio for the editor's C64.
 - **`MainFiles`**: the file F5/F7 assemble: the main file set for the folder, or the file found by following the
   `!source` lines up to the one nobody includes.
-- **`ComputerForm`** (`Fake64.Computer`): one C64 (board, monitor, keyboard, speakers, control ports), as a tab or
+- **`ComputerForm`** (`Thing64.Computer`): one C64 (board, monitor, keyboard, speakers, control ports), as a tab or
   as a window of its own. It runs programs with `MediaLoader.Run`: reset, KERNAL boot with `FastForward`, load,
   then `RUN` or `SYS`. Closing it stops the board.
-- **`AppSettings`** (`Fake64.Computer`): one shared instance saved in `%AppData%\Fake64\settings.json` (control
+- **`AppSettings`** (`Thing64.Computer`): one shared instance saved in `%AppData%\Thing64\settings.json` (control
   ports, audio, last folder, window placement, main files).
-- **`Program`** (`Fake64.Studio`): `Fake64.Studio.exe [path]` opens the studio, `--computer [file]` a single C64
+- **`Program`** (`Thing64.Studio`): `Thing64.Studio.exe [path]` opens the studio, `--computer [file]` a single C64
   window; Shift+F5 in the studio starts the same executable with `--computer`.
 
-## The command line (`Fake64`)
+## The command line (`Thing64`)
 
-`fake64` is built with Spectre.Console and packaged as a .NET global tool (`tools/Install-Tool.ps1`).
+`thing64` is built with Spectre.Console and packaged as a .NET global tool (`tools/Install-Tool.ps1`).
 
 - **`asm`, `basic`, `build`** run in the command line itself: `ProgramBuilder` turns a `.asm` or `.bas` into a
   `.prg`; `BuildManifest` reads a JSON manifest that lists the outputs (programs, and cartridges made of assembled
@@ -257,4 +257,4 @@ the machine with `Board.Enqueue`, which runs the action between two cycles. `Boa
 - **`studio`, `run`** start the desktop app as a separate process (`Desktop`), so that the terminal is free again.
   A .NET tool cannot use Windows Forms, so the command line is `net10.0` and the tool package carries the desktop
   app, published into its `desktop` folder when the tool is packed. While developing, the command line finds it in
-  the build output of `src/Fake64.Studio`.
+  the build output of `src/Thing64.Studio`.

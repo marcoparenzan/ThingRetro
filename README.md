@@ -1,11 +1,13 @@
-# Fake64
+# Thing64
+
+*(formerly Fake64)*
 
 A Commodore 64 (PAL) emulator in C#, written to be read: the code mirrors the real motherboard, with the MOS
 chips in their sockets, the traces that connect them and the cables to the monitor, the speakers and the keyboard.
 It comes with a small studio to write 6502 assembly and run it right away.
 
-![Boot and a line of BASIC](images/fake64-ready.png)
-![Raster bars with a raster interrupt and an expanded sprite](images/fake64-rasterbars.png)
+![Boot and a line of BASIC](images/thing64-ready.png)
+![Raster bars with a raster interrupt and an expanded sprite](images/thing64-rasterbars.png)
 
 ## What works
 
@@ -44,17 +46,17 @@ Not yet: the 1541 drive and disk/tape images (`.d64`, `.t64`). See [Known limits
 
 | Project | Contents |
 | --- | --- |
-| `src/Fake64.Mos` | The MOS chips as standalone components: `MOS6502` (CPU core), `MOS6510` (CPU with I/O port), `MOS6526` (CIA), `MOS6569` (PAL VIC-II), `MOS6581` (SID). Each chip implements its own **pinout** (`I6510Pinout`, `I6526Pinout`, `I6569Pinout`, `I6581Pinout`) and does not know which computer it is mounted in |
-| `src/Fake64.C64` | The **motherboard**: sockets, PLA, RAM, color RAM, ROMs, keyboard matrix, expansion port, control ports, video and audio outputs |
-| `src/Fake64.Prg` | Loading `.prg` files and writing into the KERNAL keyboard buffer |
-| `src/Fake64.Crt` | The `.crt` format and the cartridge types |
-| `src/Fake64.Asm` | 6502/6510 assembler, ACME-compatible: labels, macros, loops, includes, expressions, errors with their file and line |
-| `src/Fake64.Basic` | BASIC V2 tokenizer: a program in text becomes the `.prg` the C64 would have in memory |
-| `src/Fake64.WinForms` | `C64Monitor` (the screen, a UserControl), `PcKeyboard` (the keyboard cable), `PcSpeakers` (the speakers), joystick and paddle simulators |
-| `src/Fake64.Computer` | One C64 in a window (`ComputerForm`), loading of `.prg`/`.crt`, the ROMs, the settings |
-| `src/Fake64.Studio` | The desktop app: the studio (explorer, editors, C64 tabs) and the single C64 window |
-| `src/Fake64` | The `fake64` command line (Spectre.Console), a .NET global tool: `studio`, `run`, `asm`, `basic`, `build` |
-| `src/Fake64.Tests` | Tests (MSTest) |
+| `src/Thing64.Mos` | The MOS chips as standalone components: `MOS6502` (CPU core), `MOS6510` (CPU with I/O port), `MOS6526` (CIA), `MOS6569` (PAL VIC-II), `MOS6581` (SID). Each chip implements its own **pinout** (`I6510Pinout`, `I6526Pinout`, `I6569Pinout`, `I6581Pinout`) and does not know which computer it is mounted in |
+| `src/Thing64.C64` | The **motherboard**: sockets, PLA, RAM, color RAM, ROMs, keyboard matrix, expansion port, control ports, video and audio outputs |
+| `src/Thing64.Prg` | Loading `.prg` files and writing into the KERNAL keyboard buffer |
+| `src/Thing64.Crt` | The `.crt` format and the cartridge types |
+| `src/Thing64.Asm` | 6502/6510 assembler, ACME-compatible: labels, macros, loops, includes, expressions, errors with their file and line |
+| `src/Thing64.Basic` | BASIC V2 tokenizer: a program in text becomes the `.prg` the C64 would have in memory |
+| `src/Thing64.WinForms` | `C64Monitor` (the screen, a UserControl), `PcKeyboard` (the keyboard cable), `PcSpeakers` (the speakers), joystick and paddle simulators |
+| `src/Thing64.Computer` | One C64 in a window (`ComputerForm`), loading of `.prg`/`.crt`, the ROMs, the settings |
+| `src/Thing64.Studio` | The desktop app: the studio (explorer, editors, C64 tabs) and the single C64 window |
+| `src/Thing64` | The `thing64` command line (Spectre.Console), a .NET global tool: `studio`, `run`, `asm`, `basic`, `build` |
+| `src/Thing64.Tests` | Tests (MSTest) |
 | `samples` | Sample programs ready to load, with the commented BASIC and assembly sources in `samples/src` |
 | `tools` | Helper scripts (download of the CPU test suites) |
 
@@ -97,28 +99,28 @@ You need the [.NET 10 SDK](https://dotnet.microsoft.com/) and Windows for the ap
 assembler libraries are `net10.0`). The editor uses WebView2, which is part of Windows 11.
 
 ```powershell
-dotnet build src/Fake64.sln
-./tools/Install-Tool.ps1          # packs the command line and installs it as the global tool "fake64"
+dotnet build src/Thing64.sln
+./tools/Install-Tool.ps1          # packs the command line and installs it as the global tool "thing64"
 ```
 
 Then, from any folder:
 
 ```powershell
-fake64 studio                      # the studio
-fake64 studio main.asm             # the studio with a source open (or a .prg/.crt, or a folder)
-fake64 run game.prg                # one C64 window running a program (or a .crt, or a source built first)
-fake64 asm main.asm --labels main.labels   # assembles to main.prg; labels in VICE format
-fake64 basic hello.bas             # tokenizes to hello.prg
-fake64 build samples/samples.json  # builds every output of a build manifest
-fake64 --help
+thing64 studio                      # the studio
+thing64 studio main.asm             # the studio with a source open (or a .prg/.crt, or a folder)
+thing64 run game.prg                # one C64 window running a program (or a .crt, or a source built first)
+thing64 asm main.asm --labels main.labels   # assembles to main.prg; labels in VICE format
+thing64 basic hello.bas             # tokenizes to hello.prg
+thing64 build samples/samples.json  # builds every output of a build manifest
+thing64 --help
 ```
 
-Without installing the tool, the same commands work with `dotnet run --project src/Fake64 -- ...` (after a build
+Without installing the tool, the same commands work with `dotnet run --project src/Thing64 -- ...` (after a build
 of the solution, so that the desktop app is there).
 
 A .NET tool cannot use Windows Forms, so the command line is `net10.0` and starts the desktop app
-(`Fake64.Studio.exe`), which travels inside the tool package in its `desktop` folder. The ROMs are in
-`src/Fake64.Computer/roms` (`kernal`, `basic`, `chargen`) and are copied next to the desktop app. They are the
+(`Thing64.Studio.exe`), which travels inside the tool package in its `desktop` folder. The ROMs are in
+`src/Thing64.Computer/roms` (`kernal`, `basic`, `chargen`) and are copied next to the desktop app. They are the
 original C64 ROMs, protected by copyright: the tool package contains them, so keep it for yourself.
 
 ### The studio
@@ -136,7 +138,7 @@ The main window holds tabs (at the bottom) with assembly editors and C64s, and a
 - **Keys**: Ctrl+S saves, **F7** assembles and writes the `.prg` next to the source, **F5** assembles and runs it
   in the editor's own C64 tab: the machine restarts, the KERNAL boots at full speed, then the program starts with
   `RUN` (BASIC, or machine code with the `.basic` stub) or `SYS` to its first byte. **Shift+F5** assembles and runs it in a
-  separate C64 window (a new process, like `fake64 run`). Ctrl+W closes a tab;
+  separate C64 window (a new process, like `thing64 run`). Ctrl+W closes a tab;
   a middle click on a tab closes it too.
 - **Main file**: a project is usually a main file that includes the others with `!source`. F5, F7 and Shift+F5
   assemble the main file of the folder, set with **Set as main file** (right click in the explorer, or the Build
@@ -153,8 +155,8 @@ borders, SID sound, joystick and paddles, cartridges (autostart, Ultimax, banks)
 BASIC and 6502 assembly commented line by line: they are meant for learning, and they open in the studio.
 
 ```powershell
-fake64 run samples/rasterbars.prg
-fake64 build samples/samples.json   # rebuilds them from samples/src
+thing64 run samples/rasterbars.prg
+thing64 build samples/samples.json   # rebuilds them from samples/src
 ```
 
 ### Using a C64
@@ -198,8 +200,8 @@ its proportions (`KeepAspectRatio`), receives the keyboard only when it has the 
 for a copy of the last frame. To load files from code:
 
 ```csharp
-using Fake64.Crt;
-using Fake64.Prg;
+using Thing64.Crt;
+using Thing64.Prg;
 
 board.Enqueue(() => board.LoadPrg(File.ReadAllBytes("game.prg")));   // on the emulation thread
 board.Enqueue(() => board.TypeText("RUN\r"));
@@ -212,7 +214,7 @@ given time as fast as possible (the studio uses it for the KERNAL boot).
 ## Tests
 
 ```powershell
-dotnet test src/Fake64.Tests
+dotnet test src/Thing64.Tests
 ```
 
 About 270 tests of its own: CPU (also alone, on a fake bus that records every cycle), CIA, VIC-II and graphics

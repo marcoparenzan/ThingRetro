@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Downloads the external 6502 CPU test suites used by Fake64.Tests.
+    Downloads the external 6502 CPU test suites used by Thing64.Tests.
 
 .DESCRIPTION
     - Klaus Dormann, 6502 functional test (GPL-3.0): 64 KB image and listing.
@@ -9,7 +9,7 @@
       each with 10,000 cases and the bus accesses cycle by cycle (about 1 GB in all).
       https://github.com/SingleStepTests/65x02
 
-    The files go into src/Fake64.Tests/TestData/External, excluded from git: because of their licenses
+    The files go into src/Thing64.Tests/TestData/External, excluded from git: because of their licenses
     they are not part of the repository. Without the files the matching tests are "Inconclusive".
 
 .PARAMETER SkipSingleStep
@@ -25,7 +25,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$target = Join-Path $root 'src/Fake64.Tests/TestData/External'
+$target = Join-Path $root 'src/Thing64.Tests/TestData/External'
 
 $dormann = Join-Path $target 'KlausDormann'
 New-Item -ItemType Directory -Force $dormann | Out-Null
