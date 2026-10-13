@@ -1,5 +1,9 @@
 # Thing64
 
+<p align="center">
+  <img src="images/thing64-logo.png" alt="Thing64 logo" width="720">
+</p>
+
 *(formerly Fake64)*
 
 A Commodore 64 (PAL) emulator in C#, written to be read: the code mirrors the real motherboard, with the MOS
@@ -56,6 +60,7 @@ Not yet: the 1541 drive and disk/tape images (`.d64`, `.t64`). See [Known limits
 | `src/Thing64.Computer` | One C64 in a window (`ComputerForm`), loading of `.prg`/`.crt`, the ROMs, the settings |
 | `src/Thing64.Studio` | The desktop app: the studio (explorer, editors, C64 tabs) and the single C64 window |
 | `src/Thing64` | The `thing64` command line (Spectre.Console), a .NET global tool: `studio`, `run`, `asm`, `basic`, `build` |
+| `src/Thing64.WebComputer` | The C64 in the browser: the same board compiled to WebAssembly (Blazor, AOT), on a canvas |
 | `src/Thing64.Tests` | Tests (MSTest) |
 | `samples` | Sample programs ready to load, with the commented BASIC and assembly sources in `samples/src` |
 | `tools` | Helper scripts (download of the CPU test suites) |
@@ -99,7 +104,7 @@ You need the [.NET 10 SDK](https://dotnet.microsoft.com/) and Windows for the ap
 assembler libraries are `net10.0`). The editor uses WebView2, which is part of Windows 11.
 
 ```powershell
-dotnet build src/Thing64.sln
+dotnet build src/Thing64.slnx
 ./tools/Install-Tool.ps1          # packs the command line and installs it as the global tool "thing64"
 ```
 
@@ -146,6 +151,24 @@ The main window holds tabs (at the bottom) with assembly editors and C64s, and a
   includes. Errors are marked in the file they are in.
 - **C64 tabs**: while a C64 tab is active the PC keyboard is the C64 keyboard: F5, Ctrl+S and the other
   shortcuts go to the C64, not to the menu. Closing the tab stops the machine.
+
+### The C64 in the browser
+
+`src/Thing64.WebComputer` runs the same board and chips in the browser: Blazor WebAssembly hosts them, the page
+drives the board one frame at a time (`requestAnimationFrame`) and paints the frames on a canvas. Keys are
+positional as in the desktop app; programs and cartridges are loaded with a button or dropped on the screen.
+
+```powershell
+dotnet run --project src/Thing64.WebComputer              # development server on http://localhost:5164
+dotnet publish src/Thing64.WebComputer -c Release -o out  # static site in out/wwwroot
+```
+
+The Release build is compiled ahead of time to WebAssembly (it needs `dotnet workload install wasm-tools`). It makes
+all the difference: measured in Edge on the development PC, the emulation can run at about 2.9 times real time
+with AOT, at 0.18 times without (Debug builds are interpreted, so they run slowly).
+
+The C64 ROMs are copyrighted and are not part of the published site: the first time, the page asks for the three
+files (`kernal`, `basic`, `chargen`) and keeps them in the browser. Debug builds embed them, for development.
 
 ### Samples
 
@@ -258,3 +281,4 @@ SingleStepTests.
   mains.
 - **EasyFlash**: read-only (games that save to flash do not save).
 - **Studio editor**: Monaco is loaded from the jsDelivr CDN, so the first start needs an internet connection.
+- **Browser C64**: no sound, no joystick or paddles yet, no studio; Debug builds are too slow (interpreted).

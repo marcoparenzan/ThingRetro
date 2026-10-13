@@ -1,0 +1,132 @@
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+@* The page: the C64 monitor (a canvas), loading of programs and cartridges, reset, and the ROMs the first time *@
+
+<main>
+    <header>
+        <h1>Thing64</h1>
+        <span class="status">@status</span>
+    </header>
+
+    @if (needRoms)
+    {
+        <section class="roms">
+            <p>
+                The C64 ROMs are copyrighted, so they are not part of this site. Choose the three files from your disk
+                (<code>kernal</code>, <code>basic</code>, <code>chargen</code>, for example from VICE): the browser
+                keeps them for the next visits.
+            </p>
+            <InputFile OnChange="LoadRoms" multiple />
+            @if (romError is not null) { <p class="error">@romError</p> }
+        </section>
+    }
+
+    <canvas id="screen" width="@MonitorWidth" height="@MonitorHeight" tabindex="0"></canvas>
+
+    <nav>
+        <label class="button">
+            Load .prg / .crt
+            <InputFile OnChange="LoadProgram" accept=".prg,.crt" />
+        </label>
+        <button @onclick="Reset">Reset</button>
+        <span class="speed" id="speed"></span>
+    </nav>
+
+    <p class="hint">
+        Click the screen to type. Keys are positional as on a C64: Esc is RUN/STOP, Tab CTRL, left Alt the C= key,
+        F2/F4/F6/F8 are Shift + F1/F3/F5/F7. Programs and cartridges can also be dropped on the screen.
+    </p>
+</main>
+
+@code {
+    const int MonitorWidth = Thing64.Mos.MOS6569.SCREEN_WIDTH;
+    const int MonitorHeight = Thing64.Mos.MOS6569.SCREEN_HEIGHT;
+
+    string status = "Starting...";
+    bool needRoms;
+    string? romError;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await JSHost.ImportAsync("computer", new Uri(new Uri(Navigation.BaseUri), "js/computer.js").ToString());
+
+        var roms = WebComputer.EmbeddedRoms() ?? StoredRoms();
+        if (roms is null)
+        {
+            needRoms = true;
+            status = "Waiting for the ROMs";
+            StateHasChanged();
+            return;
+        }
+        await Start(roms);
+    }
+
+    static SystemRoms? StoredRoms()
+    {
+        var kernal = Script.StoredRom("kernal");
+        var basic = Script.StoredRom("basic");
+        var chargen = Script.StoredRom("chargen");
+        return kernal is null || basic is null || chargen is null ? null : new SystemRoms(kernal, basic, chargen);
+    }
+
+    async Task Start(SystemRoms roms)
+    {
+        WebComputer.Start(roms);
+        await Script.Start("screen");
+        status = "READY.";
+        StateHasChanged();
+    }
+
+    // The three ROM files, recognized by their names (kernal..., basic..., char...)
+    async Task LoadRoms(InputFileChangeEventArgs e)
+    {
+        var files = new Dictionary<string, byte[]>();
+        foreach (var file in e.GetMultipleFiles(3))
+        {
+            string name = file.Name.ToLowerInvariant();
+            string? kind = name.Contains("kernal") ? "kernal" : name.Contains("basic") ? "basic" : name.Contains("char") ? "chargen" : null;
+            if (kind is null) continue;
+            using var stream = file.OpenReadStream(16384);
+            using var copy = new MemoryStream();
+            await stream.CopyToAsync(copy);
+            files[kind] = copy.ToArray();
+        }
+        try
+        {
+            if (files.Count != 3) throw new ArgumentException("choose the three files kernal, basic and chargen");
+            var roms = new SystemRoms(files["kernal"], files["basic"], files["chargen"]);
+            foreach (var (kind, bytes) in files) Script.StoreRom(kind, bytes);
+            needRoms = false;
+            romError = null;
+            await Start(roms);
+        }
+        catch (ArgumentException error)
+        {
+            romError = error.Message;
+        }
+    }
+
+    async Task LoadProgram(InputFileChangeEventArgs e)
+    {
+        using var stream = e.File.OpenReadStream(1024 * 1024);
+        using var copy = new MemoryStream();
+        await stream.CopyToAsync(copy);
+        status = WebComputer.Load(e.File.Name, copy.ToArray());
+        Script.Focus("screen");
+    }
+
+    void Reset()
+    {
+        WebComputer.Reset();
+        status = "Reset";
+        Script.Focus("screen");
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        if (!needRoms) Script.Stop();
+        return ValueTask.CompletedTask;
+    }
+}

@@ -125,8 +125,9 @@ public partial class Board
         resyncClock = true;
     }
 
-    // Runs a fixed number of cycles synchronously (used by the tests, with startClock: false)
-    internal void RunCycles(long cycles)
+    // Runs a fixed number of cycles synchronously, without the real-time clock (startClock: false): used by the tests
+    // and by hosts that drive the board themselves, like the browser one frame at a time
+    public void RunCycles(long cycles)
     {
         for (long i = 0; i < cycles; i++) ExecuteCycle();
     }

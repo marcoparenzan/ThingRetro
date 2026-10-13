@@ -31,6 +31,9 @@ flowchart LR
     Cli --> Basic
     Cli --> Crt
     Cli -. starts .-> Studio
+    Web[Thing64.WebComputer<br/>C64 in the browser]
+    Web --> Prg
+    Web --> Crt
 ```
 
 - **`Thing64.Mos`** depends on nothing: a `MOS6526` could sit in a 1571 drive, a `MOS6502` in any computer.
@@ -245,6 +248,25 @@ the machine with `Board.Enqueue`, which runs the action between two cycles. `Boa
   ports, audio, last folder, window placement, main files).
 - **`Program`** (`Thing64.Studio`): `Thing64.Studio.exe [path]` opens the studio, `--computer [file]` a single C64
   window; Shift+F5 in the studio starts the same executable with `--computer`.
+
+## The C64 in the browser (`Thing64.WebComputer`)
+
+A Blazor WebAssembly app with the same `Board`, chips, `.prg` and `.crt` code as the desktop.
+
+- **No emulation thread**: the browser runs everything on one thread, so the board is created without its clock
+  (`startClock: false`) and `wwwroot/js/computer.js` calls `WebComputer.Frame(elapsed)` at every animation frame;
+  the board runs the matching cycles with `Board.RunCycles` (at most 100 ms worth, so that a background tab does
+  not freeze the page when it comes back).
+- **Screen**: an `IScreen` whose buffer is unmanaged memory; at the end of each VIC-II frame `present()` receives
+  it as a `MemoryView` (no copy across the boundary), copies it into the canvas `ImageData` and swaps the BGRA bytes
+  to RGBA.
+- **Keyboard**: `KeyboardEvent.code` (the physical key) mapped by `WebKeyboardLayout`, positional as in the desktop.
+- **Programs**: a `.prg` resets the machine and is loaded when the KERNAL boot is over (counted in cycles, since
+  a fast-forward would block the page); a `.crt` is inserted.
+- **ROMs**: embedded only in Debug builds; otherwise the user loads them once and the page keeps them in
+  `localStorage`.
+- **Speed**: Release builds are AOT-compiled to WebAssembly (`RunAOTCompilation`); the interpreter is about 15 times
+  slower, too slow for a cycle-exact C64.
 
 ## The command line (`Thing64`)
 
