@@ -1,30 +1,30 @@
 namespace Fake64.Mos;
 
-// Motore ciclo per ciclo: ogni Tick è un ciclo di φ2 con esattamente un accesso al bus, nello stesso
-// ordine del chip (letture fittizie comprese, doppia scrittura nelle lettura-modifica-scrittura).
-// Riferimento: "6502 Instruction Timing" (64doc, John West e Marko Mäkelä)
+// Cycle-stepped engine: every Tick is one φ2 cycle with exactly one bus access, in the same order as the
+// chip (dummy reads included, double write in read-modify-write instructions).
+// Reference: "6502 Instruction Timing" (64doc, John West and Marko Mäkelä)
 public partial class MOS6502
 {
-    int cycle;                   // ciclo all'interno dell'istruzione; 0 = prossimo prelievo di opcode
-    Instruction instruction;     // istruzione in corso
-    int accessCycle;             // ciclo in cui inizia l'accesso all'operando (0 = non ancora noto)
-    ushort address;              // indirizzo effettivo
-    ushort baseAddress;          // indirizzo prima dell'indice (abs,X / abs,Y / (zp),Y)
-    byte pointer;                // puntatore in pagina zero (indiretti)
-    byte data;                   // dato letto, in attesa di essere riscritto
+    int cycle;                   // cycle within the instruction; 0 = next opcode fetch
+    Instruction instruction;     // instruction being executed
+    int accessCycle;             // cycle where the operand access starts (0 = not known yet)
+    ushort address;              // effective address
+    ushort baseAddress;          // address before indexing (abs,X / abs,Y / (zp),Y)
+    byte pointer;                // zero-page pointer (indirect modes)
+    byte data;                   // data read, waiting to be written back
     bool pageCrossed;
-    bool interruptPending;       // deciso all'inizio dell'ultimo ciclo dell'istruzione precedente
-    bool inInterrupt;            // sequenza IRQ/NMI in corso al posto di un'istruzione
-    bool jammed;                 // opcode JAM: la CPU si blocca fino al reset
-    bool nmiPending;             // /NMI scatta sul fronte di discesa e resta in sospeso finché non viene servito
+    bool interruptPending;       // decided at the start of the last cycle of the previous instruction
+    bool inInterrupt;            // IRQ/NMI sequence running instead of an instruction
+    bool jammed;                 // JAM opcode: the CPU halts until reset
+    bool nmiPending;             // /NMI triggers on the falling edge and stays pending until served
     bool nmiWasLow;
 
     internal bool IsInstructionBoundary => cycle == 0;
     internal long InstructionCount { get; private set; }
     internal bool IsJammed => jammed;
 
-    // Un ciclo di clock. /NMI viene campionato sempre. Con AEC basso il bus è del VIC-II e la CPU è ferma;
-    // con RDY basso la CPU si ferma al primo ciclo di lettura, mentre le scritture proseguono
+    // One clock cycle. /NMI is always sampled. With AEC low the bus belongs to the VIC-II and the CPU is halted;
+    // with RDY low the CPU stops at the first read cycle, while writes go on
     public void Tick()
     {
         SampleNmi();
@@ -32,8 +32,8 @@ public partial class MOS6502
         if (!AecInput()) return;
         if (!RdyInput() && !IsWriteCycle()) return;
 
-        // Gli interrupt si controllano all'inizio dell'ultimo ciclo: per questo dopo CLI viene eseguita
-        // ancora un'istruzione, mentre un IRQ già attivo durante SEI viene servito
+        // Interrupts are polled at the start of the last cycle: that is why one more instruction runs after CLI,
+        // while an IRQ already active during SEI is served
         bool interruptRequested = nmiPending || (IrqInput() && (Status & FLAG_I) == 0);
 
         if (cycle == 0) Fetch();
@@ -53,7 +53,7 @@ public partial class MOS6502
     void Next() => cycle++;
     void Done() => cycle = 0;
 
-    // Ciclo 0: prelievo dell'opcode, oppure inizio della sequenza di interrupt (lettura fittizia del PC)
+    // Cycle 0: opcode fetch, or start of the interrupt sequence (dummy read at PC)
     void Fetch()
     {
         accessCycle = 0;
@@ -80,7 +80,7 @@ public partial class MOS6502
         switch (instruction.Kind)
         {
             case Kind.Implied:
-                ReadByte(PC); // lettura fittizia del byte successivo
+                ReadByte(PC); // dummy read of the next byte
                 ExecuteImplied(instruction.Op);
                 Done();
                 break;
@@ -97,7 +97,7 @@ public partial class MOS6502
         }
     }
 
-    // Cicli che calcolano l'indirizzo effettivo; quando è pronto fissano accessCycle
+    // Cycles that compute the effective address; when it is ready they set accessCycle
     void AddressCycle()
     {
         switch (instruction.Mode)
@@ -117,7 +117,7 @@ public partial class MOS6502
                 if (cycle == 1) { address = operandLow = ReadByte(PC++); Next(); }
                 else
                 {
-                    ReadByte(address); // lettura fittizia dall'indirizzo non indicizzato
+                    ReadByte(address); // dummy read from the unindexed address
                     address = (byte)(address + (instruction.Mode == Mode.ZpX ? X : Y));
                     StartAccess();
                 }
@@ -159,7 +159,7 @@ public partial class MOS6502
                 break;
 
             default:
-                throw new InvalidOperationException($"Modo {instruction.Mode} non valido per {instruction.Op}");
+                throw new InvalidOperationException($"Mode {instruction.Mode} is not valid for {instruction.Op}");
         }
     }
 
@@ -169,9 +169,9 @@ public partial class MOS6502
         Next();
     }
 
-    // Somma l'indice al byte basso. Le letture senza cambio di pagina accedono subito all'indirizzo giusto;
-    // altrimenti (e sempre per scritture e lettura-modifica-scrittura) c'è prima una lettura fittizia
-    // dall'indirizzo con il byte alto non ancora corretto
+    // Adds the index to the low byte. Reads that do not cross a page access the right address at once;
+    // otherwise (and always for writes and read-modify-write) there is first a dummy read from the address
+    // whose high byte has not been fixed yet
     void Index(byte index)
     {
         address = (ushort)(baseAddress + index);
@@ -186,7 +186,7 @@ public partial class MOS6502
         StartAccess();
     }
 
-    // Accesso all'operando: step 0 = primo ciclo dopo il calcolo dell'indirizzo
+    // Operand access: step 0 = first cycle after the address calculation
     void AccessCycle(int step)
     {
         switch (instruction.Kind)
@@ -199,7 +199,7 @@ public partial class MOS6502
             case Kind.Write:
                 {
                     byte value = WriteValue(instruction.Op);
-                    // SHA/SHX/SHY/TAS: con cambio di pagina il byte alto dell'indirizzo diventa il valore scritto
+                    // SHA/SHX/SHY/TAS: when a page is crossed the high byte of the address becomes the value written
                     if (pageCrossed && instruction.Op is Op.SHA or Op.SHX or Op.SHY or Op.TAS)
                         address = (ushort)((value << 8) | (address & 0x00FF));
                     WriteByte(address, value);
@@ -211,7 +211,7 @@ public partial class MOS6502
                 if (step == 0) { data = ReadByte(address); Next(); }
                 else if (step == 1)
                 {
-                    WriteByte(address, data); // il 6502 NMOS riscrive il valore originale prima di quello nuovo
+                    WriteByte(address, data); // the NMOS 6502 writes the original value back before the new one
                     data = ExecuteReadModifyWrite(instruction.Op, data);
                     Next();
                 }
@@ -220,7 +220,7 @@ public partial class MOS6502
         }
     }
 
-    // Salti condizionati: 2 cicli se non presi, 3 se presi, 4 se la destinazione è in un'altra pagina
+    // Branches: 2 cycles if not taken, 3 if taken, 4 if the target is in another page
     void BranchCycle()
     {
         if (cycle == 1)
@@ -238,13 +238,13 @@ public partial class MOS6502
         }
         else
         {
-            ReadByte(PC); // lettura fittizia dalla pagina sbagliata
+            ReadByte(PC); // dummy read from the wrong page
             PC = address;
             Done();
         }
     }
 
-    // Accesso allo stack: il puntatore SP indica la prossima posizione libera in pagina 1
+    // Stack access: SP points to the next free location in page 1
     void Push(byte value) => WriteByte((ushort)(0x0100 + SP--), value);
     byte Pop() => ReadByte((ushort)(0x0100 + ++SP));
     void ReadStack() => ReadByte((ushort)(0x0100 + SP));
@@ -258,7 +258,7 @@ public partial class MOS6502
                 else { operandHigh = ReadByte(PC); PC = (ushort)(operandHigh << 8 | operandLow); Done(); }
                 break;
 
-            case Op.JMP: // JMP ($xxxx): il byte alto del puntatore non viene incrementato ($xxFF -> $xx00)
+            case Op.JMP: // JMP ($xxxx): the high byte of the pointer is not incremented ($xxFF -> $xx00)
                 if (cycle == 1) { operandLow = ReadByte(PC++); Next(); }
                 else if (cycle == 2) { operandHigh = ReadByte(PC++); Next(); }
                 else if (cycle == 3) { data = ReadByte((ushort)(operandHigh << 8 | operandLow)); Next(); }
@@ -270,7 +270,7 @@ public partial class MOS6502
                 }
                 break;
 
-            case Op.JSR: // salva l'indirizzo dell'ultimo byte di JSR (indirizzo di ritorno - 1)
+            case Op.JSR: // pushes the address of the last byte of JSR (return address - 1)
                 if (cycle == 1) { operandLow = ReadByte(PC++); Next(); }
                 else if (cycle == 2) { ReadStack(); Next(); }
                 else if (cycle == 3) { Push((byte)(PC >> 8)); Next(); }
@@ -278,7 +278,7 @@ public partial class MOS6502
                 else { operandHigh = ReadByte(PC); PC = (ushort)(operandHigh << 8 | operandLow); Done(); }
                 break;
 
-            case Op.RTS: // riprende dall'indirizzo salvato + 1
+            case Op.RTS: // resumes from the pushed address + 1
                 if (cycle == 1) { ReadByte(PC); Next(); }
                 else if (cycle == 2) { ReadStack(); Next(); }
                 else if (cycle == 3) { PC = Pop(); Next(); }
@@ -317,7 +317,7 @@ public partial class MOS6502
                 }
                 break;
 
-            case Op.BRK: // come un interrupt, con il byte di padding saltato e B a 1 nello stato salvato
+            case Op.BRK: // like an interrupt, with the padding byte skipped and B set in the pushed status
                 if (cycle == 1) { ReadByte(PC++); Next(); }
                 else InterruptSequence(brk: true);
                 break;
@@ -334,8 +334,8 @@ public partial class MOS6502
         else InterruptSequence(brk: false);
     }
 
-    // Cicli 2-6 comuni a BRK, IRQ e NMI: salva PC e stato, poi legge il vettore.
-    // Il vettore si sceglie al ciclo 4: un NMI arrivato prima "dirotta" anche un BRK o un IRQ
+    // Cycles 2-6 shared by BRK, IRQ and NMI: push PC and status, then read the vector.
+    // The vector is chosen at cycle 4: an NMI arriving before then "hijacks" a BRK or an IRQ too
     bool vectorIsNmi;
 
     void InterruptSequence(bool brk)
@@ -363,7 +363,7 @@ public partial class MOS6502
         }
     }
 
-    // Tipo del prossimo ciclo, senza eseguirlo: con RDY basso solo le letture fermano la CPU
+    // Kind of the next cycle, without running it: with RDY low only reads stop the CPU
     bool IsWriteCycle()
     {
         if (cycle == 0) return false;

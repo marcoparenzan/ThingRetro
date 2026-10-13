@@ -1,37 +1,37 @@
 namespace Fake64.Mos;
 
-// MOS 6581 SID: tre voci (oscillatore, forme d'onda, inviluppo), un filtro multimodo e il volume generale.
-// Tutto avanza di un passo a ogni ciclo di φ2 (985248 Hz sul C64 PAL). AUDIO OUT è il livello istantaneo
-// dell'uscita: la scheda lo campiona a ogni ciclo e lo manda alla presa audio (vedi Board.AudioOut).
-// Il modello è digitale come quello di reSID per oscillatori e inviluppi; filtro e mixer, che sul chip sono
-// analogici, sono approssimati (curva del filtro dal datasheet, combinazioni di forme d'onda come AND)
+// MOS 6581 SID: three voices (oscillator, waveforms, envelope), a multimode filter and the master volume.
+// Everything advances one step at every φ2 cycle (985248 Hz on the PAL C64). AUDIO OUT is the instantaneous
+// level of the output: the board samples it at every cycle and sends it to the audio socket (see Board.AudioOut).
+// Oscillators and envelopes follow the digital model of reSID; filter and mixer, which are analog on the chip,
+// are approximated (filter curve from the datasheet, combined waveforms as AND)
 public partial class MOS6581 : I6581Pinout
 {
     const int CLOCK_HZ = 985248;
 
-    // Registri del filtro e del volume
-    const int FC_LO = 0x15;         // bit 0-2 della frequenza di taglio (11 bit)
+    // Filter and volume registers
+    const int FC_LO = 0x15;         // bits 0-2 of the cutoff frequency (11 bits)
     const int FC_HI = 0x16;         // bit 3-10
-    const int RES_FILT = 0x17;      // bit 4-7 risonanza, bit 0-2 voci nel filtro, bit 3 ingresso esterno
-    const int MODE_VOL = 0x18;      // bit 4 passa basso, 5 passa banda, 6 passa alto, 7 voce 3 spenta; bit 0-3 volume
+    const int RES_FILT = 0x17;      // bits 4-7 resonance, bits 0-2 voices into the filter, bit 3 external input
+    const int MODE_VOL = 0x18;      // bit 4 low-pass, 5 band-pass, 6 high-pass, 7 voice 3 off; bits 0-3 volume
 
     readonly Voice[] voices = [new(), new(), new()];
 
     int cutoff;                     // 0-2047
     int resonance;                  // 0-15
-    int filterRouting;              // bit 0-2: voci che passano dal filtro
+    int filterRouting;              // bits 0-2: voices going through the filter
     byte modeVolume;
-    byte busValue;                  // ultimo valore scritto: i registri di sola scrittura rileggono il bus
+    byte busValue;                  // last value written: write-only registers read back the bus
 
-    // Filtro a variabili di stato (passa alto, banda, basso) aggiornato a ogni ciclo
+    // State-variable filter (high-, band-, low-pass) updated at every cycle
     double w0, inverseQ;
     double highPass, bandPass, lowPass;
 
-    // Il mixer del 6581 ha una componente continua: il volume la scala insieme alle voci, quindi anche senza
-    // voci attive scrivere $D418 sposta l'uscita. È così che i giochi suonano campioni ("digi") a 4 bit
+    // The 6581 mixer has a DC component: the volume scales it together with the voices, so writing $D418 moves
+    // the output even with no voice playing. That is how games play 4-bit samples ("digis")
     const double MIXER_DC = 0.5;
 
-    // Scala delle voci: una forma d'onda a piena ampiezza e inviluppo 255 vale circa 1
+    // Voice scale: a full-amplitude waveform with envelope 255 is about 1
     const double VOICE_SCALE = 1.0 / (0x800 * 255);
 
     public MOS6581()
@@ -55,18 +55,18 @@ public partial class MOS6581 : I6581Pinout
         potX = potY = 0xFF;
     }
 
-    // AUDIO OUT (pin 27): livello dell'uscita all'ultimo ciclo, circa fra -1 e 1 per ogni voce a pieno volume
+    // AUDIO OUT (pin 27): output level at the last cycle, about -1 to 1 for each voice at full volume
     public double AudioOutput { get; private set; }
 
-    // POT X / POT Y: il SID scarica e ricarica un condensatore attraverso la resistenza esterna e conta
-    // i cicli; il risultato (0-255) è disponibile in $19 / $1A e si aggiorna ogni 512 cicli
+    // POT X / POT Y: the SID discharges and recharges a capacitor through the external resistance and counts
+    // the cycles; the result (0-255) is available in $19 / $1A and is updated every 512 cycles
     public Func<byte> PotXInput { get; set; } = () => 0xFF;
     public Func<byte> PotYInput { get; set; } = () => 0xFF;
     const int POT_MEASUREMENT_CYCLES = 512;
     byte potX = 0xFF, potY = 0xFF;
     int potCycle;
 
-    // φ2: un ciclo di oscillatori, inviluppi, filtro e mixer
+    // φ2: one cycle of oscillators, envelopes, filter and mixer
     public void Tick()
     {
         foreach (var voice in voices) voice.ClockOscillator();
@@ -78,7 +78,7 @@ public partial class MOS6581 : I6581Pinout
         {
             double output = voices[v].Output() * VOICE_SCALE;
             if ((filterRouting & (1 << v)) != 0) filterInput += output;
-            else if (v != 2 || (modeVolume & 0x80) == 0) direct += output; // "3 OFF" spegne la voce 3 se non è filtrata
+            else if (v != 2 || (modeVolume & 0x80) == 0) direct += output; // "3 OFF" silences voice 3 when it is not filtered
         }
 
         AudioOutput = (direct + Filter(filterInput) + MIXER_DC) * (modeVolume & 0x0F) / 15.0;
@@ -91,7 +91,7 @@ public partial class MOS6581 : I6581Pinout
         }
     }
 
-    // Un passo del filtro a variabili di stato (come in reSID). Le uscite sono invertite, come sul chip
+    // One step of the state-variable filter (as in reSID). The outputs are inverted, as on the chip
     double Filter(double input)
     {
         bandPass -= w0 * highPass;
@@ -105,8 +105,8 @@ public partial class MOS6581 : I6581Pinout
         return output;
     }
 
-    // Frequenza di taglio dal datasheet: circa 30 Hz + 5,8 Hz per passo (30 Hz - 12 kHz). Sul 6581 la curva reale
-    // varia molto da un esemplare all'altro e non è lineare
+    // Cutoff frequency from the datasheet: about 30 Hz + 5.8 Hz per step (30 Hz - 12 kHz). On the 6581 the real
+    // curve varies a lot from chip to chip and is not linear
     void UpdateFilter()
     {
         double hertz = 30 + 5.8 * cutoff;
@@ -114,13 +114,13 @@ public partial class MOS6581 : I6581Pinout
         inverseQ = 1 / (0.707 + resonance / 15.0);
     }
 
-    // A0-A4: i 32 registri si ripetono in tutta l'area selezionata da /CS. Solo $19-$1C si leggono
+    // A0-A4: the 32 registers repeat across the whole area selected by /CS. Only $19-$1C can be read
     public byte Read(int register) => (register & 0x1F) switch
     {
         0x19 => potX,
         0x1A => potY,
-        0x1B => (byte)(voices[2].Waveform() >> 4),   // OSC3: gli 8 bit alti della forma d'onda della voce 3
-        0x1C => (byte)voices[2].Envelope,             // ENV3: l'inviluppo della voce 3
+        0x1B => (byte)(voices[2].Waveform() >> 4),   // OSC3: the high 8 bits of voice 3's waveform
+        0x1C => (byte)voices[2].Envelope,             // ENV3: voice 3's envelope
         _ => busValue,
     };
 

@@ -1,9 +1,9 @@
 namespace Fake64.Mos;
 
-// Cosa fa ciascuna operazione sul dato, una volta che il motore dei cicli ha eseguito gli accessi al bus
+// What each operation does to the data, once the cycle engine has done the bus accesses
 public partial class MOS6502
 {
-    // Istruzioni senza operando in memoria (anche quelle sull'accumulatore: ASL A, ROR A...)
+    // Instructions without a memory operand (also those on the accumulator: ASL A, ROR A...)
     void ExecuteImplied(Op op)
     {
         switch (op)
@@ -30,11 +30,11 @@ public partial class MOS6502
             case Op.ROL: A = ROL(A); break;
             case Op.ROR: A = ROR(A); break;
             case Op.NOP: break;
-            default: throw new InvalidOperationException($"{op} non è un'istruzione implicita");
+            default: throw new InvalidOperationException($"{op} is not an implied instruction");
         }
     }
 
-    // Istruzioni che leggono un valore (immediato o dalla memoria)
+    // Instructions that read a value (immediate or from memory)
     void ExecuteRead(Op op, byte value)
     {
         switch (op)
@@ -66,7 +66,7 @@ public partial class MOS6502
                 if ((Status & FLAG_D) != 0) ArrDecimal(value);
                 else
                 {
-                    // AND e poi ROR, con C = bit 6 e V = bit 6 xor bit 5 del risultato
+                    // AND then ROR, with C = bit 6 and V = bit 6 xor bit 5 of the result
                     A = (byte)(((A & value) >> 1) | ((Status & FLAG_C) != 0 ? 0x80 : 0));
                     SetZN(A);
                     Status = (byte)((Status & ~(FLAG_C | FLAG_V)) |
@@ -82,14 +82,14 @@ public partial class MOS6502
                     SetZN(X);
                     break;
                 }
-            case Op.XAA: A = (byte)((A | 0xEE) & X & value); SetZN(A); break; // instabile: costante $EE
-            case Op.LXA: A = X = (byte)((A | 0xEE) & value); SetZN(A); break;  // instabile: costante $EE
-            default: throw new InvalidOperationException($"{op} non è un'istruzione di lettura");
+            case Op.XAA: A = (byte)((A | 0xEE) & X & value); SetZN(A); break; // unstable: constant $EE
+            case Op.LXA: A = X = (byte)((A | 0xEE) & value); SetZN(A); break;  // unstable: constant $EE
+            default: throw new InvalidOperationException($"{op} is not a read instruction");
         }
     }
 
-    // ARR in modo decimale (6502 NMOS, come VICE): N è il carry precedente, Z e V vengono dal risultato
-    // della rotazione, poi ciascuna cifra viene corretta in BCD; C indica la correzione della cifra alta
+    // ARR in decimal mode (NMOS 6502, as in VICE): N is the previous carry, Z and V come from the result
+    // of the rotation, then each digit is BCD-corrected; C tells whether the high digit was corrected
     void ArrDecimal(byte value)
     {
         int and = A & value;
@@ -113,8 +113,8 @@ public partial class MOS6502
         A = (byte)result;
     }
 
-    // Valore che un'istruzione di scrittura mette sul bus. Per SHA/SHX/SHY/TAS è AND con il byte alto
-    // dell'indirizzo base + 1 (comportamento instabile del chip, riprodotto nella forma più comune)
+    // Value a write instruction puts on the bus. For SHA/SHX/SHY/TAS it is ANDed with the high byte of the
+    // base address + 1 (unstable behaviour of the chip, reproduced in its most common form)
     byte WriteValue(Op op)
     {
         byte high = (byte)((baseAddress >> 8) + 1);
@@ -128,11 +128,11 @@ public partial class MOS6502
             Op.SHX => (byte)(X & high),
             Op.SHY => (byte)(Y & high),
             Op.TAS => (byte)((SP = (byte)(A & X)) & high),
-            _ => throw new InvalidOperationException($"{op} non è un'istruzione di scrittura"),
+            _ => throw new InvalidOperationException($"{op} is not a write instruction"),
         };
     }
 
-    // Istruzioni che leggono, modificano e riscrivono la memoria; restituisce il valore da scrivere
+    // Instructions that read, modify and write back memory; returns the value to write
     byte ExecuteReadModifyWrite(Op op, byte value)
     {
         switch (op)
@@ -149,7 +149,7 @@ public partial class MOS6502
             case Op.RRA: value = ROR(value); ADC(value); return value;
             case Op.DCP: value--; Compare(A, value); return value;
             case Op.ISC: value++; SBC(value); return value;
-            default: throw new InvalidOperationException($"{op} non è un'istruzione di lettura-modifica-scrittura");
+            default: throw new InvalidOperationException($"{op} is not a read-modify-write instruction");
         }
     }
 
@@ -163,6 +163,6 @@ public partial class MOS6502
         Op.BCS => (Status & FLAG_C) != 0,
         Op.BNE => (Status & FLAG_Z) == 0,
         Op.BEQ => (Status & FLAG_Z) != 0,
-        _ => throw new InvalidOperationException($"{op} non è un salto condizionato"),
+        _ => throw new InvalidOperationException($"{op} is not a branch"),
     };
 }

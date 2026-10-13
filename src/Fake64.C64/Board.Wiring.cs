@@ -2,7 +2,7 @@ using Fake64.Mos;
 
 namespace Fake64.C64;
 
-// Il cablaggio della scheda: cosa è collegato a quale pin di ciascuno zoccolo
+// The board's wiring: what is connected to which pin of each socket
 public partial class Board
 {
     public Socket<I6510Pinout> CpuSocket { get; private set; } = null!;   // MOS 6510, DIP-40
@@ -11,14 +11,14 @@ public partial class Board
     public Socket<I6526Pinout> Cia1Socket { get; private set; } = null!;  // MOS 6526 CIA 1 ($DC00), DIP-40
     public Socket<I6526Pinout> Cia2Socket { get; private set; } = null!;  // MOS 6526 CIA 2 ($DD00), DIP-40
 
-    // Chip attualmente negli zoccoli (null = zoccolo vuoto), letti a ogni ciclo
+    // Chips currently in the sockets (null = empty socket), read at every cycle
     I6510Pinout? cpu;
     I6569Pinout? vic;
     I6581Pinout? sid;
     I6526Pinout? cia1;
     I6526Pinout? cia2;
 
-    // /IRQ della CPU: VIC-II e CIA 1. /NMI: CIA 2 (il tasto RESTORE non è ancora modellato)
+    // CPU /IRQ: VIC-II and CIA 1. /NMI: CIA 2 (the RESTORE key is not modelled yet)
     OpenCollectorLine irqLine = null!;
     OpenCollectorLine nmiLine = null!;
 
@@ -40,8 +40,8 @@ public partial class Board
         Cia2Socket = new Socket<I6526Pinout>("CIA 2", ConnectCia2, DisconnectCia2);
     }
 
-    // CPU: bus indirizzi/dati attraverso il PLA, /IRQ, /NMI, RDY da BA e AEC da AEC del VIC-II,
-    // P0-P2 (LORAM, HIRAM, CHAREN) al PLA; P3-P5 al registratore (non collegato: pull-up)
+    // CPU: address/data bus through the PLA, /IRQ, /NMI, RDY from BA and AEC from AEC of the VIC-II,
+    // P0-P2 (LORAM, HIRAM, CHAREN) to the PLA; P3-P5 to the datasette (not connected: pull-ups)
     void ConnectCpu(I6510Pinout chip)
     {
         chip.Bus = cpuBus;
@@ -63,7 +63,7 @@ public partial class Board
         MemoryMap();
     }
 
-    // VIC-II: bus video (con il banco da CIA 2 e la ROM caratteri), /IRQ, BA, uscita video
+    // VIC-II: video bus (with the bank from CIA 2 and the character ROM), /IRQ, BA, video output
     void ConnectVic(I6569Pinout chip)
     {
         chip.Memory = vicBus;
@@ -78,10 +78,10 @@ public partial class Board
         vic = null;
     }
 
-    // CIA 1: porta A alle righe della tastiera e ai contatti della porta di controllo 2, porta B alle
-    // colonne della tastiera e ai contatti della porta di controllo 1. I contatti chiusi tirano a massa
-    // le linee anche quando sono uscite: per questo un joystick nella porta 1 "preme" tasti fantasma
-    // durante la scansione della tastiera, e quasi tutti i giochi usano la porta 2
+    // CIA 1: port A to the keyboard rows and to the contacts of control port 2, port B to the keyboard
+    // columns and to the contacts of control port 1. Closed contacts pull the lines to ground even when they
+    // are outputs: that is why a joystick in port 1 "presses" phantom keys during the keyboard scan, and
+    // almost every game uses port 2
     void ConnectCia1(I6526Pinout chip)
     {
         chip.PortA.External = () => ControlPort2.DigitalLines;
@@ -96,8 +96,8 @@ public partial class Board
         cia1 = null;
     }
 
-    // SID: POT X e POT Y arrivano dalle porte di controllo attraverso un commutatore analogico (4066)
-    // comandato da PA6 (porta 1) e PA7 (porta 2) della CIA 1. Senza porta selezionata le linee sono libere
+    // SID: POT X and POT Y come from the control ports through an analog switch (4066) driven by
+    // PA6 (port 1) and PA7 (port 2) of CIA 1. With no port selected the lines are floating
     void ConnectSid(I6581Pinout chip)
     {
         chip.PotXInput = () => SelectedPotPort()?.PotX ?? 0xFF;
@@ -120,17 +120,17 @@ public partial class Board
         return null;
     }
 
-    // CIA 2: PA0-PA1 = banco del VIC-II (invertiti), PA2 = user port, PA3-PA5 = ATN/CLK/DATA in uscita
-    // sul bus seriale, PA6-PA7 = CLK/DATA in ingresso. Senza drive collegati le linee seriali sono
-    // pilotate solo dal C64: le uscite passano per un invertitore, quindi un'uscita a 1 tiene la linea bassa
+    // CIA 2: PA0-PA1 = VIC-II bank (inverted), PA2 = user port, PA3-PA5 = ATN/CLK/DATA out on the serial bus,
+    // PA6-PA7 = CLK/DATA in. With no drive connected the serial lines are driven by the C64 only: the outputs
+    // go through an inverter, so an output at 1 holds the line low
     void ConnectCia2(I6526Pinout chip)
     {
         chip.PortA.External = () =>
         {
             byte output = chip.PortA.Output;
             byte pins = 0x3F;                              // PA0-PA5: pull-up
-            if ((output & 0x10) == 0) pins |= 0x40;        // CLK IN: alta se CLK OUT non la tira giù
-            if ((output & 0x20) == 0) pins |= 0x80;        // DATA IN: alta se DATA OUT non la tira giù
+            if ((output & 0x10) == 0) pins |= 0x40;        // CLK IN: high if CLK OUT does not pull it down
+            if ((output & 0x20) == 0) pins |= 0x80;        // DATA IN: high if DATA OUT does not pull it down
             return pins;
         };
         chip.PortB.External = () => 0xFF;

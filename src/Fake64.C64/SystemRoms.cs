@@ -1,7 +1,7 @@
 namespace Fake64.C64;
 
-// Contenuto delle tre ROM della scheda madre. La scheda non sa da dove arrivano (file, risorse, rete):
-// chi crea la Board le legge e le passa al costruttore
+// Contents of the three motherboard ROMs. The board does not know where they come from (files, resources,
+// network): whoever creates the Board reads them and passes them to the constructor
 public sealed record SystemRoms
 {
     public const int KERNAL_SIZE = 0x2000;
@@ -17,13 +17,13 @@ public sealed record SystemRoms
 
     public byte[] Kernal { get; }   // $E000-$FFFF
     public byte[] Basic { get; }    // $A000-$BFFF
-    public byte[] Chargen { get; }  // $D000-$DFFF (CPU) e $1000/$9000 (VIC-II)
+    public byte[] Chargen { get; }  // $D000-$DFFF (CPU) and $1000/$9000 (VIC-II)
 
     static byte[] Check(byte[] rom, int size, string name)
     {
         ArgumentNullException.ThrowIfNull(rom, name);
         if (rom.Length != size)
-            throw new ArgumentException($"La ROM {name} deve essere di {size} byte, non {rom.Length}", name);
+            throw new ArgumentException($"The {name} ROM must be {size} bytes, not {rom.Length}", name);
         return rom;
     }
 }

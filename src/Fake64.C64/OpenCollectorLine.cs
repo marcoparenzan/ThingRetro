@@ -1,12 +1,12 @@
 namespace Fake64.C64;
 
-// Pista a collettore aperto (/IRQ, /NMI): una resistenza la tiene alta e ogni uscita collegata
-// può solo tirarla giù. È bassa (attiva) se almeno un dispositivo la sta tirando giù
+// Open-collector trace (/IRQ, /NMI): a resistor keeps it high and every connected output
+// can only pull it down. It is low (active) if at least one device is pulling it down
 public sealed class OpenCollectorLine
 {
     readonly Func<bool>[] drivers;
 
-    // drivers: le uscite collegate alla pista; ognuna restituisce true quando tira giù la linea
+    // drivers: the outputs connected to the trace; each one returns true when it pulls the line down
     public OpenCollectorLine(string name, params Func<bool>[] drivers)
     {
         Name = name;

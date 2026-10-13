@@ -1,86 +1,89 @@
-# Esempi
+# Samples
 
-Programmi da trascinare sulla finestra di Fake64 (o da passare da riga di comando), ciascuno dedicato a un
-argomento del Commodore 64. I sorgenti sono in [src](src): BASIC (`.bas`) e assembly 6502 commentato (`.asm`),
-pensati per essere letti. I programmi BASIC e quelli con lo stub `10 SYS2061` partono da soli con `RUN`.
+Programs to open in Fake64 (from the studio's explorer, by dragging them onto a C64 or from the command line),
+each devoted to a Commodore 64 topic. The sources are in [src](src): BASIC (`.bas`) and commented 6502 assembly
+(`.asm`), meant to be read; the `.asm` ones open in the studio's editor, where F5 assembles and runs them.
+BASIC programs and those with the `10 SYS2061` stub start by themselves with `RUN`.
 
 ## BASIC
 
-| File | Sorgente | Cosa mostra |
+| File | Source | What it shows |
 | --- | --- | --- |
-| `hello.prg` | [hello.bas](src/hello.bas) | Testo a colori: `POKE 646` è il colore del cursore |
-| `math.prg` | [math.bas](src/math.bas) | Espressioni e funzioni in virgola mobile |
-| `sprite.prg` | [sprite.bas](src/sprite.bas) | Uno sprite espanso che rimbalza |
-| `keys.prg` | [keys.bas](src/keys.bas) | Tasti funzione e tasti cursore con `GET` (F1-F8 = codici 133-140). `Q` per uscire |
-| `joystick.prg` | [joystick.bas](src/joystick.bas) | Joystick nella porta 2 (`PEEK(56320)`): lo smile si muove, con il fuoco cambia colore |
-| `paddle.prg` | [paddle.bas](src/paddle.bas) | Paddle nella porta 1 (nell'app: "Paddle: mouse"): lo smile segue la manopola (`PEEK(54297)`) |
-| `sound.prg` | [sound.bas](src/sound.bas) | Una scala con la voce 1 del SID: frequenza, inviluppo, GATE |
+| `hello.prg` | [hello.bas](src/hello.bas) | Colored text: `POKE 646` is the cursor color |
+| `math.prg` | [math.bas](src/math.bas) | Floating point expressions and functions |
+| `sprite.prg` | [sprite.bas](src/sprite.bas) | A bouncing expanded sprite |
+| `keys.prg` | [keys.bas](src/keys.bas) | Function keys and cursor keys with `GET` (F1-F8 = codes 133-140). `Q` to quit |
+| `joystick.prg` | [joystick.bas](src/joystick.bas) | Joystick in port 2 (`PEEK(56320)`): the smiley moves, fire changes its color |
+| `paddle.prg` | [paddle.bas](src/paddle.bas) | Paddles in port 1 (in the app: "Paddles: mouse"): the smiley follows the knob (`PEEK(54297)`) |
+| `sound.prg` | [sound.bas](src/sound.bas) | A scale with voice 1 of the SID: frequency, envelope, GATE |
 
-## Linguaggio macchina: CPU e interrupt
+## Machine language: CPU and interrupts
 
-| File | Sorgente | Cosa mostra |
+| File | Source | What it shows |
 | --- | --- | --- |
-| `sys.prg` | [sys.asm](src/sys.asm) | Una routine a `$C000`: si avvia con `SYS 49152` (non con `RUN`) |
-| `rasterbars.prg` | [rasterbars.asm](src/rasterbars.asm) | Raster interrupt del VIC-II: una barra rossa ferma nel bordo, mentre il BASIC funziona |
-| `irq.prg` | [irq.asm](src/irq.asm) | Agganciarsi all'IRQ del timer della CIA 1 (vettore `$0314`) senza fermare il KERNAL |
-| `nmi.prg` | [nmi.asm](src/nmi.asm) | NMI dal timer della CIA 2 (vettore `$0318`): fronte di discesa e conferma dell'interrupt |
-| `decimal.prg` | [decimal.asm](src/decimal.asm) | Modo decimale (BCD): un contatore a 4 cifre senza divisioni. Non torna al BASIC |
+| `sys.prg` | [sys.asm](src/sys.asm) | A routine at `$C000`: started with `SYS 49152` (not with `RUN`) |
+| `rasterbars.prg` | [rasterbars.asm](src/rasterbars.asm) | VIC-II raster interrupt: a still red bar in the border, while BASIC works |
+| `irq.prg` | [irq.asm](src/irq.asm) | Hooking into the CIA 1 timer IRQ (vector `$0314`) without stopping the KERNAL |
+| `nmi.prg` | [nmi.asm](src/nmi.asm) | NMI from the CIA 2 timer (vector `$0318`): falling edge and interrupt acknowledge |
+| `decimal.prg` | [decimal.asm](src/decimal.asm) | Decimal mode (BCD): a 4-digit counter without divisions. Does not return to BASIC |
 
-## Linguaggio macchina: SID
+## Machine language: SID
 
-| File | Sorgente | Cosa mostra |
+| File | Source | What it shows |
 | --- | --- | --- |
-| `music.prg` | [music.asm](src/music.asm) | Musica a tre voci suonata dall'IRQ: melodia con PWM, basso nel filtro passa basso con risonanza, rumore. Torna al BASIC e continua a suonare |
+| `music.prg` | [music.asm](src/music.asm) | Three-voice music played by the IRQ: melody with PWM, bass through the resonant low-pass filter, noise. Returns to BASIC and keeps playing |
 
-## Linguaggio macchina: VIC-II
+## Machine language: VIC-II
 
-| File | Sorgente | Cosa mostra |
+| File | Source | What it shows |
 | --- | --- | --- |
-| `multicolor.prg` | [multicolor.asm](src/multicolor.asm) | Testo multicolor con un set di caratteri definito in RAM |
-| `ecm.prg` | [ecm.asm](src/ecm.asm) | Extended color mode: 4 colori di sfondo scelti dai bit 6-7 del codice di schermo |
-| `bitmap.prg` | [bitmap.asm](src/bitmap.asm) | Bitmap 320 x 200: la memoria organizzata in celle di 8 x 8 |
-| `mcbitmap.prg` | [mcbitmap.asm](src/mcbitmap.asm) | Bitmap multicolor 160 x 200: le 4 sorgenti di colore di ogni cella |
-| `sprites.prg` | [sprites.asm](src/sprites.asm) | Otto sprite: espansione, multicolor, priorità sulla grafica, collisioni (`$D01E`) |
-| `scroll.prg` | [scroll.asm](src/scroll.asm) | Scroll fine di una riga con XSCROLL, cambiato con il raster. Non torna al BASIC |
-| `vicbank.prg` | [vicbank.asm](src/vicbank.asm) | Banco del VIC-II dalla CIA 2, caratteri copiati dalla ROM in RAM e modificati |
+| `multicolor.prg` | [multicolor.asm](src/multicolor.asm) | Multicolor text with a character set defined in RAM |
+| `ecm.prg` | [ecm.asm](src/ecm.asm) | Extended color mode: 4 background colors selected by bits 6-7 of the screen code |
+| `bitmap.prg` | [bitmap.asm](src/bitmap.asm) | 320 x 200 bitmap: memory organized in 8 x 8 cells |
+| `mcbitmap.prg` | [mcbitmap.asm](src/mcbitmap.asm) | 160 x 200 multicolor bitmap: the 4 color sources of each cell |
+| `sprites.prg` | [sprites.asm](src/sprites.asm) | Eight sprites: expansion, multicolor, priority over the graphics, collisions (`$D01E`) |
+| `scroll.prg` | [scroll.asm](src/scroll.asm) | Fine scrolling of one line with XSCROLL, changed with the raster. Does not return to BASIC |
+| `vicbank.prg` | [vicbank.asm](src/vicbank.asm) | VIC-II bank from CIA 2, characters copied from ROM into RAM and modified |
+| `borders.prg` | [borders.asm](src/borders.asm) | Top and bottom borders opened by changing the number of rows at line 248, with four sprites in the bottom border |
 
-I programmi che "non tornano al BASIC" restano in un ciclo: per uscire serve un reset (clic destro sul monitor).
+The programs that "do not return to BASIC" stay in a loop: a reset is needed to get out (right click on the
+monitor).
 
-## Cartucce
+## Cartridges
 
-| File | Sorgente | Cosa mostra |
+| File | Source | What it shows |
 | --- | --- | --- |
-| `hello.crt` | [cartridge.asm](src/cartridge.asm) | Cartuccia 8K con avvio automatico (firma `CBM80`) |
-| `ultimax.crt` | [ultimax.asm](src/ultimax.asm) | Modo Ultimax: il C64 senza KERNAL, partendo dal vettore di reset della cartuccia |
-| `banks.crt` | [banks0.asm](src/banks0.asm), [banks1.asm](src/banks1.asm) | Magic Desk con due banchi: il codice che cambia banco deve girare in RAM |
+| `hello.crt` | [cartridge.asm](src/cartridge.asm) | 8K cartridge with autostart (`CBM80` signature) |
+| `ultimax.crt` | [ultimax.asm](src/ultimax.asm) | Ultimax mode: the C64 without KERNAL, starting from the cartridge's reset vector |
+| `banks.crt` | [banks0.asm](src/banks0.asm), [banks1.asm](src/banks1.asm) | Magic Desk with two banks: the bank switching code must run in RAM |
 
-## L'assembler
+## The assembler
 
-I sorgenti `.asm` usano l'assembler del progetto `src/Fake64.Samples`, essenziale ma completo:
+The `.asm` sources use the project's assembler (`src/Fake64.Asm`), small but complete:
 
 ```asm
-; commento
-* = $0801               ; indirizzo di assemblaggio
-.basic                  ; riga BASIC "10 SYS2061": il codice parte subito dopo
-BORDO = $D020           ; costante (COSTANTI in maiuscolo, etichette in minuscolo: sono distinte)
-ciclo:  LDA #<testo     ; etichetta; <valore e >valore sono il byte basso e alto
-        STA SCHERMO+40*12,X
-        BNE ciclo
-testo:  .text "CIAO"    ; PETSCII, per CHROUT
-        .screen "CIAO"  ; codici schermo, da scrivere direttamente nella memoria video
+; comment
+* = $0801               ; assembly address
+.basic                  ; BASIC line "10 SYS2061": the code starts right after it
+BORDER = $D020          ; constant (CONSTANTS in upper case, labels in lower case: they are distinct)
+loop:   LDA #<text      ; label; <value and >value are the low and the high byte
+        STA SCREEN+40*12,X
+        BNE loop
+text:   .text "HELLO"   ; PETSCII, for CHROUT
+        .screen "HELLO" ; screen codes, to be written straight into video memory
         .byte 13, $FF, %1010, 'A'
-        .word ciclo
+        .word loop
         .fill 8, 0
 ```
 
-Tutti i modi di indirizzamento del 6502 con la sintassi standard (la pagina zero viene scelta da sola), gli opcode
-non documentati compresi, espressioni con `+ - * /`, parentesi e `*` per l'indirizzo corrente.
+All the 6502 addressing modes with the standard syntax (zero page is chosen automatically), the undocumented
+opcodes included, expressions with `+ - * /`, parentheses and `*` for the current address.
 
-## Rigenerare
+## Regenerating
 
 ```powershell
-dotnet run --project src/Fake64.Samples            # scrive i .prg e i .crt in samples/
+dotnet run --project src/Fake64.Samples            # writes the .prg and .crt files into samples/
 ```
 
-I test in `src/Fake64.Tests/TestSamples.cs` eseguono ogni esempio nell'emulatore e verificano che i file di questa
-cartella coincidano con quelli prodotti dai sorgenti.
+The tests in `src/Fake64.Tests/TestSamples.cs` run every sample in the emulator and check that the files of this
+folder match the ones produced from the sources.

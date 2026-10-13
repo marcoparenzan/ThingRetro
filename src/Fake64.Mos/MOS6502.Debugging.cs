@@ -1,6 +1,6 @@
 namespace Fake64.Mos;
 
-// Ultima istruzione eseguita, disassemblata solo quando il debugger la chiede
+// Last instruction executed, disassembled only when the debugger asks for it
 public partial class MOS6502
 {
     ushort instructionPC;

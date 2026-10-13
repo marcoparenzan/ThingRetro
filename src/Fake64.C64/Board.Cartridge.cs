@@ -1,8 +1,8 @@
 namespace Fake64.C64;
 
-// Porta di espansione: inserire o togliere una cartuccia equivale a farlo a macchina spenta,
-// quindi segue un reset (il KERNAL cerca la firma "CBM80" a $8004 all'avvio).
-// Per caricare un file .crt vedere Fake64.Crt.CrtFile
+// Expansion port: inserting or removing a cartridge is like doing it with the machine off,
+// so a reset follows (the KERNAL looks for the "CBM80" signature at $8004 at power on).
+// To load a .crt file see Fake64.Crt.CrtFile
 public partial class Board
 {
     Cartridge? cartridge;

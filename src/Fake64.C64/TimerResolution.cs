@@ -2,8 +2,8 @@ using System.Runtime.InteropServices;
 
 namespace Fake64.C64;
 
-// Su Windows Thread.Sleep(1) dura fino a ~15,6 ms con la risoluzione predefinita del timer di sistema:
-// timeBeginPeriod(1) la porta a 1 ms finché l'emulazione è attiva, così i frame non arrivano a raffiche
+// On Windows Thread.Sleep(1) lasts up to ~15.6 ms with the default resolution of the system timer:
+// timeBeginPeriod(1) brings it to 1 ms while the emulation runs, so the frames do not arrive in bursts
 sealed class TimerResolution : IDisposable
 {
     readonly uint milliseconds;

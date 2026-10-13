@@ -3,13 +3,13 @@ using static Fake64.Tests.TestHelpers;
 
 namespace Fake64.Tests;
 
-// Uscita video, cavo e monitor
+// Video output, cable and monitor
 [TestClass]
 public sealed class MonitorTests
 {
     const int FRAME_CYCLES = 312 * 63;
 
-    // Schermo finto: conta i frame e conserva i pixel
+    // Fake screen: counts the frames and keeps the pixels
     sealed unsafe class RecordingScreen : IScreen
     {
         public readonly uint[] Pixels = new uint[MOS6569.SCREEN_WIDTH * MOS6569.SCREEN_HEIGHT];
@@ -52,7 +52,7 @@ public sealed class MonitorTests
         }
 
         Assert.AreEqual(3, screen.Frames);
-        Assert.AreEqual(0xFF6C5EB5u, screen.Pixels[0]); // bordo azzurro (colore 14) dopo il reset del VIC-II
+        Assert.AreEqual(0xFF6C5EB5u, screen.Pixels[0]); // light blue border (color 14) after the VIC-II reset
     }
 
     [TestMethod]
@@ -91,8 +91,8 @@ public sealed class MonitorTests
         Assert.IsTrue(monitor.FramesReceived > 100);
         using var frame = monitor.CaptureFrame();
         Assert.AreEqual(MOS6569.SCREEN_WIDTH, frame.Width);
-        Assert.AreEqual(Color.FromArgb(0xFF, 0x6C, 0x5E, 0xB5), frame.GetPixel(0, 0));    // bordo azzurro
-        Assert.AreEqual(Color.FromArgb(0xFF, 0x35, 0x28, 0x79), frame.GetPixel(42, 42));  // sfondo blu
+        Assert.AreEqual(Color.FromArgb(0xFF, 0x6C, 0x5E, 0xB5), frame.GetPixel(0, 0));    // light blue border
+        Assert.AreEqual(Color.FromArgb(0xFF, 0x35, 0x28, 0x79), frame.GetPixel(42, 42));  // blue background
     }
 
     [TestMethod]

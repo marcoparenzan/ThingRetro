@@ -10,7 +10,7 @@ public sealed class ProgramLoadingTests
     const long CYCLES_PER_SECOND = 985248;
     const int FRAME_CYCLES = 312 * 63;
 
-    // I programmi vengono dagli esempi di samples/ (sorgenti in samples/src)
+    // The programs come from the samples in samples/ (sources in samples/src)
     static byte[] Sample(string fileName) => SampleSet.All.Single(sample => sample.FileName == fileName).Content;
 
     private static Board BootedBoard()
@@ -42,7 +42,7 @@ public sealed class ProgramLoadingTests
 
         board.LoadPrg(new byte[] { 0x00, 0xA0, 0x42 });
 
-        board.SetCpuPort(0x36); // BASIC ROM disattivata
+        board.SetCpuPort(0x36); // BASIC ROM switched off
         Assert.AreEqual(0x42, (int)board.Peek(0xA000));
     }
 
@@ -79,8 +79,8 @@ public sealed class ProgramLoadingTests
         board.RunCycles(CYCLES_PER_SECOND / 2);
 
         var screen = Screen(board);
-        StringAssert.Contains(screen, "10 PRINT 6*7\n");   // la riga 20 contiene ^, la freccia su del C64
-        StringAssert.Contains(screen, "30 PRINT \"PI GRECO\";4*ATN(1)");
+        StringAssert.Contains(screen, "10 PRINT 6*7\n");   // line 20 contains ^, the C64 up arrow
+        StringAssert.Contains(screen, "30 PRINT \"PI\";4*ATN(1)");
         StringAssert.Contains(screen, "RUN\n 42\n 1024\n");
     }
 
@@ -97,7 +97,7 @@ public sealed class ProgramLoadingTests
 
         Assert.AreEqual(0, board.Peek(0xD020) & 0x0F);
         Assert.AreEqual(11, board.Peek(0xD021) & 0x0F);
-        StringAssert.Contains(Screen(board), "CIAO DA $C000! (SYS 49152)\n\nREADY.");
+        StringAssert.Contains(Screen(board), "HELLO FROM $C000! (SYS 49152)\n\nREADY.");
     }
 
     [TestMethod]
@@ -107,7 +107,7 @@ public sealed class ProgramLoadingTests
         board.LoadPrg(Sample("rasterbars.prg"));
         board.TypeText("RUN\r");
         board.RunCycles(CYCLES_PER_SECOND / 2);
-        board.RunCycles(FRAME_CYCLES); // un frame completo con le raster bar attive
+        board.RunCycles(FRAME_CYCLES); // one full frame with the raster bars active
 
         const byte RED = 2, LIGHT_BLUE = 14;
         byte BorderAt(int rasterLine) => board.Vic.PixelAt(0, rasterLine - 9);
@@ -116,7 +116,7 @@ public sealed class ProgramLoadingTests
         Assert.AreEqual(RED, BorderAt(148));
         Assert.AreEqual(LIGHT_BLUE, BorderAt(152));
 
-        // Il KERNAL continua a ricevere l'IRQ della CIA1: tastiera e BASIC funzionano ancora
+        // The KERNAL keeps receiving the CIA1 IRQ: keyboard and BASIC still work
         board.TypeText("?1+1\r");
         board.RunCycles(CYCLES_PER_SECOND / 2);
         StringAssert.Contains(Screen(board), "?1+1\n 2\n");
@@ -125,8 +125,8 @@ public sealed class ProgramLoadingTests
     [TestMethod]
     public void RasterBars_ShouldStayOnTheSameLinesFrameAfterFrame()
     {
-        // Il cambio di colore cade a metà riga: deve restare fermo invece di spostare righe intere.
-        // Sono ammessi pochi frame diversi, quando l'IRQ della CIA ritarda quello raster (come sul C64 vero)
+        // The color change falls in the middle of a line: it must stay still instead of moving whole lines.
+        // A few different frames are allowed, when the CIA IRQ delays the raster one (as on the real C64)
         var board = BootedBoard();
         board.LoadPrg(Sample("rasterbars.prg"));
         board.TypeText("RUN\r");

@@ -1,14 +1,13 @@
 ; ----------------------------------------------------------------------------------------------------------
-; ECM - extended background color mode: quattro colori di sfondo per i caratteri
+; ECM - extended background color mode: four background colors for the characters
 ;
-; In modo ECM ($D011 bit 6) i bit 6 e 7 del codice di schermo non scelgono più il carattere ma il colore di
-; sfondo della cella, fra $D021, $D022, $D023 e $D024. Il prezzo: restano solo 64 caratteri (codici 0-63),
-; abbastanza per lettere, cifre e punteggiatura.
+; In ECM mode ($D011 bit 6) bits 6 and 7 of the screen code no longer select the character but the background
+; color of the cell, among $D021, $D022, $D023 and $D024. The price: only 64 characters are left (codes 0-63),
+; enough for letters, digits and punctuation.
 ;
-; Il programma scrive la stessa frase quattro volte, una per colore di sfondo, e torna al BASIC: il BASIC
-; continua a funzionare in modo ECM, perché lettere e cifre hanno codici sotto 64. Il cursore invece appare
-; come un quadratino verde: per lampeggiare inverte il carattere impostando il bit 7, che in ECM sceglie
-; lo sfondo $D023.
+; The program writes the same sentence four times, one per background color, and returns to BASIC: BASIC keeps
+; working in ECM mode, because letters and digits have codes below 64. The cursor instead shows up as a small
+; green square: to blink it reverses the character by setting bit 7, which in ECM selects background $D023.
 ; ----------------------------------------------------------------------------------------------------------
 
 SCREEN      = $0400
@@ -18,7 +17,7 @@ BACKGROUND1 = $D022
 BACKGROUND2 = $D023
 BACKGROUND3 = $D024
 CLRSCR      = $E544
-ROW2        = SCREEN+40*2   ; righe in cui scrivere
+ROW2        = SCREEN+40*2   ; rows to write to
 ROW4        = SCREEN+40*4
 ROW6        = SCREEN+40*6
 ROW8        = SCREEN+40*8
@@ -28,22 +27,22 @@ ROW8        = SCREEN+40*8
 
             JSR CLRSCR
             LDA #6
-            STA BACKGROUND0             ; blu
+            STA BACKGROUND0             ; blue
             LDA #2
-            STA BACKGROUND1             ; rosso
+            STA BACKGROUND1             ; red
             LDA #5
-            STA BACKGROUND2             ; verde
+            STA BACKGROUND2             ; green
             LDA #0
-            STA BACKGROUND3             ; nero
+            STA BACKGROUND3             ; black
             LDA VIC_CR1
             ORA #%01000000
-            STA VIC_CR1                 ; ECM attivo
+            STA VIC_CR1                 ; ECM on
 
             LDX #0
 copy:       LDA text,X
             CMP #$FF
             BEQ done
-            STA ROW2,X                  ; bit 7-6 = %00: sfondo $D021
+            STA ROW2,X                  ; bits 7-6 = %00: background $D021
             ORA #%01000000
             STA ROW4,X                  ; %01: $D022
             EOR #%11000000
@@ -54,5 +53,5 @@ copy:       LDA text,X
             BNE copy
 done:       RTS
 
-text:       .screen "EXTENDED COLOR MODE: 4 SFONDI"
+text:       .screen "EXTENDED COLOR MODE: 4 BACKGROUNDS"
             .byte $FF

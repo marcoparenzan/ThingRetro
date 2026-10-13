@@ -4,8 +4,8 @@ using Fake64.C64;
 
 namespace Fake64.Crt;
 
-// Lettura del formato .crt (VICE): intestazione "C64 CARTRIDGE   " seguita da pacchetti "CHIP" con le ROM.
-// Tutti i campi numerici sono big-endian
+// Reading of the .crt format (VICE): "C64 CARTRIDGE   " header followed by "CHIP" packets with the ROMs.
+// All numeric fields are big-endian
 public static class CrtFile
 {
     const string SIGNATURE = "C64 CARTRIDGE   ";
@@ -24,17 +24,17 @@ public static class CrtFile
     public static Cartridge Load(byte[] crt)
     {
         if (crt.Length < 0x40 || Encoding.ASCII.GetString(crt, 0, 16) != SIGNATURE)
-            throw new InvalidDataException("Non è un file .crt: manca l'intestazione \"C64 CARTRIDGE\"");
+            throw new InvalidDataException("Not a .crt file: the \"C64 CARTRIDGE\" header is missing");
 
         int headerLength = (int)BinaryPrimitives.ReadUInt32BigEndian(crt.AsSpan(0x10));
         int hardwareType = BinaryPrimitives.ReadUInt16BigEndian(crt.AsSpan(0x16));
-        bool exrom = crt[0x18] != 0; // 0 = linea attiva (bassa)
+        bool exrom = crt[0x18] != 0; // 0 = line active (low)
         bool game = crt[0x19] != 0;
         string name = Encoding.ASCII.GetString(crt, 0x20, 32).TrimEnd('\0', ' ');
 
         var chips = ReadChips(crt, Math.Max(headerLength, 0x40));
         if (chips.Count == 0)
-            throw new InvalidDataException("Il file .crt non contiene ROM (nessun pacchetto CHIP)");
+            throw new InvalidDataException("The .crt file contains no ROM (no CHIP packet)");
 
         return hardwareType switch
         {
@@ -43,8 +43,8 @@ public static class CrtFile
             TYPE_SYSTEM3 => new System3Cartridge(name, ByBank(chips)),
             TYPE_MAGIC_DESK => new MagicDeskCartridge(name, ByBank(chips)),
             TYPE_EASYFLASH => new EasyFlashCartridge(name, Roml(chips), Romh(chips)),
-            _ => throw new NotSupportedException($"Tipo di cartuccia {hardwareType} non supportato " +
-                 "(supportati: 0 Normal, 5 Ocean, 15 System 3, 19 Magic Desk, 32 EasyFlash)"),
+            _ => throw new NotSupportedException($"Cartridge type {hardwareType} is not supported " +
+                 "(supported: 0 Normal, 5 Ocean, 15 System 3, 19 Magic Desk, 32 EasyFlash)"),
         };
     }
 
@@ -54,7 +54,7 @@ public static class CrtFile
         while (offset + CHIP_HEADER_SIZE <= crt.Length)
         {
             if (Encoding.ASCII.GetString(crt, offset, 4) != "CHIP")
-                throw new InvalidDataException($"Pacchetto CHIP non valido all'offset ${offset:X}");
+                throw new InvalidDataException($"Invalid CHIP packet at offset ${offset:X}");
 
             int packetLength = (int)BinaryPrimitives.ReadUInt32BigEndian(crt.AsSpan(offset + 4));
             int type = BinaryPrimitives.ReadUInt16BigEndian(crt.AsSpan(offset + 8));
@@ -63,7 +63,7 @@ public static class CrtFile
             int size = BinaryPrimitives.ReadUInt16BigEndian(crt.AsSpan(offset + 14));
 
             if (offset + CHIP_HEADER_SIZE + size > crt.Length || packetLength < CHIP_HEADER_SIZE)
-                throw new InvalidDataException($"Pacchetto CHIP troncato all'offset ${offset:X}");
+                throw new InvalidDataException($"Truncated CHIP packet at offset ${offset:X}");
 
             chips.Add(new Chip(type, bank, loadAddress, crt.AsSpan(offset + CHIP_HEADER_SIZE, size).ToArray()));
             offset += packetLength;
@@ -83,8 +83,8 @@ public static class CrtFile
         return banks;
     }
 
-    // Distribuisce i byte di ogni chip secondo l'indirizzo: $8000-$9FFF in ROML, $A000-$BFFF e $E000-$FFFF in ROMH
-    // (un chip da 16 KB a $8000 riempie entrambe)
+    // Spreads the bytes of each chip by address: $8000-$9FFF into ROML, $A000-$BFFF and $E000-$FFFF into ROMH
+    // (a 16 KB chip at $8000 fills both)
     static byte[][] Roml(List<Chip> chips) => Place(chips, romh: false);
     static byte[][] Romh(List<Chip> chips) => Place(chips, romh: true);
 
@@ -105,7 +105,7 @@ public static class CrtFile
         return banks;
     }
 
-    // Per i tipi in cui il banco scelto vale sia per ROML sia per ROMH: un banco da 8 KB per chip
+    // For the types where the selected bank applies to both ROML and ROMH: one 8 KB bank per chip
     static byte[][] ByBank(List<Chip> chips)
     {
         var banks = NewBanks(chips);

@@ -2,7 +2,7 @@ namespace Fake64.Mos;
 
 public partial class MOS6581
 {
-    // Bit del registro di controllo di una voce ($04, $0B, $12)
+    // Bits of a voice's control register ($04, $0B, $12)
     const byte GATE = 0x01;
     const byte SYNC = 0x02;
     const byte RING_MOD = 0x04;
@@ -12,37 +12,37 @@ public partial class MOS6581
     const byte PULSE = 0x40;
     const byte NOISE = 0x80;
 
-    // Cicli fra un passo e l'altro del contatore d'inviluppo per i 16 valori di attacco, decadimento e rilascio
-    // (dalla misura del chip: attacco 0 = 9 cicli x 255 passi = 2 ms, attacco 15 = 31251 x 255 = 8 s)
+    // Cycles between two steps of the envelope counter for the 16 attack, decay and release values
+    // (measured on the chip: attack 0 = 9 cycles x 255 steps = 2 ms, attack 15 = 31251 x 255 = 8 s)
     static readonly int[] RatePeriods = [9, 32, 63, 95, 149, 220, 267, 313, 392, 977, 1954, 3126, 3907, 11720, 19532, 31251];
 
     enum EnvelopePhase { Attack, DecaySustain, Release }
 
-    // Una voce: oscillatore a 24 bit, generatori di forma d'onda (12 bit) e generatore d'inviluppo (8 bit).
-    // L'uscita è il prodotto dei due, come nel moltiplicatore analogico del chip
+    // A voice: 24-bit oscillator, waveform generators (12 bits) and envelope generator (8 bits).
+    // The output is the product of the two, as in the chip's analog multiplier
     sealed class Voice
     {
-        public Voice SyncSource = null!;   // la voce precedente: 3 per la 1, 1 per la 2, 2 per la 3
+        public Voice SyncSource = null!;   // the previous voice: 3 for 1, 1 for 2, 2 for 3
 
-        // Registri
-        public int Frequency;              // $00-$01: incremento dell'accumulatore a ogni ciclo
+        // Registers
+        public int Frequency;              // $00-$01: accumulator increment at every cycle
         public int PulseWidth;             // $02-$03: 12 bit
         public byte Control;               // $04
         public int Attack, Decay;          // $05
         public int Sustain, Release;       // $06
 
-        // Oscillatore: la frequenza è Frequency x clock / 2^24 (sul C64 PAL Frequency = Hz x 17,03)
+        // Oscillator: the frequency is Frequency x clock / 2^24 (on the PAL C64 Frequency = Hz x 17.03)
         public int Accumulator;
-        public bool MsbRising;             // il bit 23 è passato da 0 a 1 in questo ciclo: sincronizza la voce successiva
-        int noise = 0x7FFFF8;              // registro a scorrimento a 23 bit del rumore
+        public bool MsbRising;             // bit 23 went from 0 to 1 in this cycle: syncs the next voice
+        int noise = 0x7FFFF8;              // 23-bit noise shift register
 
-        // Inviluppo
-        public int Envelope;               // 0-255, leggibile per la voce 3 in $1C
+        // Envelope
+        public int Envelope;               // 0-255, readable for voice 3 in $1C
         EnvelopePhase phase = EnvelopePhase.Release;
-        int rateCounter;                   // contatore a 15 bit confrontato con il periodo della fase
+        int rateCounter;                   // 15-bit counter compared with the period of the phase
         int exponentialCounter;
         int exponentialPeriod = 1;
-        bool holdZero = true;              // a zero il contatore si ferma fino al prossimo attacco
+        bool holdZero = true;              // at zero the counter stops until the next attack
 
         public void Reset()
         {
@@ -63,7 +63,7 @@ public partial class MOS6581
             bool gateWas = (Control & GATE) != 0, gate = (value & GATE) != 0;
             if (!gateWas && gate)
             {
-                // Fronte di salita del GATE: attacco, dal livello in cui si trova l'inviluppo
+                // Rising edge of GATE: attack, from the level the envelope is at
                 phase = EnvelopePhase.Attack;
                 holdZero = false;
             }
@@ -72,7 +72,7 @@ public partial class MOS6581
                 phase = EnvelopePhase.Release;
             }
 
-            // TEST tiene fermo l'oscillatore a zero e riempie di 1 il registro del rumore
+            // TEST holds the oscillator at zero and fills the noise register with 1s
             if ((value & TEST) != 0)
             {
                 Accumulator = 0;
@@ -93,7 +93,7 @@ public partial class MOS6581
             Accumulator = (Accumulator + Frequency) & 0xFFFFFF;
             MsbRising = (previous & 0x800000) == 0 && (Accumulator & 0x800000) != 0;
 
-            // Il rumore avanza quando il bit 19 dell'accumulatore passa da 0 a 1: segue la frequenza della voce
+            // The noise advances when bit 19 of the accumulator goes from 0 to 1: it follows the voice's frequency
             if ((previous & 0x080000) == 0 && (Accumulator & 0x080000) != 0)
             {
                 int feedback = ((noise >> 22) ^ (noise >> 17)) & 1;
@@ -101,14 +101,14 @@ public partial class MOS6581
             }
         }
 
-        // SYNC: quando l'oscillatore sorgente ricomincia il ciclo, questo riparte da zero
+        // SYNC: when the source oscillator starts a new cycle, this one restarts from zero
         public void ApplySync()
         {
             if ((Control & SYNC) != 0 && SyncSource.MsbRising) Accumulator = 0;
         }
 
-        // Uscita a 12 bit del generatore di forme d'onda. Più forme insieme danno l'AND dei bit
-        // (un'approssimazione: sul chip vero le combinazioni sono più deboli e meno regolari)
+        // 12-bit output of the waveform generator. Several waveforms together give the AND of the bits
+        // (an approximation: on the real chip the combinations are weaker and less regular)
         public int Waveform()
         {
             if ((Control & 0xF0) == 0) return 0;
@@ -121,22 +121,22 @@ public partial class MOS6581
             return output;
         }
 
-        // Il triangolo è il dente di sega ripiegato con il bit 23; con RING_MOD il bit 23 è messo in XOR con quello
-        // della voce sorgente, e il triangolo diventa la modulazione ad anello delle due frequenze
+        // The triangle is the sawtooth folded by bit 23; with RING_MOD bit 23 is XORed with the source voice's,
+        // and the triangle becomes the ring modulation of the two frequencies
         int Triangle()
         {
             int msb = ((Control & RING_MOD) != 0 ? Accumulator ^ SyncSource.Accumulator : Accumulator) & 0x800000;
             return ((msb != 0 ? ~Accumulator : Accumulator) >> 11) & 0xFFF;
         }
 
-        // Otto bit sparsi del registro a scorrimento diventano gli 8 bit alti dell'uscita
+        // Eight scattered bits of the shift register become the high 8 bits of the output
         int Noise() =>
             ((noise & 0x100000) >> 9) | ((noise & 0x040000) >> 8) | ((noise & 0x004000) >> 5) | ((noise & 0x000800) >> 3) |
             ((noise & 0x000200) >> 2) | ((noise & 0x000020) << 1) | ((noise & 0x000004) << 3) | ((noise & 0x000001) << 4);
 
-        // Un ciclo del generatore d'inviluppo. Il contatore di cicli è a 15 bit e si confronta per uguaglianza
-        // con il periodo: se il periodo scende sotto il valore già raggiunto, il contatore deve fare tutto il giro
-        // (fino a 32768 cicli) prima del passo successivo. È il famoso "ADSR bug" del SID
+        // One cycle of the envelope generator. The cycle counter has 15 bits and is compared for equality with
+        // the period: if the period drops below the value already reached, the counter has to wrap all the way
+        // around (up to 32768 cycles) before the next step. It is the SID's famous "ADSR bug"
         public void ClockEnvelope()
         {
             int period = phase switch
@@ -152,14 +152,14 @@ public partial class MOS6581
 
             if (phase == EnvelopePhase.Attack)
             {
-                // Attacco lineare fino a 255, poi il decadimento
+                // Linear attack up to 255, then the decay
                 exponentialCounter = 0;
                 Envelope = (Envelope + 1) & 0xFF;
                 if (Envelope == 0xFF) phase = EnvelopePhase.DecaySustain;
             }
             else
             {
-                // Decadimento e rilascio sono "esponenziali": il passo si allunga man mano che il livello scende
+                // Decay and release are "exponential": the step gets longer as the level drops
                 if (++exponentialCounter != exponentialPeriod) return;
                 exponentialCounter = 0;
                 if (holdZero) return;
@@ -182,8 +182,8 @@ public partial class MOS6581
             if (Envelope == 0) holdZero = true;
         }
 
-        // Uscita della voce, prima del filtro. Sul 6581 lo zero della forma d'onda non è a metà scala ($800) ma
-        // più in basso: per questo una voce con l'inviluppo che sale o scende produce anche uno spostamento continuo
+        // Output of the voice, before the filter. On the 6581 the zero of the waveform is not at mid-scale ($800)
+        // but lower: that is why a voice whose envelope rises or falls also produces a DC shift
         public int Output() => (Waveform() - 0x380) * Envelope;
     }
 }

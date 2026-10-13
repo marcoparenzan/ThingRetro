@@ -2,11 +2,11 @@ using Fake64.C64;
 
 namespace Fake64.WinForms;
 
-// Simulatore: il mouse del PC gira la manopola del paddle A di una coppia di Paddles.
-// Un clic sinistro sul controllo cattura il mouse (cursore nascosto e confinato); il movimento orizzontale
-// gira la manopola, il pulsante sinistro è il pulsante del paddle. Il clic destro (che apre il menu)
-// o la perdita del focus liberano il mouse.
-// Verso: muovere verso destra gira in senso orario, e sui paddle del C64 il valore letto diminuisce
+// Simulator: the PC mouse turns the knob of paddle A of a pair of Paddles.
+// A left click on the control captures the mouse (cursor hidden and confined); horizontal movement turns
+// the knob, the left button is the paddle's button. A right click (which opens the menu) or losing the
+// focus releases the mouse.
+// Direction: moving right turns clockwise, and on the C64 paddles the value read decreases
 public sealed class MousePaddles : IDisposable
 {
     readonly Control source;
@@ -26,12 +26,12 @@ public sealed class MousePaddles : IDisposable
         source.LostFocus += OnLostFocus;
     }
 
-    // Unità del paddle per pixel di movimento del mouse
+    // Paddle units per pixel of mouse movement
     public double Sensitivity { get; set; } = 1.0;
 
     public bool IsCaptured => captured;
 
-    // Movimento orizzontale del mouse in pixel (positivo = verso destra)
+    // Horizontal mouse movement in pixels (positive = to the right)
     internal void MoveBy(int dx)
     {
         position = Math.Clamp(position - dx * Sensitivity, 0, 255);
@@ -42,7 +42,7 @@ public sealed class MousePaddles : IDisposable
     {
         if (e.Button == MouseButtons.Right) { Release(); return; }
         if (e.Button != MouseButtons.Left) return;
-        if (!captured) { Capture(); return; } // il primo clic cattura soltanto
+        if (!captured) { Capture(); return; } // the first click only captures
         paddles.FireA = true;
     }
 
@@ -58,7 +58,7 @@ public sealed class MousePaddles : IDisposable
         int dx = screen.X - center.X;
         if (dx == 0) return;
         MoveBy(dx);
-        Cursor.Position = center; // movimento relativo: il cursore torna al centro
+        Cursor.Position = center; // relative movement: the cursor goes back to the center
     }
 
     void OnLostFocus(object? sender, EventArgs e) => Release();

@@ -1,6 +1,6 @@
 namespace Fake64.Tests;
 
-// Il nucleo 6502 da solo, su un bus finto che registra ogni accesso: un ciclo, un accesso, come sul chip
+// The 6502 core alone, on a fake bus that records every access: one cycle, one access, as on the chip
 [TestClass]
 public sealed class MOS6502CycleTests
 {
@@ -22,7 +22,7 @@ public sealed class MOS6502CycleTests
         }
     }
 
-    // CPU ferma al PC indicato con il programma in memoria e il log vuoto
+    // CPU stopped at the given PC with the program in memory and an empty log
     static (MOS6502 Cpu, RecordingBus Bus) Cpu(ushort pc, params byte[] program)
     {
         var bus = new RecordingBus();
@@ -90,12 +90,12 @@ public sealed class MOS6502CycleTests
         bool rdy = true;
         cpu.RdyInput = () => rdy;
 
-        Tick(cpu, 4);  // opcode, operando basso, operando alto, lettura del valore
-        rdy = false;   // il VIC-II abbassa BA: restano due cicli di scrittura
+        Tick(cpu, 4);  // opcode, low operand, high operand, read of the value
+        rdy = false;   // the VIC-II pulls BA low: two write cycles are left
         Tick(cpu, 10);
 
-        Assert.AreEqual(0x42, (int)bus.Memory[0x0300]); // le due scritture sono avvenute
-        Assert.AreEqual(6, bus.Log.Count);               // il prelievo del NOP (una lettura) aspetta
+        Assert.AreEqual(0x42, (int)bus.Memory[0x0300]); // both writes happened
+        Assert.AreEqual(6, bus.Log.Count);               // the fetch of NOP (a read) waits
         Assert.IsTrue(cpu.IsInstructionBoundary);
 
         rdy = true;
@@ -111,7 +111,7 @@ public sealed class MOS6502CycleTests
         cpu.AecInput = () => aec;
 
         Tick(cpu, 3);
-        aec = false;   // il VIC-II usa il bus anche nella fase della CPU
+        aec = false;   // the VIC-II uses the bus in the CPU's half of the cycle too
         Tick(cpu, 5);
 
         Assert.AreEqual(3, bus.Log.Count);
@@ -123,17 +123,17 @@ public sealed class MOS6502CycleTests
     [TestMethod]
     public void Sei_ShouldStillServeAnIrqAlreadyPending()
     {
-        // Il controllo degli interrupt avviene all'inizio dell'ultimo ciclo: SEI non fa in tempo a bloccarlo
+        // Interrupts are polled at the start of the last cycle: SEI is too late to block it
         var (cpu, bus) = Cpu(0x0200, 0x78, 0xEA); // SEI : NOP
         bus.Memory[0xFFFE] = 0x00;
         bus.Memory[0xFFFF] = 0x30;
         cpu.Status = 0x20;      // I = 0
         cpu.IrqInput = () => true;
 
-        Tick(cpu, 2 + 7);       // SEI, poi la sequenza di interrupt
+        Tick(cpu, 2 + 7);       // SEI, then the interrupt sequence
 
         Assert.AreEqual(0x3000, (int)cpu.PC);
-        Assert.AreEqual(0x02, (int)bus.Memory[0x01FD]); // indirizzo di ritorno $0201
+        Assert.AreEqual(0x02, (int)bus.Memory[0x01FD]); // return address $0201
         Assert.AreEqual(0x01, (int)bus.Memory[0x01FC]);
     }
 
@@ -156,7 +156,7 @@ public sealed class MOS6502CycleTests
     [DataRow(new byte[] { 0xB5, 0x10 }, 4)]             // LDA zp,X
     [DataRow(new byte[] { 0xAD, 0x00, 0x10 }, 4)]       // LDA abs
     [DataRow(new byte[] { 0xA1, 0x10 }, 6)]             // LDA (zp,X)
-    [DataRow(new byte[] { 0xB1, 0x10 }, 5)]             // LDA (zp),Y senza cambio di pagina
+    [DataRow(new byte[] { 0xB1, 0x10 }, 5)]             // LDA (zp),Y without page crossing
     [DataRow(new byte[] { 0x91, 0x10 }, 6)]             // STA (zp),Y
     [DataRow(new byte[] { 0x06, 0x10 }, 5)]             // ASL zp
     [DataRow(new byte[] { 0x1E, 0x00, 0x10 }, 7)]       // ASL abs,X
@@ -175,6 +175,6 @@ public sealed class MOS6502CycleTests
         do { cpu.Tick(); taken++; } while (!cpu.IsInstructionBoundary);
 
         Assert.AreEqual(cycles, taken);
-        Assert.AreEqual(cycles, bus.Log.Count); // un accesso al bus per ciclo
+        Assert.AreEqual(cycles, bus.Log.Count); // one bus access per cycle
     }
 }

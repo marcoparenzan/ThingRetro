@@ -2,13 +2,13 @@ using System.Collections.Concurrent;
 
 namespace Fake64.C64;
 
-// Comandi inviati da altri thread (UI, caricamento di programmi, cartucce) ed eseguiti dal thread di emulazione
+// Commands sent by other threads (UI, program loading, cartridges) and run by the emulation thread
 public partial class Board
 {
     readonly ConcurrentQueue<Action> pendingCommands = new();
 
-    // Esegue un'azione sul thread di emulazione fra due cicli, così non legge o scrive la memoria
-    // mentre la CPU sta eseguendo; se il clock in tempo reale non è attivo la esegue subito
+    // Runs an action on the emulation thread between two cycles, so it does not read or write memory
+    // while the CPU is running; if the real-time clock is not active it runs it at once
     public void Enqueue(Action command)
     {
         if (clock is null) command();

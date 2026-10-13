@@ -3,7 +3,7 @@ namespace Fake64.Tests;
 [TestClass]
 public sealed class MOS6526Tests
 {
-    // La CIA da sola, fuori da qualunque scheda: si usa solo attraverso la sua piedinatura
+    // The CIA alone, outside any board: it is used only through its pinout
     private MOS6526 _cia = null!;
 
     [TestInitialize]
@@ -30,7 +30,7 @@ public sealed class MOS6526Tests
         for (int i = 0; i < cycles; i++)
         {
             Tick();
-            if ((_cia.Read(0x0D) & 0x01) != 0) underflows++; // la lettura azzera i flag
+            if ((_cia.Read(0x0D) & 0x01) != 0) underflows++; // reading clears the flags
         }
         return underflows;
     }
@@ -58,12 +58,12 @@ public sealed class MOS6526Tests
     [TestMethod]
     public void TimerA_ContinuousMode_ShouldKeepRunningAfterUnderflow()
     {
-        StartTimerA(0x0004, 0x11); // start + force load, bit 3 = 0 -> continuo
+        StartTimerA(0x0004, 0x11); // start + force load, bit 3 = 0 -> continuous
 
         int underflows = CountTimerAUnderflows(40);
 
         Assert.IsTrue(underflows >= 8, $"underflow: {underflows}");
-        Assert.AreEqual(0x01, _cia.Read(0x0E) & 0x01); // ancora in esecuzione
+        Assert.AreEqual(0x01, _cia.Read(0x0E) & 0x01); // still running
     }
 
     [TestMethod]
@@ -74,7 +74,7 @@ public sealed class MOS6526Tests
         int underflows = CountTimerAUnderflows(40);
 
         Assert.AreEqual(1, underflows);
-        Assert.AreEqual(0x00, _cia.Read(0x0E) & 0x01); // start bit azzerato
+        Assert.AreEqual(0x00, _cia.Read(0x0E) & 0x01); // start bit cleared
     }
 
     [TestMethod]
@@ -84,7 +84,7 @@ public sealed class MOS6526Tests
         Tick(10);
         Assert.IsFalse(_cia.Irq);
 
-        _cia.Write(0x0D, 0x81); // abilita Timer A
+        _cia.Write(0x0D, 0x81); // enable Timer A
         Assert.IsTrue(_cia.Irq);
     }
 
@@ -109,7 +109,7 @@ public sealed class MOS6526Tests
         _cia.Write(0x0D, 0x81);
         StartTimerA(0x0002, 0x11);
 
-        Tick(20); // più underflow senza leggere l'ICR: la linea resta attiva, non pulsa
+        Tick(20); // several underflows without reading the ICR: the line stays active, it does not pulse
         Assert.IsTrue(_cia.Irq);
 
         _cia.Read(0x0D); // acknowledge
@@ -121,24 +121,24 @@ public sealed class MOS6526Tests
     [TestMethod]
     public void Ports_ShouldDriveOutputsAndReadExternalInputs()
     {
-        _cia.PortA.External = () => 0xFA;  // l'esterno tira a massa PA0 e PA2
-        _cia.Write(0x02, 0xF0);            // PA4-PA7 in uscita
+        _cia.PortA.External = () => 0xFA;  // the outside pulls PA0 and PA2 to ground
+        _cia.Write(0x02, 0xF0);            // PA4-PA7 as outputs
         _cia.Write(0x00, 0xA5);
 
         Assert.AreEqual(0xA0, (int)_cia.PortA.Output);
-        Assert.AreEqual(0xAA, (int)_cia.Read(0x00)); // uscite dal latch, ingressi con pull-up, AND con l'esterno
+        Assert.AreEqual(0xAA, (int)_cia.Read(0x00)); // outputs from the latch, inputs with pull-ups, AND with the outside
     }
 
     [TestMethod]
     public void Ports_ExternalDeviceShouldPullOutputsLow()
     {
-        // Le uscite NMOS hanno un pull-up debole: un contatto a massa vince (così si legge un joystick)
+        // NMOS outputs have a weak pull-up: a contact to ground wins (that is how a joystick is read)
         _cia.Write(0x02, 0xFF);
         _cia.Write(0x00, 0xFF);
-        _cia.PortA.External = () => 0xEF;  // fuoco premuto: PA4 a massa
+        _cia.PortA.External = () => 0xEF;  // fire pressed: PA4 to ground
 
         Assert.AreEqual(0xEF, (int)_cia.Read(0x00));
-        Assert.AreEqual(0xFF, (int)_cia.PortA.Output); // il chip continua a pilotare 1
+        Assert.AreEqual(0xFF, (int)_cia.PortA.Output); // the chip keeps driving 1
     }
 
     [TestMethod]
@@ -147,11 +147,11 @@ public sealed class MOS6526Tests
         _cia.Write(0x04, 0x34);
         _cia.Write(0x05, 0x12);
 
-        _cia.Write(0x0E, 0x10); // force load a timer fermo
+        _cia.Write(0x0E, 0x10); // force load with the timer stopped
 
         Assert.AreEqual(0x34, (int)_cia.Read(0x04));
         Assert.AreEqual(0x12, (int)_cia.Read(0x05));
-        Assert.AreEqual(0x00, (int)_cia.Read(0x0E)); // il bit 4 è uno strobe
+        Assert.AreEqual(0x00, (int)_cia.Read(0x0E)); // bit 4 is a strobe
     }
 
     [TestMethod]
@@ -159,7 +159,7 @@ public sealed class MOS6526Tests
     {
         _cia.Write(0x06, 0x10);
         _cia.Write(0x07, 0x00);
-        _cia.Write(0x0F, 0x51); // start + force load + conta gli underflow di Timer A
+        _cia.Write(0x0F, 0x51); // start + force load + count the underflows of Timer A
         StartTimerA(0x0004, 0x11);
 
         int underflowsA = CountTimerAUnderflows(20);

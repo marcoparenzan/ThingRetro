@@ -1,10 +1,10 @@
 namespace Fake64.Mos;
 
-// Porta parallela a 8 bit di un chip (PA/PB della 6526, P0-P5 della 6510).
-// Ogni bit è un'uscita se il bit corrispondente di Direction è 1, altrimenti un ingresso.
-// Le uscite NMOS hanno un pull-up debole: un dispositivo esterno può sempre tirare un pin a massa.
-// Il livello di un pin è quindi l'uscita (o il pull-up, se è un ingresso) in AND con ciò che
-// impone l'esterno (External, 0 = tirato a massa): così un joystick si legge anche su una porta in uscita
+// 8-bit parallel port of a chip (PA/PB of the 6526, P0-P5 of the 6510).
+// Each bit is an output if the matching bit of Direction is 1, an input otherwise.
+// NMOS outputs have a weak pull-up: an external device can always pull a pin to ground.
+// So the level of a pin is the output (or the pull-up, for an input) ANDed with what the outside
+// imposes (External, 0 = pulled to ground): this is how a joystick can be read even on an output port
 public sealed class ParallelPort
 {
     byte latch;
@@ -22,16 +22,16 @@ public sealed class ParallelPort
         set { direction = value; Changed?.Invoke(); }
     }
 
-    // Linee tirate a massa dall'esterno (bit a 0); lo imposta la scheda che collega il chip
+    // Lines pulled to ground from outside (bits at 0); set by the board the chip is wired to
     public Func<byte> External { get; set; } = () => 0xFF;
 
-    // Bit pilotati dal chip (le uscite), senza leggere i pin esterni
+    // Bits driven by the chip (the outputs), without reading the external pins
     public byte Output => (byte)(latch & direction);
 
-    // Livello effettivo dei pin: uscite dal latch, ingressi a 1 (pull-up), il tutto in AND con l'esterno
+    // Actual pin levels: outputs from the latch, inputs at 1 (pull-up), all ANDed with the outside
     public byte Pins => (byte)(((latch & direction) | ~direction) & External());
 
-    // Cambio di Latch o Direction: chi è collegato alle uscite può reagire (es. il banco del VIC-II)
+    // Latch or Direction changed: whatever is connected to the outputs can react (e.g. the VIC-II bank)
     public event Action? Changed;
 
     public void Reset()

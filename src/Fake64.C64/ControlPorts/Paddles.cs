@@ -1,8 +1,8 @@
 namespace Fake64.C64;
 
-// Coppia di paddle (Le Mans, REVS...): due potenziometri da 470 kΩ sulle linee POT X (paddle A) e
-// POT Y (paddle B), e un pulsante ciascuno: A chiude il pin 3 (sinistra), B il pin 4 (destra).
-// La posizione è il valore che il SID misura: 0 con la manopola tutta da una parte, 255 dall'altra
+// Pair of paddles (Le Mans, REVS...): two 470 kΩ potentiometers on the POT X (paddle A) and POT Y (paddle B)
+// lines, and one button each: A closes pin 3 (left), B pin 4 (right).
+// The position is the value the SID measures: 0 with the knob all the way one side, 255 the other
 public sealed class Paddles : IControlPortDevice
 {
     const int FireABit = 0x04, FireBBit = 0x08;

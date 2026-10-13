@@ -1,38 +1,38 @@
 ; ----------------------------------------------------------------------------------------------------------
-; SPRITES - otto sprite: espansione, multicolor, priorità e collisioni
+; SPRITES - eight sprites: expansion, multicolor, priority and collisions
 ;
-; Il VIC-II disegna fino a 8 sprite di 24 x 21 pixel sopra (o sotto) la grafica. Ogni sprite legge 63 byte
-; da un blocco di 64 nel banco del VIC-II: il numero del blocco sta negli ultimi 8 byte della memoria video
-; ($07F8-$07FF con lo schermo a $0400). Qui i dati vanno nel buffer della cassetta: blocco 13 ($0340) per
-; lo smile, blocco 14 ($0380) per la palla multicolor.
+; The VIC-II draws up to 8 sprites of 24 x 21 pixels over (or under) the graphics. Each sprite reads 63 bytes
+; from a block of 64 in the VIC-II bank: the block number is in the last 8 bytes of video memory
+; ($07F8-$07FF with the screen at $0400). Here the data goes into the cassette buffer: block 13 ($0340) for
+; the smiley, block 14 ($0380) for the multicolor ball.
 ;
-;   sprite 0: normale          sprite 4: multicolor ($D01C): coppie di bit, %01 = $D025, %11 = $D026
-;   sprite 1: largo il doppio  sprite 5: multicolor, espanso in larghezza e altezza
-;   sprite 2: alto il doppio   sprite 6: dietro la grafica ($D01B): il testo gli passa sopra
-;   sprite 3: largo e alto     sprite 7: sovrapposto al 6: collisione fra sprite
+;   sprite 0: normal             sprite 4: multicolor ($D01C): pairs of bits, %01 = $D025, %11 = $D026
+;   sprite 1: double width       sprite 5: multicolor, expanded in width and height
+;   sprite 2: double height      sprite 6: behind the graphics ($D01B): the text passes over it
+;   sprite 3: wide and tall      sprite 7: overlapping sprite 6: a sprite-sprite collision
 ;
-; Dopo un frame il programma legge $D01E (collisioni fra sprite: un bit per sprite coinvolto) e ne scrive
-; il valore in binario sullo schermo. Leggere il registro lo azzera. Il programma torna al BASIC.
+; After a frame the program reads $D01E (sprite-sprite collisions: one bit per sprite involved) and writes its
+; value in binary on the screen. Reading the register clears it. The program returns to BASIC.
 ; ----------------------------------------------------------------------------------------------------------
 
-VIC         = $D000         ; $D000 + 2n: X dello sprite n, $D001 + 2n: Y
-X_MSB       = $D010         ; nono bit delle X
+VIC         = $D000         ; $D000 + 2n: X of sprite n, $D001 + 2n: Y
+X_MSB       = $D010         ; ninth bit of the Xs
 ENABLE      = $D015
 EXPAND_Y    = $D017
-PRIORITY    = $D01B         ; bit a 1: sprite dietro la grafica
+PRIORITY    = $D01B         ; bit set: sprite behind the graphics
 MULTICOLOR  = $D01C
 EXPAND_X    = $D01D
-COLLISIONS  = $D01E         ; sprite-sprite (si azzera alla lettura)
+COLLISIONS  = $D01E         ; sprite-sprite (cleared when read)
 MCOLOR0     = $D025
 MCOLOR1     = $D026
-COLORS      = $D027         ; $D027 + n: colore dello sprite n
+COLORS      = $D027         ; $D027 + n: color of sprite n
 RASTER      = $D012
 POINTERS    = $07F8
 SCREEN      = $0400
 CLRSCR      = $E544
-SMILEY      = $0340         ; blocco 13
-BALL        = $0380         ; blocco 14
-TEXT_ROW    = SCREEN+40*14  ; riga del testo che passa sopra lo sprite 6
+SMILEY      = $0340         ; block 13
+BALL        = $0380         ; block 14
+TEXT_ROW    = SCREEN+40*14  ; row of the text that passes over sprite 6
 RESULT      = SCREEN+40*22
 
             * = $0801
@@ -40,7 +40,7 @@ RESULT      = SCREEN+40*22
 
             JSR CLRSCR
             LDX #62
-data:       LDA smiley,X                ; i dati degli sprite nei blocchi 13 e 14
+data:       LDA smiley,X                ; the sprite data into blocks 13 and 14
             STA SMILEY,X
             LDA ball,X
             STA BALL,X
@@ -49,46 +49,46 @@ data:       LDA smiley,X                ; i dati degli sprite nei blocchi 13 e 1
 
             LDX #0
 setup:      LDA blocks,X
-            STA POINTERS,X              ; blocco di ciascuno sprite
+            STA POINTERS,X              ; block of each sprite
             LDA colors,X
             STA COLORS,X
             INX
             CPX #8
             BNE setup
 
-            LDX #15                     ; X e Y degli 8 sprite (coppie consecutive a partire da $D000)
+            LDX #15                     ; X and Y of the 8 sprites (consecutive pairs starting at $D000)
 position:   LDA positions,X
             STA VIC,X
             DEX
             BPL position
 
             LDA #0
-            STA X_MSB                   ; tutte le X sotto 256
-            LDA #%00101010              ; sprite 1, 3, 5 larghi il doppio
+            STA X_MSB                   ; all the Xs below 256
+            LDA #%00101010              ; sprites 1, 3, 5 double width
             STA EXPAND_X
-            LDA #%00101100              ; sprite 2, 3, 5 alti il doppio
+            LDA #%00101100              ; sprites 2, 3, 5 double height
             STA EXPAND_Y
-            LDA #%00110000              ; sprite 4 e 5 multicolor
+            LDA #%00110000              ; sprites 4 and 5 multicolor
             STA MULTICOLOR
             LDA #1
-            STA MCOLOR0                 ; %01 bianco
+            STA MCOLOR0                 ; %01 white
             LDA #0
-            STA MCOLOR1                 ; %11 nero
-            LDA #%01000000              ; sprite 6 dietro la grafica
+            STA MCOLOR1                 ; %11 black
+            LDA #%01000000              ; sprite 6 behind the graphics
             STA PRIORITY
             LDA #%11111111
-            STA ENABLE                  ; accende tutti e 8
+            STA ENABLE                  ; turns all 8 on
 
             LDX #0
-text:       LDA message,X               ; testo che attraversa lo sprite 6
+text:       LDA message,X               ; text crossing sprite 6
             CMP #$FF
             BEQ wait
             STA TEXT_ROW,X
             INX
             BNE text
 
-wait:       LDA RASTER                  ; aspetta un frame intero: le collisioni si rilevano mentre si disegna,
-            CMP #255                    ; quindi serve che il VIC-II abbia disegnato tutte le righe degli sprite
+wait:       LDA RASTER                  ; wait a whole frame: collisions are detected while drawing,
+            CMP #255                    ; so the VIC-II must have drawn all the sprite lines
             BNE wait
 next_line:  LDA RASTER
             CMP #255
@@ -96,13 +96,13 @@ next_line:  LDA RASTER
 wait_again: LDA RASTER
             CMP #255
             BNE wait_again
-            LDA COLLISIONS              ; legge (e azzera) le collisioni fra sprite
+            LDA COLLISIONS              ; reads (and clears) the sprite-sprite collisions
 
-            LDX #0                      ; scrive il valore in binario: 8 cifre, sprite 7 a sinistra
+            LDX #0                      ; writes the value in binary: 8 digits, sprite 7 on the left
 bits:       ASL
             PHA
             LDA #'0'
-            ADC #0                      ; il bit uscito è nel carry: '0' + carry = '0' o '1'
+            ADC #0                      ; the bit shifted out is in the carry: '0' + carry = '0' or '1'
             STA RESULT+12,X
             PLA
             INX
@@ -122,12 +122,12 @@ blocks:     .byte 13, 13, 13, 13, 14, 14, 13, 13
 colors:     .byte 7, 3, 5, 10, 2, 4, 13, 14
 positions:  .byte 24,90, 56,90, 112,90, 144,90, 200,90, 230,90, 120,150, 132,156
 
-message:    .screen "IL TESTO PASSA SOPRA LO SPRITE 6"
+message:    .screen "THIS TEXT PASSES OVER SPRITE 6"
             .byte $FF
-caption:    .screen "COLLISIONI:"
+caption:    .screen "COLLISIONS:"
             .byte $FF
 
-; Smile, 24 x 21 pixel, un bit per pixel
+; Smiley, 24 x 21 pixels, one bit per pixel
 smiley:     .byte %00000000, %11111111, %00000000
             .byte %00000011, %11111111, %11000000
             .byte %00000111, %11111111, %11100000
@@ -147,7 +147,7 @@ smiley:     .byte %00000000, %11111111, %00000000
             .byte %00000000, %11111111, %00000000
             .fill 12, 0
 
-; Palla multicolor, 12 x 21 pixel larghi: %01 = bianco ($D025), %10 = colore dello sprite, %11 = nero ($D026)
+; Multicolor ball, 12 x 21 wide pixels: %01 = white ($D025), %10 = sprite color, %11 = black ($D026)
 ball:       .byte %00000000, %11111111, %00000000
             .byte %00001111, %10101010, %11110000
             .byte %00111010, %10101010, %10101100

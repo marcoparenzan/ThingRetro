@@ -1,22 +1,22 @@
 <#
 .SYNOPSIS
-    Scarica le suite di test esterne per la CPU 6502 usate da Fake64.Tests.
+    Downloads the external 6502 CPU test suites used by Fake64.Tests.
 
 .DESCRIPTION
-    - Klaus Dormann, 6502 functional test (GPL-3.0): immagine di 64 KB e listato.
+    - Klaus Dormann, 6502 functional test (GPL-3.0): 64 KB image and listing.
       https://github.com/Klaus2m5/6502_65C02_functional_tests
-    - Tom Harte, SingleStepTests 65x02, cartella 6502/v1 (MIT): 256 file JSON, uno per opcode,
-      ciascuno con 10.000 casi e gli accessi al bus ciclo per ciclo (circa 1 GB in tutto).
+    - Tom Harte, SingleStepTests 65x02, folder 6502/v1 (MIT): 256 JSON files, one per opcode,
+      each with 10,000 cases and the bus accesses cycle by cycle (about 1 GB in all).
       https://github.com/SingleStepTests/65x02
 
-    I file finiscono in src/Fake64.Tests/TestData/External, esclusa da git: per le licenze
-    non fanno parte del repository. Senza i file i test corrispondenti risultano "Inconclusive".
+    The files go into src/Fake64.Tests/TestData/External, excluded from git: because of their licenses
+    they are not part of the repository. Without the files the matching tests are "Inconclusive".
 
 .PARAMETER SkipSingleStep
-    Scarica solo il test di Klaus Dormann (pochi KB invece di circa 1 GB).
+    Downloads only Klaus Dormann's test (a few KB instead of about 1 GB).
 
 .PARAMETER Opcodes
-    Scarica solo gli opcode indicati delle SingleStepTests (es. "a9","8d").
+    Downloads only the given opcodes of the SingleStepTests (e.g. "a9","8d").
 #>
 param(
     [switch]$SkipSingleStep,
@@ -31,7 +31,7 @@ $dormann = Join-Path $target 'KlausDormann'
 New-Item -ItemType Directory -Force $dormann | Out-Null
 foreach ($file in '6502_functional_test.bin', '6502_functional_test.lst') {
     $url = "https://raw.githubusercontent.com/Klaus2m5/6502_65C02_functional_tests/master/bin_files/$file"
-    Write-Host "Scarico $file"
+    Write-Host "Downloading $file"
     Invoke-WebRequest -Uri $url -OutFile (Join-Path $dormann $file)
 }
 
@@ -43,6 +43,6 @@ $names = if ($Opcodes) { $Opcodes | ForEach-Object { $_.ToLowerInvariant() } } e
 foreach ($name in $names) {
     $file = Join-Path $singleStep "$name.json"
     if (Test-Path $file) { continue }
-    Write-Host "Scarico SingleStepTests 6502/v1/$name.json"
+    Write-Host "Downloading SingleStepTests 6502/v1/$name.json"
     Invoke-WebRequest -Uri "https://raw.githubusercontent.com/SingleStepTests/65x02/main/6502/v1/$name.json" -OutFile $file
 }

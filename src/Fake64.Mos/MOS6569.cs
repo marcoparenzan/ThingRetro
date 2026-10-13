@@ -2,15 +2,15 @@ namespace Fake64.Mos;
 
 public partial class MOS6569 : I6569Pinout
 {
-    // Bus video (A0-A13, D0-D11) e uscita video, collegati dalla scheda
+    // Video bus (A0-A13, D0-D11) and video output, wired by the board
     public IVicMemory? Memory { get; set; }
     public Action? FrameCompleted { get; set; }
 
-    // Il VIC-II genera da sé la temporizzazione: riga raster e ciclo all'interno della riga
+    // The VIC-II generates its own timing: raster line and cycle within the line
     private int rasterLine;
     private int currentCycle;
-    private int rasterCompare;        // Riga del raster interrupt (scritta tramite $D012 e bit 7 di $D011)
-    private bool badLinesEnabled;     // DEN ($D011 bit 4) attivo durante la riga $30 del frame corrente
+    private int rasterCompare;        // Raster interrupt line (written through $D012 and bit 7 of $D011)
+    private bool badLinesEnabled;     // DEN ($D011 bit 4) set during line $30 of the current frame
 
     // VIC-II has 47 registers (0x00-0x2E)
     private byte[] registers = new byte[0x2F];
@@ -90,10 +90,12 @@ public partial class MOS6569 : I6569Pinout
         currentCycle = 0;
         rasterCompare = 0;
         badLinesEnabled = false;
+        mainBorder = verticalBorder = true;
+        ResetSprites();
     }
 
-    // Fine di un ciclo: alla fine dell'ultimo ciclo della riga si passa alla riga successiva.
-    // BusAvailable va letto prima, perché riguarda il ciclo in corso
+    // End of a cycle: at the end of the last cycle of the line the next line starts.
+    // BusAvailable must be read before, because it concerns the current cycle
     public void Tick()
     {
         if (currentCycle == CYCLES_PER_LINE - 1)
@@ -105,28 +107,30 @@ public partial class MOS6569 : I6569Pinout
         {
             currentCycle++;
         }
+        SpriteCycle();
     }
 
-    // Bad line: righe $30-$F7 in cui i 3 bit bassi del raster coincidono con YSCROLL ($D011 bit 0-2),
-    // se il display era abilitato (DEN) durante la riga $30. Valutato a ogni ciclo, così le scritture
-    // a $D011 durante la riga hanno effetto immediato
+    // Bad line: lines $30-$F7 whose 3 low raster bits match YSCROLL ($D011 bits 0-2), if the display was
+    // enabled (DEN) during line $30. Evaluated at every cycle, so writes to $D011 during the line take effect
+    // at once
     internal bool IsBadLine =>
         badLinesEnabled &&
         rasterLine >= 0x30 && rasterLine <= 0xF7 &&
         (rasterLine & 0x07) == (registers[REG_CONTROL_1] & 0x07);
 
-    // Nelle bad line il VIC-II legge 40 codici carattere nei cicli 15-54 (contando da 1): in quei cicli
-    // tiene AEC basso e il bus è suo. BA scende 3 cicli prima (dal ciclo 12), così la CPU, collegata a RDY,
-    // può finire le scritture in corso e si ferma al primo ciclo di lettura.
-    // Non modellati: gli accessi degli sprite, che rubano altri cicli
-    public bool BusAvailable => !(IsBadLine && currentCycle >= 11 && currentCycle <= 53);
-    public bool AddressEnable => !(IsBadLine && currentCycle >= 14 && currentCycle <= 53);
+    // On bad lines the VIC-II reads 40 character codes in cycles 15-54 (counting from 1): in those cycles it
+    // keeps AEC low and the bus is its own. BA goes low 3 cycles earlier (from cycle 12), so that the CPU, wired
+    // to RDY, can finish the writes in progress and stops at the first read cycle.
+    // Sprites with DMA on take more cycles, at the end and at the start of the line (see MOS6569.Sprites.cs)
+    public bool BusAvailable => !(IsBadLine && currentCycle >= 11 && currentCycle <= 53) && SpriteDmaCycles(SpriteBaWindow) == 0;
+    public bool AddressEnable => !(IsBadLine && currentCycle >= 14 && currentCycle <= 53) && SpriteDmaCycles(SpriteAecWindow) == 0;
 
     // Handle end-of-line processing
     private void EndLine()
     {
-        // Disegna la riga appena terminata con lo stato attuale dei registri
+        // Draws the line just finished with the current register state
         RenderLine(rasterLine);
+        LatchSprites();
 
         // Update the raster line counter
         rasterLine = (rasterLine + 1) % TOTAL_RASTER_LINES;
@@ -140,7 +144,7 @@ public partial class MOS6569 : I6569Pinout
         else
             registers[REG_CONTROL_1] &= 0x7F;
 
-        // Le bad line del frame dipendono da DEN durante la riga $30
+        // The frame's bad lines depend on DEN during line $30
         if (rasterLine == 0)
             badLinesEnabled = false;
         if (rasterLine == 0x30 && (registers[REG_CONTROL_1] & 0x10) != 0)
@@ -148,13 +152,13 @@ public partial class MOS6569 : I6569Pinout
 
         CheckRasterCompare();
 
-        // Fine del frame: l'uscita video presenta l'immagine
+        // End of frame: the video output presents the picture
         if (rasterLine == 0)
             FrameCompleted?.Invoke();
     }
 
-    // Il raster interrupt scatta quando la riga corrente raggiunge il valore di confronto
-    // (anche quando il confronto viene scritto con la riga già in corso)
+    // The raster interrupt triggers when the current line reaches the compare value
+    // (also when the compare value is written while that line is already in progress)
     private void CheckRasterCompare()
     {
         if (rasterLine == rasterCompare)
@@ -164,7 +168,7 @@ public partial class MOS6569 : I6569Pinout
         }
     }
 
-    // Ricalcola il bit 7 di $D019, che rappresenta lo stato della linea /IRQ del VIC-II
+    // Recomputes bit 7 of $D019, which is the state of the VIC-II's /IRQ line
     private void CheckInterrupts()
     {
         if ((registers[REG_INTERRUPT_STATUS] & registers[REG_INTERRUPT_ENABLE] & 0x0F) != 0)
@@ -177,16 +181,16 @@ public partial class MOS6569 : I6569Pinout
     public bool Irq => (registers[REG_INTERRUPT_STATUS] & 0x80) != 0;
 
     // Address space is 0x00-0x3F (64 bytes), but we only use 0x00-0x2E
-    // A0-A5: i 64 registri si ripetono in tutta l'area selezionata da /CS
+    // A0-A5: the 64 registers repeat across the whole area selected by /CS
     public byte Read(int register)
     {
         ushort addr = (ushort)register;
-        addr &= 0x3F; // I registri si ripetono ogni 64 byte in $D000-$D3FF
+        addr &= 0x3F; // The registers repeat every 64 bytes in $D000-$D3FF
         if (addr == REG_INTERRUPT_STATUS)
-            return (byte)(registers[addr] | 0x70); // Bit 4-6 non usati, letti a 1
+            return (byte)(registers[addr] | 0x70); // Bits 4-6 unused, read as 1
         if (addr == REG_SPRITE_SPRITE_COLL || addr == REG_SPRITE_DATA_COLL)
         {
-            // I registri di collisione si azzerano quando vengono letti
+            // The collision registers are cleared when read
             byte collisions = registers[addr];
             registers[addr] = 0;
             return collisions;
@@ -200,10 +204,10 @@ public partial class MOS6569 : I6569Pinout
     public void Write(int register, byte value)
     {
         ushort addr = (ushort)register;
-        addr &= 0x3F; // I registri si ripetono ogni 64 byte in $D000-$D3FF
-        if (addr > 0x2E) return; // Registri non usati
+        addr &= 0x3F; // The registers repeat every 64 bytes in $D000-$D3FF
+        if (addr > 0x2E) return; // Unused registers
 
-        // I pixel già emessi in questa riga restano con i valori di prima
+        // The pixels already output on this line keep the old values
         if (addr != REG_INTERRUPT_STATUS && addr != REG_INTERRUPT_ENABLE)
             CatchUp();
 
@@ -211,12 +215,12 @@ public partial class MOS6569 : I6569Pinout
         switch (addr)
         {
             case REG_RASTER:
-                // La scrittura imposta il confronto, la lettura restituisce la riga corrente
+                // Writing sets the compare value, reading returns the current line
                 rasterCompare = (rasterCompare & 0x100) | value;
                 CheckRasterCompare();
                 break;
             case REG_CONTROL_1:
-                // Il bit 7 in scrittura è il bit 8 del confronto, in lettura il bit 8 del raster
+                // Bit 7 is bit 8 of the compare value when written, bit 8 of the raster when read
                 rasterCompare = (rasterCompare & 0xFF) | ((value & 0x80) << 1);
                 registers[addr] = (byte)((value & 0x7F) | (registers[addr] & 0x80));
                 if (rasterLine == 0x30 && (value & 0x10) != 0)
@@ -234,7 +238,7 @@ public partial class MOS6569 : I6569Pinout
                 break;
             case REG_SPRITE_SPRITE_COLL:
             case REG_SPRITE_DATA_COLL:
-                break; // Registri di sola lettura
+                break; // Read-only registers
             default:
                 registers[addr] = value;
                 break;

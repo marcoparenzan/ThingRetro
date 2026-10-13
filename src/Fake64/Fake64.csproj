@@ -10,15 +10,25 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Fake64.Asm\Fake64.Asm.csproj" />
     <ProjectReference Include="..\Fake64.C64\Fake64.C64.csproj" />
     <ProjectReference Include="..\Fake64.Crt\Fake64.Crt.csproj" />
     <ProjectReference Include="..\Fake64.Prg\Fake64.Prg.csproj" />
     <ProjectReference Include="..\Fake64.WinForms\Fake64.WinForms.csproj" />
   </ItemGroup>
 
-  <!-- ROM del C64 (KERNAL, BASIC, caratteri): l'app le legge dalla cartella roms accanto all'eseguibile -->
+  <!-- C64 ROMs (KERNAL, BASIC, characters): the app reads them from the roms folder next to the executable -->
   <ItemGroup>
     <Content Include="roms\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- The assembly editor page (Monaco in WebView2), served from the folder next to the executable -->
+  <ItemGroup>
+    <Content Include="Studio\Editor\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,61 +1,65 @@
 namespace Fake64.Mos;
 
-// Rendering del VIC-II in un frame buffer di indici colore. Il VIC-II emette 8 pixel per ciclo: quando
-// la CPU scrive un registro a metà riga, i pixel già "passati sotto il pennello" vengono disegnati
-// con i valori vecchi (CatchUp) e il resto della riga con quelli nuovi. Così uno split raster cade
-// nel punto giusto della riga, con la precisione di un ciclo, invece di spostare righe intere
+// VIC-II rendering into a frame buffer of color indexes. The VIC-II outputs 8 pixels per cycle: when the CPU
+// writes a register in the middle of a line, the pixels already "under the beam" are drawn with the old values
+// (CatchUp) and the rest of the line with the new ones. So a raster split falls at the right point of the line,
+// with the precision of a cycle, instead of moving whole lines
 public partial class MOS6569
 {
-    // Area visibile: 42 pixel di bordo a sinistra/sopra, 320x200 di display, 41/42 a destra/sotto
+    // Visible area: 42 pixels of border left/top, 320x200 of display, 41/42 right/bottom
     public const int SCREEN_WIDTH = 403;
     public const int SCREEN_HEIGHT = 284;
-    const int FIRST_VISIBLE_LINE = 9;        // riga raster mostrata nella prima riga del frame buffer
-    const int DISPLAY_LEFT = 42;             // colonna del frame buffer che corrisponde alla X sprite 24
+    const int FIRST_VISIBLE_LINE = 9;        // raster line shown on the first line of the frame buffer
+    const int DISPLAY_LEFT = 42;             // frame buffer column matching sprite X 24
     const int SPRITE_X_TO_SCREEN = DISPLAY_LEFT - 24;
-    const int FIRST_TEXT_LINE = 0x30;        // la riga di testo 0 inizia alla riga raster $30 + YSCROLL
+    const int FIRST_TEXT_LINE = 0x30;        // text row 0 starts at raster line $30 + YSCROLL
+    const int LINE_X_POSITIONS = 504;        // X coordinates in a line: 63 cycles x 8 pixels
 
     readonly byte[] frame = new byte[SCREEN_WIDTH * SCREEN_HEIGHT];
 
-    // Buffer di lavoro per una riga
+    // Working buffers for one line
     readonly byte[] lineColor = new byte[SCREEN_WIDTH];
-    readonly bool[] lineForeground = new bool[SCREEN_WIDTH]; // pixel di primo piano (priorità e collisioni sprite)
-    readonly byte[] lineSprites = new byte[SCREEN_WIDTH];    // maschera degli sprite presenti in ogni pixel
+    readonly bool[] lineForeground = new bool[SCREEN_WIDTH]; // foreground pixels (sprite priority and collisions)
+    readonly byte[] lineSprites = new byte[SCREEN_WIDTH];    // mask of the sprites present in each pixel
 
-    // Pixel della riga corrente già disegnati nel frame buffer
+    // Pixels of the current line already drawn into the frame buffer
     int renderedTo;
 
-    // Indice colore (0-15) di un pixel dell'ultimo frame disegnato
+    // Color index (0-15) of a pixel of the last frame drawn
     internal byte PixelAt(int x, int y) => frame[y * SCREEN_WIDTH + x];
 
-    // Colonna del frame buffer emessa nel ciclo corrente: 8 pixel per ciclo, la X sprite 24
-    // (colonna 42) esce nel ciclo 16 (contando da 0)
+    // Frame buffer column output in the current cycle: 8 pixels per cycle, sprite X 24
+    // (column 42) comes out in cycle 16 (counting from 0)
     int BeamX => Math.Clamp(8 * currentCycle - 86, 0, SCREEN_WIDTH);
 
-    // Prima di una scrittura in un registro: disegna con i valori vecchi i pixel già emessi in questa riga
+    // Before a register write: draws the pixels already output on this line with the old values.
+    // The border advances on lines outside the frame buffer too, because its state carries over between lines
     private void CatchUp()
     {
         int x = BeamX;
-        int y = rasterLine - FIRST_VISIBLE_LINE;
-        if (x <= renderedTo || y < 0 || y >= SCREEN_HEIGHT) return;
-
-        ComposeLine(rasterLine, detectCollisions: false);
-        Array.Copy(lineColor, renderedTo, frame, y * SCREEN_WIDTH + renderedTo, x - renderedTo);
-        renderedTo = x;
+        if (x <= renderedTo) return;
+        DrawUpTo(x, detectCollisions: false);
     }
 
-    // Fine riga: disegna i pixel rimasti e rileva le collisioni degli sprite
+    // End of line: draws the remaining pixels, detects sprite collisions, then the border check of cycle 63
     private void RenderLine(int line)
     {
-        int y = line - FIRST_VISIBLE_LINE;
-        if (y >= 0 && y < SCREEN_HEIGHT)
-        {
-            ComposeLine(line, detectCollisions: true);
-            Array.Copy(lineColor, renderedTo, frame, y * SCREEN_WIDTH + renderedTo, SCREEN_WIDTH - renderedTo);
-        }
+        DrawUpTo(SCREEN_WIDTH, detectCollisions: true);
+        EndOfLineBorder(line);
         renderedTo = 0;
     }
 
-    // Calcola l'intera riga con i registri attuali nei buffer di lavoro
+    private void DrawUpTo(int x, bool detectCollisions)
+    {
+        int y = rasterLine - FIRST_VISIBLE_LINE;
+        bool visible = y >= 0 && y < SCREEN_HEIGHT;
+        if (visible) ComposeLine(rasterLine, detectCollisions);
+        ApplyBorder(rasterLine, renderedTo, x, visible);
+        if (visible) Array.Copy(lineColor, renderedTo, frame, y * SCREEN_WIDTH + renderedTo, x - renderedTo);
+        renderedTo = x;
+    }
+
+    // Computes the whole line (graphics and sprites, without border) with the current registers into the working buffers
     private void ComposeLine(int line, bool detectCollisions)
     {
         byte control1 = registers[REG_CONTROL_1];
@@ -65,18 +69,20 @@ public partial class MOS6569
         Array.Clear(lineForeground);
 
         RenderGraphics(line, control1, control2);
-        RenderSprites(line, detectCollisions);
-        RenderBorder(line, control1, control2);
+        RenderSprites(detectCollisions);
     }
 
-    // Letture sul bus video; senza nulla collegato il bus resta alto
+    // Video bus reads; with nothing connected the bus stays high
     private byte ReadMemory(int address) => Memory?.Read(address & 0x3FFF) ?? 0xFF;
     private byte ReadColor(int address) => (byte)((Memory?.ReadColor(address & 0x03FF) ?? 0x0F) & 0x0F);
 
+    // Outside the 200 display lines (or in a frame without bad lines) the graphics sequencer is "idle": it repeats
+    // the byte at the last address of the bank ($3FFF, $39FF in extended color) with the color data at zero.
+    // Normally the border covers it; it shows when the border is open, which is why demos clear $3FFF
     private void RenderGraphics(int line, byte control1, byte control2)
     {
         int graphicsLine = line - (FIRST_TEXT_LINE + (control1 & 0x07)); // YSCROLL
-        if (graphicsLine < 0 || graphicsLine >= 200) return;
+        bool idle = !badLinesEnabled || graphicsLine < 0 || graphicsLine >= 200;
 
         int row = graphicsLine >> 3;
         int charLine = graphicsLine & 0x07;
@@ -87,8 +93,8 @@ public partial class MOS6569
         bool mcm = (control2 & 0x10) != 0;
 
         byte memoryPointers = registers[REG_MEMORY_POINTERS];
-        int screenBase = (memoryPointers & 0xF0) << 6;   // $0000-$3C00 a passi di $0400
-        int charBase = (memoryPointers & 0x0E) << 10;    // $0000-$3800 a passi di $0800
+        int screenBase = (memoryPointers & 0xF0) << 6;   // $0000-$3C00 in steps of $0400
+        int charBase = (memoryPointers & 0x0E) << 10;    // $0000-$3800 in steps of $0800
         int bitmapBase = (memoryPointers & 0x08) << 10;  // $0000 o $2000
 
         byte bg0 = (byte)(registers[REG_BACKGROUND_COLOR] & 0x0F);
@@ -96,14 +102,22 @@ public partial class MOS6569
         byte bg2 = (byte)(registers[REG_BACKGROUND_COLOR_2] & 0x0F);
         byte bg3 = (byte)(registers[REG_BACKGROUND_COLOR_3] & 0x0F);
 
+        byte idleBits = ReadMemory(ecm ? 0x39FF : 0x3FFF);
+
         for (int column = 0; column < 40; column++)
         {
             int cell = row * 40 + column;
-            byte screenCode = ReadMemory(screenBase + cell);
-            byte color = ReadColor(cell);
+            byte screenCode = idle ? (byte)0 : ReadMemory(screenBase + cell);
+            byte color = idle ? (byte)0 : ReadColor(cell);
             int x = xStart + column * 8;
 
-            if (bmm)
+            if (idle)
+            {
+                if (ecm && (bmm || mcm)) PutInvalid(x, idleBits, mcm);
+                else if (bmm && mcm) PutMulticolor(x, idleBits, bg0, 0, 0, 0);
+                else PutHires(x, idleBits, 0, bmm ? (byte)0 : bg0);
+            }
+            else if (bmm)
             {
                 byte bits = ReadMemory(bitmapBase + cell * 8 + charLine);
                 if (ecm)
@@ -115,7 +129,7 @@ public partial class MOS6569
             }
             else if (ecm)
             {
-                // Extended color: i bit 6-7 del codice scelgono lo sfondo, solo 64 caratteri
+                // Extended color: bits 6-7 of the code select the background, only 64 characters
                 byte bits = ReadMemory(charBase + (screenCode & 0x3F) * 8 + charLine);
                 if (mcm)
                     PutInvalid(x, bits, true);
@@ -136,7 +150,7 @@ public partial class MOS6569
         }
     }
 
-    // 8 pixel: bit a 1 = primo piano, bit a 0 = sfondo
+    // 8 pixels: bit 1 = foreground, bit 0 = background
     private void PutHires(int x, byte bits, byte foreground, byte background)
     {
         for (int i = 0; i < 8; i++, x++)
@@ -148,7 +162,7 @@ public partial class MOS6569
         }
     }
 
-    // 4 coppie di bit, ciascuna larga 2 pixel: 00 e 01 sono sfondo, 10 e 11 primo piano
+    // 4 bit pairs, each 2 pixels wide: 00 and 01 are background, 10 and 11 foreground
     private void PutMulticolor(int x, byte bits, byte color00, byte color01, byte color10, byte color11)
     {
         for (int pair = 0; pair < 4; pair++)
@@ -164,7 +178,7 @@ public partial class MOS6569
         }
     }
 
-    // Modi non validi (ECM insieme a BMM o MCM): schermo nero, ma i pixel di primo piano contano per le collisioni
+    // Invalid modes (ECM together with BMM or MCM): black screen, but foreground pixels count for collisions
     private void PutInvalid(int x, byte bits, bool multicolor)
     {
         for (int i = 0; i < 8; i++, x++)
@@ -177,32 +191,31 @@ public partial class MOS6569
         }
     }
 
-    private void RenderSprites(int line, bool detectCollisions)
+    // The visible sprites and the data row of each come from the DMA logic (MOS6569.Sprites.cs)
+    private void RenderSprites(bool detectCollisions)
     {
-        byte enabled = registers[REG_SPRITE_ENABLE];
-        if (enabled == 0) return;
+        byte visible = spriteVisible;
+        if (visible == 0) return;
 
         Array.Clear(lineSprites);
         int screenBase = (registers[REG_MEMORY_POINTERS] & 0xF0) << 6;
 
-        // Lo sprite con numero più basso ha la precedenza: un pixel già occupato non viene ridisegnato
+        // The lowest-numbered sprite wins: a pixel already taken is not drawn again
         for (int n = 0; n < 8; n++)
         {
             int bit = 1 << n;
-            if ((enabled & bit) == 0) continue;
-
-            bool expandY = (registers[REG_SPRITE_Y_EXPAND] & bit) != 0;
-            int spriteLine = line - (registers[REG_SPRITE0_Y + n * 2] + 1); // la coordinata Y 50 allinea lo sprite alla riga $33
-            if (spriteLine < 0 || spriteLine >= (expandY ? 42 : 21)) continue;
-            if (expandY) spriteLine >>= 1;
+            if ((visible & bit) == 0) continue;
 
             int pointer = ReadMemory(screenBase + 0x3F8 + n);
-            int dataAddress = pointer * 64 + spriteLine * 3;
+            int dataAddress = pointer * 64 + spriteData[n];
             int data = ReadMemory(dataAddress) << 16 | ReadMemory(dataAddress + 1) << 8 | ReadMemory(dataAddress + 2);
             if (data == 0) continue;
 
+            // On a PAL line X goes from 0 to 503 (positions $1F8-$1FF are never reached); the visible left border
+            // starts at X 486, so sprites with X 486-503 appear to the left of X 0
             int spriteX = registers[REG_SPRITE0_X + n * 2] | ((registers[REG_SPRITE_X_MSB] & bit) != 0 ? 0x100 : 0);
-            int x = spriteX + SPRITE_X_TO_SCREEN;
+            if (spriteX >= LINE_X_POSITIONS) continue;
+            int x = (spriteX >= LINE_X_POSITIONS - SPRITE_X_TO_SCREEN ? spriteX - LINE_X_POSITIONS : spriteX) + SPRITE_X_TO_SCREEN;
             int pixelWidth = (registers[REG_SPRITE_X_EXPAND] & bit) != 0 ? 2 : 1;
             bool behindForeground = (registers[REG_SPRITE_PRIORITY] & bit) != 0;
             byte spriteColor = (byte)(registers[REG_SPRITE0_COLOR + n] & 0x0F);
@@ -245,8 +258,8 @@ public partial class MOS6569
         }
     }
 
-    // Collisioni: i registri accumulano i bit finché non vengono letti; l'interrupt
-    // scatta solo quando il registro passa da zero a non-zero
+    // Collisions: the registers accumulate bits until they are read; the interrupt
+    // triggers only when the register goes from zero to non-zero
     private void DetectCollisions()
     {
         int spriteSprite = 0;
@@ -272,29 +285,58 @@ public partial class MOS6569
         if ((spriteSprite | spriteBackground) != 0) CheckInterrupts();
     }
 
-    // Bordo: copre tutto fuori dalla finestra di display (40/38 colonne, 25/24 righe), o tutta la riga con DEN = 0
-    private void RenderBorder(int line, byte control1, byte control2)
+    // The border is made of two flip-flops, as in the chip:
+    // - vertical: set when the raster reaches the bottom line (251, or 247 with 24 rows) and cleared at the top
+    //   line (51, or 55) if DEN is on. The check happens at cycle 63 and when the beam reaches the left compare;
+    // - main (the one you see): set when the beam reaches the right compare (X 344, or 335 with 38 columns) and
+    //   cleared at the left one (X 24, or 31), but only if the vertical one is clear.
+    // The compares are equalities: if a register changes when the value that would trigger the border has already
+    // gone by, the border is not set. Switching to 24 rows between lines 247 and 251 leaves the top and bottom
+    // borders open; switching to 38 columns in cycle 56 (between X 335 and 344) opens the side borders of that line
+    bool mainBorder = true, verticalBorder = true;
+
+    (int Top, int Bottom) BorderRows() => (registers[REG_CONTROL_1] & 0x08) != 0 ? (0x33, 0xFB) : (0x37, 0xF7);
+
+    // Advances the border over pixels [from, to) of the line, drawing it where it is set
+    private void ApplyBorder(int line, int from, int to, bool visible)
     {
-        bool rows25 = (control1 & 0x08) != 0;
-        int top = rows25 ? 0x33 : 0x37;
-        int bottom = rows25 ? 0xFB : 0xF7;
-        bool columns40 = (control2 & 0x08) != 0;
+        bool columns40 = (registers[REG_CONTROL_2] & 0x08) != 0;
         int left = DISPLAY_LEFT + (columns40 ? 0 : 7);
         int right = DISPLAY_LEFT + (columns40 ? 320 : 311);
-
         byte border = (byte)(registers[REG_BORDER_COLOR] & 0x0F);
-        bool displayEnabled = (control1 & 0x10) != 0;
+        int position = from;
 
-        if (!displayEnabled || line < top || line >= bottom)
+        void Fill(int end)
         {
-            Array.Fill(lineColor, border);
-            return;
+            if (visible && mainBorder && end > position) Array.Fill(lineColor, border, position, end - position);
+            position = Math.Max(position, end);
         }
-        Array.Fill(lineColor, border, 0, left);
-        Array.Fill(lineColor, border, right, SCREEN_WIDTH - right);
+
+        if (left >= from && left < to)
+        {
+            Fill(left);
+            var (top, bottom) = BorderRows();
+            if (line == bottom) verticalBorder = true;
+            else if (line == top && (registers[REG_CONTROL_1] & 0x10) != 0) verticalBorder = false;
+            if (!verticalBorder) mainBorder = false;
+        }
+        if (right >= from && right < to)
+        {
+            Fill(right);
+            mainBorder = true;
+        }
+        Fill(to);
     }
 
-    // Copia l'ultimo frame nella bitmap 32 bit (BGRA) della finestra
+    // Cycle 63: vertical check at the end of the line
+    private void EndOfLineBorder(int line)
+    {
+        var (top, bottom) = BorderRows();
+        if (line == bottom) verticalBorder = true;
+        else if (line == top && (registers[REG_CONTROL_1] & 0x10) != 0) verticalBorder = false;
+    }
+
+    // Copies the last frame into the window's 32-bit (BGRA) bitmap
     unsafe public void Render(byte* scan0)
     {
         uint* pixels = (uint*)scan0;

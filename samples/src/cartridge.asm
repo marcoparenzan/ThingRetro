@@ -1,23 +1,23 @@
 ; ----------------------------------------------------------------------------------------------------------
-; CARTRIDGE - cartuccia da 8 KB che parte da sola (diventa hello.crt)
+; CARTRIDGE - an 8 KB cartridge that starts by itself (becomes hello.crt)
 ;
-; Una cartuccia "normale" da 8 KB tiene bassa la linea EXROM: il PLA mostra la sua ROM (ROML) a $8000-$9FFF.
-; All'accensione il KERNAL controlla se a $8004 c'è la firma "CBM80" (in PETSCII, con il bit 7 delle lettere
-; a 1): se c'è, invece di avviare il BASIC salta all'indirizzo scritto a $8000 (avvio a freddo).
-; A quel punto il sistema non è ancora inizializzato: tocca alla cartuccia chiamare le routine del KERNAL
-; che preparano CIA, memoria, vettori e schermo.
+; A "normal" 8 KB cartridge holds the EXROM line low: the PLA shows its ROM (ROML) at $8000-$9FFF.
+; At power on the KERNAL checks whether the "CBM80" signature is at $8004 (in PETSCII, with bit 7 of the
+; letters set): if it is, instead of starting BASIC it jumps to the address stored at $8000 (cold start).
+; At that point the system is not initialized yet: it is up to the cartridge to call the KERNAL routines
+; that set up the CIAs, memory, vectors and screen.
 ; ----------------------------------------------------------------------------------------------------------
 
-IOINIT      = $FF84         ; inizializza CIA, SID, porte
-RAMTAS      = $FF87         ; azzera la pagina zero, prova la RAM, imposta i puntatori
-RESTOR      = $FF8A         ; vettori del KERNAL predefiniti
-CINT        = $FF81         ; VIC-II e schermo (pulisce lo schermo)
-CHROUT      = $FFD2         ; scrive il carattere in A alla posizione del cursore
+IOINIT      = $FF84         ; initializes CIAs, SID, ports
+RAMTAS      = $FF87         ; clears the zero page, tests the RAM, sets the pointers
+RESTOR      = $FF8A         ; default KERNAL vectors
+CINT        = $FF81         ; VIC-II and screen (clears the screen)
+CHROUT      = $FFD2         ; writes the character in A at the cursor position
 
             * = $8000
-            .word start                 ; avvio a freddo (all'accensione e al reset)
-            .word start                 ; avvio a caldo (RUN/STOP + RESTORE)
-            .byte $C3, $C2, $CD, '8', '0'   ; firma "CBM80"
+            .word start                 ; cold start (at power on and at reset)
+            .word start                 ; warm start (RUN/STOP + RESTORE)
+            .byte $C3, $C2, $CD, '8', '0'   ; "CBM80" signature
 
 start:      JSR IOINIT
             JSR RAMTAS
@@ -25,11 +25,11 @@ start:      JSR IOINIT
             JSR CINT
             LDX #0
 print:      LDA message,X
-            BEQ done                    ; il messaggio termina con 0
+            BEQ done                    ; the message ends with 0
             JSR CHROUT
             INX
             BNE print
-done:       JMP done                    ; nessun BASIC da cui tornare: resta qui
+done:       JMP done                    ; no BASIC to return to: stay here
 
 message:    .text "HELLO FROM CARTRIDGE"
             .byte 0

@@ -1,9 +1,9 @@
 namespace Fake64.C64;
 
-// Zoccolo della scheda madre. Il contratto è la piedinatura (TPinout): qualunque oggetto che la
-// implementa entra nello zoccolo. Inserendo un chip la scheda ne collega i pin alle piste
-// (bus, linee di interrupt, porte); togliendolo le piste restano scollegate, come uno zoccolo vuoto.
-// Dopo aver cambiato un chip conviene un Board.Reset(), come riaccendere la macchina
+// A motherboard socket. The contract is the pinout (TPinout): any object that implements it fits the
+// socket. Inserting a chip, the board connects its pins to the traces (bus, interrupt lines, ports);
+// removing it leaves the traces unconnected, like an empty socket.
+// After changing a chip a Board.Reset() is advisable, like switching the machine off and on
 public sealed class Socket<TPinout> where TPinout : class
 {
     readonly Action<TPinout> connect;
@@ -24,7 +24,7 @@ public sealed class Socket<TPinout> where TPinout : class
     {
         ArgumentNullException.ThrowIfNull(chip);
         if (Chip is not null)
-            throw new InvalidOperationException($"Lo zoccolo {Name} è già occupato: togliere prima il chip presente");
+            throw new InvalidOperationException($"The {Name} socket is already taken: remove the chip in it first");
         Chip = chip;
         connect(chip);
     }
@@ -38,5 +38,5 @@ public sealed class Socket<TPinout> where TPinout : class
         return chip;
     }
 
-    public override string ToString() => $"{Name}: {(Chip is null ? "vuoto" : Chip.GetType().Name)}";
+    public override string ToString() => $"{Name}: {(Chip is null ? "empty" : Chip.GetType().Name)}";
 }

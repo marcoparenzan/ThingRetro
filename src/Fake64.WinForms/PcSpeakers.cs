@@ -3,35 +3,35 @@ using Fake64.C64;
 
 namespace Fake64.WinForms;
 
-// Le casse del PC: un ISpeaker che suona i campioni con l'API audio di Windows (waveOut, winmm).
-// Si collega con un AudioCable (new AudioCable(board.AudioOut, speakers)).
-// L'emulazione va al passo con l'orologio del PC, la scheda audio con il proprio: i due orologi differiscono di
-// poco e la coda verso la scheda si allunga o si accorcia lentamente. Per tenerla alla latenza voluta un blocco
-// perde o ripete un campione (lo 0,2%: non si sente) invece di saltare o ripetere un blocco intero
+// The PC speakers: an ISpeaker that plays the samples with the Windows audio API (waveOut, winmm).
+// It is connected with an AudioCable (new AudioCable(board.AudioOut, speakers)).
+// The emulation keeps pace with the PC clock, the sound card with its own: the two clocks differ slightly and
+// the queue towards the card slowly grows or shrinks. To keep it at the wanted latency a block loses or repeats
+// one sample (0.2%: inaudible) instead of skipping or repeating a whole block
 public sealed unsafe class PcSpeakers : ISpeaker, IDisposable
 {
-    const int BUFFERS = 16;             // 160 ms di coda al massimo
-    const int TARGET_QUEUED = 5;        // blocchi in coda in condizioni normali: ~50 ms di latenza
+    const int BUFFERS = 16;             // at most 160 ms of queue
+    const int TARGET_QUEUED = 5;        // blocks queued in normal conditions: ~50 ms of latency
 
     readonly object gate = new();
     readonly IntPtr device;
     readonly WaveHeader*[] headers = new WaveHeader*[BUFFERS];
-    readonly int capacity;              // campioni per buffer
+    readonly int capacity;              // samples per buffer
     bool paused;
     bool disposed;
 
     public int SampleRate { get; }
 
-    // Senza audio la coda continua a scorrere (in silenzio): riattivandolo non c'è ritardo
+    // When muted the queue keeps flowing (silently): unmuting has no delay
     public bool Muted { get; set; }
 
-    // Blocchi persi perché la coda era piena e volte in cui si è svuotata (l'emulazione è rimasta indietro)
+    // Blocks dropped because the queue was full, and times it ran dry (the emulation fell behind)
     public int Overruns { get; private set; }
     public int Underruns { get; private set; }
 
     public PcSpeakers(int sampleRate = 44100)
     {
-        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("PcSpeakers usa l'audio di Windows");
+        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("PcSpeakers uses the Windows audio");
 
         SampleRate = sampleRate;
         var format = new WaveFormat
@@ -44,9 +44,9 @@ public sealed unsafe class PcSpeakers : ISpeaker, IDisposable
             BitsPerSample = 16,
         };
         uint result = waveOutOpen(out device, WAVE_MAPPER, ref format, IntPtr.Zero, IntPtr.Zero, CALLBACK_NULL);
-        if (result != 0) throw new InvalidOperationException($"Impossibile aprire il dispositivo audio (errore waveOut {result})");
+        if (result != 0) throw new InvalidOperationException($"Cannot open the audio device (waveOut error {result})");
 
-        // Blocchi fino a 40 ms: AudioPort ne manda da 10, più il campione aggiunto per recuperare
+        // Blocks of up to 40 ms: AudioPort sends 10 ms ones, plus the sample added to catch up
         capacity = sampleRate / 25;
         for (int i = 0; i < BUFFERS; i++)
         {
@@ -54,7 +54,7 @@ public sealed unsafe class PcSpeakers : ISpeaker, IDisposable
             headers[i]->Data = (IntPtr)NativeMemory.AllocZeroed((nuint)(capacity * sizeof(short)));
         }
 
-        // Il dispositivo parte in pausa: comincia a suonare quando la coda è piena quanto basta
+        // The device starts paused: it begins playing when the queue is full enough
         waveOutPause(device);
         paused = true;
     }
@@ -75,7 +75,7 @@ public sealed unsafe class PcSpeakers : ISpeaker, IDisposable
 
             if (queued == 0 && !paused)
             {
-                // La coda si è svuotata: si riempie di nuovo prima di ripartire, invece di suonare a singhiozzo
+                // The queue ran dry: it fills up again before restarting, instead of stuttering
                 waveOutPause(device);
                 paused = true;
                 Underruns++;
@@ -92,10 +92,10 @@ public sealed unsafe class PcSpeakers : ISpeaker, IDisposable
             else samples[..length].CopyTo(buffer);
 
             if (!paused && queued > TARGET_QUEUED + 1 && length > 1)
-                length--;                                   // la scheda audio è più lenta: un campione in meno
+                length--;                                   // the sound card is slower: one sample less
             else if (!paused && queued < TARGET_QUEUED - 1)
             {
-                buffer[length] = buffer[length - 1];        // la scheda audio è più veloce: un campione ripetuto
+                buffer[length] = buffer[length - 1];        // the sound card is faster: one sample repeated
                 length++;
             }
 
@@ -120,7 +120,7 @@ public sealed unsafe class PcSpeakers : ISpeaker, IDisposable
             if (disposed) return;
             disposed = true;
 
-            waveOutReset(device);   // restituisce subito tutti i buffer
+            waveOutReset(device);   // returns all the buffers at once
             foreach (var header in headers)
             {
                 if ((header->Flags & WHDR_PREPARED) != 0) waveOutUnprepareHeader(device, header, (uint)sizeof(WaveHeader));

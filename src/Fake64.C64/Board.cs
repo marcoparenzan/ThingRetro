@@ -3,8 +3,8 @@ using Fake64.Mos;
 
 namespace Fake64.C64;
 
-// La scheda madre del C64 (PAL): zoccoli per i chip MOS, RAM, color RAM, ROM, PLA e le piste che
-// collegano tutto. I chip non conoscono la scheda: la scheda li collega attraverso la loro piedinatura
+// The C64 (PAL) motherboard: sockets for the MOS chips, RAM, color RAM, ROMs, PLA and the traces that
+// connect everything. The chips do not know the board: the board wires them through their pinouts
 public partial class Board
 {
     Task? clock;
@@ -13,21 +13,21 @@ public partial class Board
     readonly Ram64KbChip ram64 = new();
     readonly ColorRamChip colorRam = new();
 
-    // Prese esterne: uscita video (vi si collega un monitor con un MonitorCable), uscita audio
-    // (altoparlanti, con un AudioCable), tastiera e le due porte di controllo (joystick, paddle, mouse)
+    // External sockets: video output (a monitor connects with a MonitorCable), audio output
+    // (speakers, with an AudioCable), keyboard and the two control ports (joystick, paddles, mouse)
     public VideoPort VideoOut { get; } = new();
     public AudioPort AudioOut { get; } = new(MASTER_CLOCK_HZ);
     public Keyboard Keyboard => keyboard;
-    public ControlPort ControlPort1 { get; } = new("porta di controllo 1");
-    public ControlPort ControlPort2 { get; } = new("porta di controllo 2");
+    public ControlPort ControlPort1 { get; } = new("control port 1");
+    public ControlPort ControlPort2 { get; } = new("control port 2");
 
-    // Accesso diretto alla RAM, senza passare per la mappa di memoria (come un DMA): permette di
-    // scrivere anche sotto le ROM. Da usare dal thread di emulazione, ad esempio tramite Enqueue
+    // Direct RAM access, bypassing the memory map (like a DMA): it can write under the ROMs too.
+    // To be used from the emulation thread, for example through Enqueue
     public Ram64KbChip Ram => ram64;
 
     internal long TotalCycles => totalCycles;
 
-    // Cicli con BA basso: il VIC-II ha chiesto il bus (43 per bad line; la CPU può ancora scrivere nei primi 3)
+    // Cycles with BA low: the VIC-II asked for the bus (43 per bad line; the CPU can still write in the first 3)
     internal long StolenCycles { get; private set; }
 
     // Cycle constants for PAL C64
@@ -35,8 +35,8 @@ public partial class Board
 
     private long totalCycles;
 
-    // Le ROM arrivano da fuori: la Board non sa dove sono i file (vedi SystemRoms).
-    // Gli zoccoli vengono popolati con i chip di serie; si possono sostituire (vedi Socket)
+    // The ROMs come from outside: the Board does not know where the files are (see SystemRoms).
+    // The sockets are filled with the stock chips; they can be replaced (see Socket)
     public Board(SystemRoms roms, bool startClock = true)
     {
         ArgumentNullException.ThrowIfNull(roms);
@@ -59,25 +59,34 @@ public partial class Board
         if (startClock) Start();
     }
 
-    // Avvia l'emulazione in tempo reale su un task separato
+    // Starts the real-time emulation on a separate task
     public void Start()
     {
         if (clock is not null) return;
 
-        // Thread dedicato: emula i cicli che mancano per stare al passo con l'orologio, poi dorme 1 ms
-        // invece di girare a vuoto (prima il ciclo teneva occupato un core anche a emulazione in pari)
+        // Dedicated thread: emulates the cycles needed to keep up with the clock, then sleeps 1 ms
+        // instead of spinning (the loop used to keep a core busy even when the emulation was in step)
+        var stop = clockStop = new CancellationTokenSource();
         clock = Task.Factory.StartNew(() =>
         {
             using var timerResolution = new TimerResolution(1);
             var sw = Stopwatch.StartNew();
             long startCycles = totalCycles;
 
-            while (true)
+            while (!stop.IsCancellationRequested)
             {
-                // Comandi arrivati da altri thread (es. caricamento di un .prg dalla UI)
+                // Commands from other threads (e.g. loading a .prg from the UI)
                 RunPendingCommands();
 
-                // Converte il tempo trascorso in cicli PAL senza perdere precisione
+                // After a fast-forward the clock starts again from here, instead of waiting for real time to catch up
+                if (resyncClock)
+                {
+                    resyncClock = false;
+                    sw.Restart();
+                    startCycles = totalCycles;
+                }
+
+                // Converts the elapsed time into PAL cycles without losing precision
                 long targetCycles = startCycles + (long)(sw.ElapsedTicks * (double)MASTER_CLOCK_HZ / Stopwatch.Frequency);
 
                 if (totalCycles >= targetCycles)
@@ -92,14 +101,38 @@ public partial class Board
         }, TaskCreationOptions.LongRunning);
     }
 
-    // Esegue un numero fisso di cicli in modo sincrono (usato dai test, con startClock: false)
+    CancellationTokenSource? clockStop;
+    bool resyncClock;
+
+    // Stops the real-time emulation and waits for the emulation thread to finish (the machine keeps its state:
+    // Start resumes it). Commands still queued are dropped
+    public void Stop()
+    {
+        if (clock is null) return;
+        clockStop!.Cancel();
+        clock.Wait();
+        clock = null;
+        clockStop.Dispose();
+        clockStop = null;
+        pendingCommands.Clear();
+    }
+
+    // Emulates the given time as fast as possible, e.g. the KERNAL boot before loading a program.
+    // Call it from the emulation thread (inside Enqueue); real-time pacing resumes from the end of it
+    public void FastForward(TimeSpan time)
+    {
+        RunCycles((long)(time.TotalSeconds * MASTER_CLOCK_HZ));
+        resyncClock = true;
+    }
+
+    // Runs a fixed number of cycles synchronously (used by the tests, with startClock: false)
     internal void RunCycles(long cycles)
     {
         for (long i = 0; i < cycles; i++) ExecuteCycle();
     }
 
-    // Un ciclo di clock (φ2). BA del VIC-II si legge prima di farlo avanzare, perché riguarda
-    // il ciclo in corso; il VIC-II chiude il ciclo e, a fine riga, disegna e gestisce il raster
+    // One clock cycle (φ2). The VIC-II's BA is read before advancing it, because it concerns the current
+    // cycle; the VIC-II closes the cycle and, at the end of a line, draws it and handles the raster
     private void ExecuteCycle()
     {
         bool busAvailable = vic?.BusAvailable ?? true;
@@ -108,20 +141,20 @@ public partial class Board
         cia2?.Tick();
         sid?.Tick();
         AudioOut.Sample(sid?.AudioOutput ?? 0);
-        cpu?.Tick(); // RDY e AEC sono collegati al VIC-II: la CPU si ferma da sola quando serve
+        cpu?.Tick(); // RDY and AEC are wired to the VIC-II: the CPU stops by itself when needed
         if (!busAvailable) StolenCycles++;
         vic?.Tick();
 
         totalCycles++;
     }
 
-    // Fine di un frame del VIC-II: l'immagine va alla presa video
+    // End of a VIC-II frame: the picture goes to the video socket
     void OnFrameCompleted()
     {
         if (vic is not null) VideoOut.Present(vic);
     }
 
-    // Accensione / pulsante di reset: /RES arriva a tutti i chip, la CPU riparte dal vettore di reset
+    // Power on / reset button: /RES reaches all the chips, the CPU restarts from the reset vector
     public void Reset()
     {
         ram64.Reset();
@@ -132,7 +165,7 @@ public partial class Board
         vic?.Reset();
         cartridge?.Reset();
         MemoryMap();
-        cpu?.Reset(); // la porta $01 torna in ingresso: la mappa si aggiorna prima di leggere il vettore
+        cpu?.Reset(); // port $01 goes back to input: the map is updated before the vector is read
     }
 
     public byte Chargen(ushort addr) => chargen[addr];

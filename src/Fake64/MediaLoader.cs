@@ -4,11 +4,11 @@ using Fake64.C64;
 
 namespace Fake64;
 
-// Apertura dei file supportati dall'app: .prg (Fake64.Prg) e .crt (Fake64.Crt). La scheda (Fake64.C64)
-// non conosce nessuno dei due formati: qui si legge il file e si passa il risultato alla Board
+// Opening the files the app supports: .prg (Fake64.Prg) and .crt (Fake64.Crt). The board (Fake64.C64)
+// knows neither format: the file is read here and the result is handed to the Board
 static class MediaLoader
 {
-    // Tempo lasciato al KERNAL per arrivare a READY. prima di caricare un .prg all'avvio
+    // Time left to the KERNAL to reach READY. before a .prg is loaded
     public static readonly TimeSpan BootTime = TimeSpan.FromSeconds(3);
 
     public static bool IsCartridge(string path) => HasExtension(path, ".crt");
@@ -18,8 +18,8 @@ static class MediaLoader
     static bool HasExtension(string path, string extension) =>
         string.Equals(Path.GetExtension(path), extension, StringComparison.OrdinalIgnoreCase);
 
-    // Restituisce una descrizione per il titolo della finestra; i file non validi sollevano un'eccezione
-    // (IOException, InvalidDataException, NotSupportedException, ArgumentException)
+    // Loads the file into a running machine and returns a description for the title. A BASIC program is RUN.
+    // Invalid files throw (IOException, InvalidDataException, NotSupportedException, ArgumentException)
     public static string Open(Board board, string path)
     {
         var content = File.ReadAllBytes(path);
@@ -33,11 +33,11 @@ static class MediaLoader
             return $"{name} ({cartridge.TypeName})";
         }
 
-        // Il caricamento scrive in RAM: va fatto sul thread di emulazione. Il file si verifica prima,
-        // così gli errori arrivano a chi lo ha aperto
+        // Loading writes RAM: it must happen on the emulation thread. The file is checked first,
+        // so that errors reach whoever opened it
         var (start, end) = PrgFile.GetRange(content);
 
-        // Leggere i due byte del puntatore al BASIC da questo thread è innocuo: il BASIC non lo cambia
+        // Reading the two bytes of the BASIC start pointer from this thread is harmless: BASIC does not change it
         bool basic = board.IsBasicProgram(start);
         board.Enqueue(() =>
         {
@@ -45,5 +45,24 @@ static class MediaLoader
             if (basic) board.TypeText("RUN\r");
         });
         return basic ? $"{fileName} (BASIC)" : $"{fileName} ${start:X4}-${end - 1:X4}: SYS {start}";
+    }
+
+    // Starts a program from scratch: reset, KERNAL boot at full speed, load, then RUN (BASIC, or machine code with
+    // a BASIC stub at $0801) or SYS to its first byte. A cartridge is simply inserted, which resets the machine
+    public static string Run(Board board, string path)
+    {
+        if (IsCartridge(path)) return Open(board, path);
+
+        var content = File.ReadAllBytes(path);
+        var (start, end) = PrgFile.GetRange(content);
+        board.Enqueue(() =>
+        {
+            board.RemoveCartridge();
+            board.Reset();
+            board.FastForward(BootTime);
+            board.LoadPrg(content);
+            board.TypeText(board.IsBasicProgram(start) ? "RUN\r" : $"SYS{start}\r");
+        });
+        return $"{Path.GetFileName(path)} ${start:X4}-${end - 1:X4}";
     }
 }

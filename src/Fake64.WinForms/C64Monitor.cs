@@ -6,13 +6,13 @@ using Fake64.Mos;
 
 namespace Fake64.WinForms;
 
-// Il monitor: uno UserControl che mostra i frame ricevuti dall'uscita video di una Board.
-// Non conosce la Board: si collega con un MonitorCable (new MonitorCable(board.VideoOut, monitor)).
-// Si può inserire in qualunque form; l'immagine viene scalata mantenendo le proporzioni
+// The monitor: a UserControl that shows the frames received from the video output of a Board.
+// It does not know the Board: it is connected with a MonitorCable (new MonitorCable(board.VideoOut, monitor)).
+// It can go into any form; the picture is scaled keeping its proportions
 public class C64Monitor : UserControl, IScreen
 {
-    // La bitmap ha sempre la dimensione del frame del VIC-II: Render scrive righe contigue di
-    // SCREEN_WIDTH pixel, quindi non deve dipendere dalla dimensione (o dal DPI) del controllo
+    // The bitmap always has the size of the VIC-II frame: Render writes contiguous rows of
+    // SCREEN_WIDTH pixels, so it must not depend on the size (or the DPI) of the control
     readonly Bitmap frame = new(MOS6569.SCREEN_WIDTH, MOS6569.SCREEN_HEIGHT, PixelFormat.Format32bppArgb);
     readonly object frameLock = new();
     BitmapData? frameData;
@@ -28,15 +28,15 @@ public class C64Monitor : UserControl, IScreen
         Size = new Size(MOS6569.SCREEN_WIDTH * 2, MOS6569.SCREEN_HEIGHT * 2);
     }
 
-    // Se falso l'immagine riempie tutto il controllo anche deformandosi
+    // If false the picture fills the whole control, even if distorted
     [DefaultValue(true)]
     public bool KeepAspectRatio { get; set; } = true;
 
-    // Frame ricevuti dal cavo video da quando il controllo esiste
+    // Frames received from the video cable since the control exists
     [Browsable(false)]
     public long FramesReceived => Interlocked.Read(ref framesReceived);
 
-    // Copia dell'ultimo frame ricevuto, alla risoluzione originale
+    // Copy of the last frame received, at the original resolution
     public Bitmap CaptureFrame()
     {
         lock (frameLock)
@@ -45,7 +45,7 @@ public class C64Monitor : UserControl, IScreen
         }
     }
 
-    // IScreen: chiamati dal thread di emulazione a fine frame; il lock resta preso fra BeginRender ed EndRender
+    // IScreen: called by the emulation thread at the end of a frame; the lock is held between BeginRender and EndRender
     unsafe byte* IScreen.BeginRender()
     {
         Monitor.Enter(frameLock);
@@ -60,11 +60,11 @@ public class C64Monitor : UserControl, IScreen
         Monitor.Exit(frameLock);
         Interlocked.Increment(ref framesReceived);
 
-        // Invalidate è sicuro da qualunque thread: il disegno avviene poi sul thread della UI
+        // Invalidate is safe from any thread: the painting then happens on the UI thread
         if (IsHandleCreated && !IsDisposed) Invalidate();
     }
 
-    // Area del controllo occupata dall'immagine (con bande nere se le proporzioni sono diverse)
+    // Area of the control taken by the picture (with black bars if the proportions differ)
     public Rectangle ImageBounds
     {
         get
@@ -91,14 +91,14 @@ public class C64Monitor : UserControl, IScreen
         base.OnPaint(e);
     }
 
-    // Il clic dà il focus al monitor, così la tastiera del PC arriva al C64 (vedi PcKeyboard)
+    // A click gives the focus to the monitor, so the PC keyboard reaches the C64 (see PcKeyboard)
     protected override void OnMouseDown(MouseEventArgs e)
     {
         Focus();
         base.OnMouseDown(e);
     }
 
-    // I tasti cursore devono arrivare al controllo invece di spostare il focus fra i controlli della form
+    // The cursor keys must reach the control instead of moving the focus between the form's controls
     protected override bool IsInputKey(Keys keyData) =>
         (keyData & Keys.KeyCode) is Keys.Up or Keys.Down or Keys.Left or Keys.Right || base.IsInputKey(keyData);
 

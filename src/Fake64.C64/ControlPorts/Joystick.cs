@@ -1,12 +1,12 @@
 namespace Fake64.C64;
 
-// Joystick digitale: cinque interruttori che chiudono a massa i pin su, giù, sinistra, destra e fuoco.
-// Lo stato si può cambiare da qualunque thread (per esempio dal simulatore che legge la tastiera del PC)
+// Digital joystick: five switches that close the up, down, left, right and fire pins to ground.
+// The state can be changed from any thread (for example from the simulator that reads the PC keyboard)
 public sealed class Joystick : IControlPortDevice
 {
     const int UpBit = 0x01, DownBit = 0x02, LeftBit = 0x04, RightBit = 0x08, FireBit = 0x10;
 
-    int closed; // contatti chiusi, un bit per interruttore
+    int closed; // closed contacts, one bit per switch
 
     public bool Up { get => Get(UpBit); set => Set(UpBit, value); }
     public bool Down { get => Get(DownBit); set => Set(DownBit, value); }
@@ -14,7 +14,7 @@ public sealed class Joystick : IControlPortDevice
     public bool Right { get => Get(RightBit); set => Set(RightBit, value); }
     public bool Fire { get => Get(FireBit); set => Set(FireBit, value); }
 
-    // Tutti gli interruttori in una volta (utile quando lo stato arriva tutto insieme, come da un gamepad)
+    // All the switches at once (useful when the state comes all together, as from a gamepad)
     public void SetState(bool up, bool down, bool left, bool right, bool fire) =>
         Volatile.Write(ref closed, (up ? UpBit : 0) | (down ? DownBit : 0) | (left ? LeftBit : 0) | (right ? RightBit : 0) | (fire ? FireBit : 0));
 

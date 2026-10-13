@@ -2,11 +2,11 @@ namespace Fake64.Mos;
 
 public partial class MOS6526 : I6526Pinout
 {
-    // PA0-PA7 e PB0-PB7: registri 0/1 (dati) e 2/3 (direzione)
+    // PA0-PA7 and PB0-PB7: registers 0/1 (data) and 2/3 (direction)
     public ParallelPort PortA { get; } = new();
     public ParallelPort PortB { get; } = new();
 
-    // /IRQ: attiva finché l'ICR non viene letto
+    // /IRQ: active until the ICR is read
     public bool Irq => (interruptStatus & 0x80) != 0;
 
     // Registers
@@ -51,7 +51,7 @@ public partial class MOS6526 : I6526Pinout
         Reset();
     }
 
-    // /RES: tutti i registri a zero, porte in ingresso, timer fermi
+    // /RES: all registers cleared, ports as inputs, timers stopped
     public void Reset()
     {
         // Clear all registers
@@ -79,20 +79,20 @@ public partial class MOS6526 : I6526Pinout
         todCycleDivider = 0;
     }
 
-    // φ2: un ciclo di timer, TOD e interrupt
+    // φ2: one cycle of timers, TOD and interrupts
     public void Tick()
     {
         ProcessSignals();
         Clock();
     }
 
-    // RS0-RS3: i 16 registri si ripetono in tutta l'area selezionata da /CS
+    // RS0-RS3: the 16 registers repeat across the whole area selected by /CS
     public byte Read(int register)
     {
         switch (register & 0x0F)
         {
             case 0x00:
-                // I bit in uscita restituiscono il valore scritto, quelli in ingresso lo stato del pin
+                // Output bits return the value written, input bits the state of the pin
                 return PortA.Pins;
             case 0x01:
                 return PortB.Pins;
@@ -109,7 +109,7 @@ public partial class MOS6526 : I6526Pinout
             case 0x0C: return serialShift; // Serial port
             case 0x0D: // Interrupt Control Register (ICR)
                 byte temp = interruptStatus;
-                interruptStatus = 0; // La lettura azzera tutti i flag e rilascia la linea IRQ
+                interruptStatus = 0; // Reading clears all the flags and releases the IRQ line
                 return temp;
             case 0x0E: return controlRegA; // Control register A
             case 0x0F: return controlRegB; // Control register B
@@ -197,17 +197,17 @@ public partial class MOS6526 : I6526Pinout
                 this.CheckInterrupts();
                 break;
             case 0x0E: // Control register A
-                controlRegA = (byte)(value & ~0x10); // Il bit 4 (force load) è uno strobe, non viene memorizzato
+                controlRegA = (byte)(value & ~0x10); // Bit 4 (force load) is a strobe, it is not stored
                 timerARunning = (value & 0x01) != 0; // Start bit
-                if ((value & 0x10) != 0) // Force load: carica il latch anche a timer fermo
+                if ((value & 0x10) != 0) // Force load: loads the latch even while the timer is stopped
                 {
                     timerA = timerALatch;
                 }
                 break;
             case 0x0F: // Control register B
-                controlRegB = (byte)(value & ~0x10); // Il bit 4 (force load) è uno strobe, non viene memorizzato
+                controlRegB = (byte)(value & ~0x10); // Bit 4 (force load) is a strobe, it is not stored
                 timerBRunning = (value & 0x01) != 0; // Start bit
-                if ((value & 0x10) != 0) // Force load: carica il latch anche a timer fermo
+                if ((value & 0x10) != 0) // Force load: loads the latch even while the timer is stopped
                 {
                     timerB = timerBLatch;
                 }

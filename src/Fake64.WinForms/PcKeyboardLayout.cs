@@ -2,9 +2,9 @@ using Fake64.C64;
 
 namespace Fake64.WinForms;
 
-// Corrispondenza fra i tasti del PC e i tasti del C64. È posizionale, come in VICE: i simboli
-// a destra della L del PC producono quelli a destra della L del C64 (":" e ";").
-// Alcuni tasti del PC corrispondono a un tasto del C64 premuto insieme allo Shift sinistro
+// Mapping between PC keys and C64 keys. It is positional, as in VICE: the symbols to the right of
+// the PC's L produce those to the right of the C64's L (":" and ";").
+// Some PC keys map to a C64 key pressed together with the left Shift
 public static class PcKeyboardLayout
 {
     readonly record struct Mapping(C64Key Key, bool Shift = false);
@@ -25,13 +25,13 @@ public static class PcKeyboardLayout
         map[Keys.Back] = new(C64Key.Delete);
         map[Keys.Escape] = new(C64Key.RunStop);
 
-        // Tasti cursore: il C64 ha solo CRSR destra e CRSR giù, sinistra e su si ottengono con Shift
+        // Cursor keys: the C64 has only CRSR right and CRSR down, left and up are obtained with Shift
         map[Keys.Right] = new(C64Key.CursorRight);
         map[Keys.Left] = new(C64Key.CursorRight, Shift: true);
         map[Keys.Down] = new(C64Key.CursorDown);
         map[Keys.Up] = new(C64Key.CursorDown, Shift: true);
 
-        // Tasti funzione: F1, F3, F5, F7 sono tasti fisici, F2, F4, F6, F8 sono gli stessi con Shift
+        // Function keys: F1, F3, F5, F7 are physical keys, F2, F4, F6, F8 are the same with Shift
         map[Keys.F1] = new(C64Key.F1);
         map[Keys.F2] = new(C64Key.F1, Shift: true);
         map[Keys.F3] = new(C64Key.F3);
@@ -55,7 +55,7 @@ public static class PcKeyboardLayout
 
     public static bool IsMapped(Keys key) => key == Keys.ShiftKey || Map.ContainsKey(key);
 
-    // Tasti del C64 premuti dato l'insieme dei tasti del PC premuti (codici senza modificatori)
+    // C64 keys pressed for a given set of pressed PC keys (codes without modifiers)
     public static IReadOnlyCollection<C64Key> ToC64Keys(IEnumerable<Keys> pcKeys)
     {
         var keys = new HashSet<C64Key>();

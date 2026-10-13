@@ -2,13 +2,13 @@ using Fake64.C64;
 
 namespace Fake64.WinForms;
 
-// Il cavo della tastiera: porta i tasti premuti su un controllo WinForms (di solito il C64Monitor)
-// alla tastiera del C64. I tasti arrivano solo quando quel controllo ha il focus, così il C64 può
-// stare in una form con altri controlli; perdendo il focus tutti i tasti vengono rilasciati
+// The keyboard cable: takes the keys pressed on a WinForms control (usually the C64Monitor) to the
+// C64 keyboard. The keys arrive only while that control has the focus, so the C64 can live in a form
+// with other controls; when the focus is lost all keys are released
 public sealed class PcKeyboard : IDisposable
 {
-    // Il KERNAL legge la tastiera 60 volte al secondo: un tasto premuto e rilasciato più in fretta
-    // (SendKeys, incolla, digitazione molto veloce) andrebbe perso, quindi resta premuto almeno così
+    // The KERNAL reads the keyboard 60 times per second: a key pressed and released faster than that
+    // (SendKeys, paste, very fast typing) would be lost, so it stays pressed at least this long
     public static readonly TimeSpan MinimumHold = TimeSpan.FromMilliseconds(40);
 
     readonly Control source;
@@ -18,10 +18,10 @@ public sealed class PcKeyboard : IDisposable
     readonly Dictionary<Keys, long> releaseDueAt = [];
     readonly System.Windows.Forms.Timer releaseTimer = new() { Interval = 10 };
 
-    // Orologio in millisecondi, sostituibile nei test
+    // Clock in milliseconds, replaceable in the tests
     internal Func<long> Now { get; set; } = () => Environment.TickCount64;
 
-    // Tasti riservati ad altro (per esempio al joystick da tastiera): non arrivano alla tastiera del C64
+    // Keys reserved for something else (for example the keyboard joystick): they do not reach the C64 keyboard
     public Func<Keys, bool>? Excluded { get; set; }
 
     bool Handles(Keys key) => PcKeyboardLayout.IsMapped(key) && Excluded?.Invoke(key) != true;
@@ -40,9 +40,9 @@ public sealed class PcKeyboard : IDisposable
     {
         if (!Handles(e.KeyCode)) return;
         e.Handled = true;
-        e.SuppressKeyPress = true; // F10 e simili non attivano il menu della form
+        e.SuppressKeyPress = true; // F10 and the like do not activate the form's menu
         releaseDueAt.Remove(e.KeyCode);
-        if (!pressed.Add(e.KeyCode)) return; // la ripetizione automatica di Windows non cambia nulla
+        if (!pressed.Add(e.KeyCode)) return; // Windows auto-repeat changes nothing
         pressedAt[e.KeyCode] = Now();
         Update();
     }
@@ -65,7 +65,7 @@ public sealed class PcKeyboard : IDisposable
         }
     }
 
-    // Rilascia i tasti la cui durata minima è trascorsa (chiamato dal timer)
+    // Releases the keys whose minimum hold time has passed (called by the timer)
     internal void ReleaseDueKeys()
     {
         long now = Now();

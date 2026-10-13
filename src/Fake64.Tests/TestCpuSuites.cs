@@ -2,15 +2,15 @@ using System.Text.Json;
 
 namespace Fake64.Tests;
 
-// Suite di test esterne per il nucleo 6502, scaricate con tools/Download-CpuTests.ps1.
-// Non sono nel repository (licenze GPL-3.0 e MIT): se mancano i test risultano "Inconclusive"
+// External test suites for the 6502 core, downloaded with tools/Download-CpuTests.ps1.
+// They are not in the repository (GPL-3.0 and MIT licenses): when they are missing the tests are "Inconclusive"
 [TestClass]
 public sealed class CpuSuiteTests
 {
     static readonly string External = Path.Combine(
         AppContext.BaseDirectory, "..", "..", "..", "TestData", "External");
 
-    // RAM piatta da 64 KB, senza I/O: il 6502 "nudo"
+    // Flat 64 KB RAM, without I/O: the "bare" 6502
     sealed class FlatBus : IBus
     {
         public readonly byte[] Memory = new byte[0x10000];
@@ -31,18 +31,18 @@ public sealed class CpuSuiteTests
 
     #region Klaus Dormann, 6502 functional test
 
-    // Tutte le istruzioni documentate, flag e modo decimale. Il programma parte da $0400 e termina
-    // in un "JMP *": a $3469 se tutti i test sono passati, altrove nel punto dell'errore
+    // All the documented instructions, flags and decimal mode. The program starts at $0400 and ends
+    // in a "JMP *": at $3469 if all the tests passed, elsewhere at the point of the error
     [TestMethod]
     [Timeout(120_000)]
     public void KlausDormann_FunctionalTest_ShouldReachSuccessTrap()
     {
         string image = Path.Combine(External, "KlausDormann", "6502_functional_test.bin");
-        if (!File.Exists(image)) Assert.Inconclusive("Manca il test: eseguire tools/Download-CpuTests.ps1 -SkipSingleStep");
+        if (!File.Exists(image)) Assert.Inconclusive("Test missing: run tools/Download-CpuTests.ps1 -SkipSingleStep");
 
         var bus = new FlatBus();
         File.ReadAllBytes(image).CopyTo(bus.Memory, 0);
-        bus.Memory[0xFFFC] = 0x00; // il vettore di reset del file punta altrove: si parte da $0400
+        bus.Memory[0xFFFC] = 0x00; // the file's reset vector points elsewhere: start from $0400
         bus.Memory[0xFFFD] = 0x04;
         var cpu = new MOS6502 { Bus = bus };
         cpu.Reset();
@@ -53,20 +53,20 @@ public sealed class CpuSuiteTests
         {
             do cpu.Tick(); while (!cpu.IsInstructionBoundary);
             instructions++;
-            if (cpu.PC == previous) break; // JMP * : fine del test
+            if (cpu.PC == previous) break; // JMP * : end of the test
             previous = cpu.PC;
-            if (instructions > 100_000_000) Assert.Fail($"Il test non termina (PC=${cpu.PC:X4})");
+            if (instructions > 100_000_000) Assert.Fail($"The test does not end (PC=${cpu.PC:X4})");
         }
 
-        Assert.AreEqual(0x3469, (int)cpu.PC, $"Trappola di errore a ${cpu.PC:X4}: vedere 6502_functional_test.lst");
+        Assert.AreEqual(0x3469, (int)cpu.PC, $"Error trap at ${cpu.PC:X4}: see 6502_functional_test.lst");
     }
 
     #endregion
 
     #region Tom Harte, SingleStepTests 6502/v1
 
-    // Opcode esclusi: i JAM (la CPU si blocca, il comportamento sul bus non è un'istruzione) e quelli
-    // instabili, che dipendono dal singolo chip e dalla temperatura
+    // Excluded opcodes: the JAMs (the CPU halts, the bus behaviour is not an instruction) and the unstable
+    // ones, which depend on the individual chip and on temperature
     static readonly HashSet<int> Excluded =
     [
         0x02, 0x12, 0x22, 0x32, 0x42, 0x52, 0x62, 0x72, 0x92, 0xB2, 0xD2, 0xF2, // JAM
@@ -78,14 +78,14 @@ public sealed class CpuSuiteTests
 
     public static string OpcodeName(System.Reflection.MethodInfo method, object[] data) => $"SingleStep ${(int)data[0]:X2}";
 
-    // Ogni caso: stato iniziale (registri e RAM), stato finale atteso e accessi al bus ciclo per ciclo
+    // Each case: initial state (registers and RAM), expected final state and bus accesses cycle by cycle
     [TestMethod]
     [DynamicData(nameof(Opcodes), DynamicDataDisplayName = nameof(OpcodeName))]
     public void SingleStep_ShouldMatchStateAndBusCycles(int opcode)
     {
         string file = Path.Combine(External, "SingleStepTests", "6502", $"{opcode:x2}.json");
-        if (Excluded.Contains(opcode)) Assert.Inconclusive("Opcode instabile o JAM: escluso");
-        if (!File.Exists(file)) Assert.Inconclusive("Manca il file: eseguire tools/Download-CpuTests.ps1");
+        if (Excluded.Contains(opcode)) Assert.Inconclusive("Unstable or JAM opcode: excluded");
+        if (!File.Exists(file)) Assert.Inconclusive("File missing: run tools/Download-CpuTests.ps1");
 
         using var document = JsonDocument.Parse(File.ReadAllBytes(file));
         var failures = new List<string>();
@@ -100,7 +100,7 @@ public sealed class CpuSuiteTests
         }
 
         if (failures.Count > 0)
-            Assert.Fail($"{failures.Count} casi su {total} falliti, ad esempio:\n" + string.Join("\n", failures.Where(f => f.Length > 0)));
+            Assert.Fail($"{failures.Count} cases out of {total} failed, for example:\n" + string.Join("\n", failures.Where(f => f.Length > 0)));
     }
 
     static string? RunCase(JsonElement test)
@@ -111,7 +111,7 @@ public sealed class CpuSuiteTests
             bus.Memory[cell[0].GetInt32()] = (byte)cell[1].GetInt32();
 
         var cpu = new MOS6502 { Bus = bus };
-        cpu.Reset(); // poi lo stato viene impostato a mano
+        cpu.Reset(); // then the state is set by hand
         cpu.PC = (ushort)initial.GetProperty("pc").GetInt32();
         cpu.SP = (byte)initial.GetProperty("s").GetInt32();
         cpu.A = (byte)initial.GetProperty("a").GetInt32();
@@ -127,14 +127,14 @@ public sealed class CpuSuiteTests
         string name = test.GetProperty("name").GetString()!;
         var expectedCycles = test.GetProperty("cycles");
         if (expectedCycles.GetArrayLength() != bus.Log.Count)
-            return $"{name}: {bus.Log.Count} cicli invece di {expectedCycles.GetArrayLength()}";
+            return $"{name}: {bus.Log.Count} cycles instead of {expectedCycles.GetArrayLength()}";
         int index = 0;
         foreach (var expected in expectedCycles.EnumerateArray())
         {
             var (address, value, write) = bus.Log[index];
             bool expectedWrite = expected[2].GetString() == "write";
             if (address != expected[0].GetInt32() || value != expected[1].GetInt32() || write != expectedWrite)
-                return $"{name}: ciclo {index} = {(write ? "W" : "R")} ${address:X4}={value:X2}, atteso {(expectedWrite ? "W" : "R")} ${expected[0].GetInt32():X4}={expected[1].GetInt32():X2}";
+                return $"{name}: cycle {index} = {(write ? "W" : "R")} ${address:X4}={value:X2}, expected {(expectedWrite ? "W" : "R")} ${expected[0].GetInt32():X4}={expected[1].GetInt32():X2}";
             index++;
         }
 
@@ -146,13 +146,13 @@ public sealed class CpuSuiteTests
         foreach (var (register, actual) in registers)
         {
             int expected = final.GetProperty(register).GetInt32();
-            if (actual != expected) return $"{name}: {register} = ${actual:X2}, atteso ${expected:X2}";
+            if (actual != expected) return $"{name}: {register} = ${actual:X2}, expected ${expected:X2}";
         }
         foreach (var cell in final.GetProperty("ram").EnumerateArray())
         {
             int address = cell[0].GetInt32();
             if (bus.Memory[address] != cell[1].GetInt32())
-                return $"{name}: RAM ${address:X4} = ${bus.Memory[address]:X2}, atteso ${cell[1].GetInt32():X2}";
+                return $"{name}: RAM ${address:X4} = ${bus.Memory[address]:X2}, expected ${cell[1].GetInt32():X2}";
         }
         return null;
     }

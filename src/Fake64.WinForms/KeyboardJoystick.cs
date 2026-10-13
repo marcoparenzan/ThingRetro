@@ -4,15 +4,15 @@ namespace Fake64.WinForms;
 
 public enum JoystickKeySet
 {
-    // 8 su, 2 giù, 4 sinistra, 6 destra; 7, 9, 1, 3 diagonali; 0 o 5 fuoco (con Bloc Num attivo)
+    // 8 up, 2 down, 4 left, 6 right; 7, 9, 1, 3 diagonals; 0 or 5 fire (with Num Lock on)
     NumericKeypad,
-    // frecce per le direzioni, Ctrl per il fuoco (per i portatili senza tastierino)
+    // arrows for the directions, Ctrl for fire (for laptops without a keypad)
     ArrowsAndCtrl,
 }
 
-// Simulatore: la tastiera del PC muove un Joystick collegato a una porta di controllo. I tasti arrivano da
-// un controllo WinForms (di solito il C64Monitor) e solo quando ha il focus; quelli usati dal joystick vanno
-// esclusi dalla tastiera del C64 (PcKeyboard.Excluded = UsesKey)
+// Simulator: the PC keyboard moves a Joystick connected to a control port. The keys come from a WinForms
+// control (usually the C64Monitor) and only while it has the focus; the keys used by the joystick must be
+// kept away from the C64 keyboard (PcKeyboard.Excluded = UsesKey)
 public sealed class KeyboardJoystick : IDisposable
 {
     [Flags]
@@ -82,7 +82,7 @@ public sealed class KeyboardJoystick : IDisposable
         joystick.ReleaseAll();
     }
 
-    // Più tasti insieme si sommano (su + destra = diagonale), come gli interruttori del joystick
+    // Several keys together add up (up + right = diagonal), like the joystick's switches
     void Update()
     {
         var direction = Direction.None;

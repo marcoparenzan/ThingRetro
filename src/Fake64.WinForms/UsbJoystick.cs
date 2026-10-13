@@ -5,13 +5,13 @@ namespace Fake64.WinForms;
 
 public sealed record UsbJoystickInfo(int Id, string Name);
 
-// Simulatore: un joystick o gamepad USB muove un Joystick collegato a una porta di controllo.
-// Usa l'API joystick di Windows (winmm), che vede quasi tutti i dispositivi HID, controller Xbox compresi.
-// Direzioni dalla leva principale (con zona morta) o dal pad direzionale; fuoco dai pulsanti 1-4
+// Simulator: a USB joystick or gamepad moves a Joystick connected to a control port.
+// It uses the Windows joystick API (winmm), which sees almost every HID device, Xbox controllers included.
+// Directions from the main stick (with a dead zone) or from the directional pad; fire from buttons 1-4
 public sealed class UsbJoystick : IDisposable
 {
     const int PollMilliseconds = 10;
-    const double DeadZone = 0.35; // frazione di metà corsa
+    const double DeadZone = 0.35; // fraction of half travel
 
     readonly int id;
     readonly Joystick joystick;
@@ -30,7 +30,7 @@ public sealed class UsbJoystick : IDisposable
 
     public string Name { get; }
 
-    // Dispositivi collegati ora (quelli che rispondono a una lettura)
+    // Devices connected now (those that answer a read)
     public static IReadOnlyList<UsbJoystickInfo> Connected()
     {
         var devices = new List<UsbJoystickInfo>();
@@ -58,7 +58,7 @@ public sealed class UsbJoystick : IDisposable
         var info = NewInfo();
         if (joyGetPosEx(id, ref info) != 0)
         {
-            joystick.ReleaseAll(); // scollegato
+            joystick.ReleaseAll(); // disconnected
             return;
         }
         var state = Map(info.dwXpos, info.dwYpos, xRange, yRange, info.dwPOV, info.dwButtons);
@@ -69,8 +69,8 @@ public sealed class UsbJoystick : IDisposable
 
     internal readonly record struct State(bool Up, bool Down, bool Left, bool Right, bool Fire);
 
-    // Lettura grezza -> interruttori: leva oltre la zona morta oppure pad direzionale (in centesimi di grado,
-    // 0 = su, 9000 = destra, $FFFF = centrato); il fuoco è uno qualsiasi dei pulsanti 1-4
+    // Raw reading -> switches: stick beyond the dead zone or directional pad (in hundredths of a degree,
+    // 0 = up, 9000 = right, $FFFF = centered); fire is any of buttons 1-4
     internal static State Map(int x, int y, AxisRange xRange, AxisRange yRange, int pov, int buttons)
     {
         double ax = Normalize(x, xRange), ay = Normalize(y, yRange);

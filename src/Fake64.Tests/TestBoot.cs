@@ -2,7 +2,7 @@ using static Fake64.Tests.TestHelpers;
 
 namespace Fake64.Tests;
 
-// Test di integrazione: KERNAL e BASIC reali, eseguiti ciclo per ciclo senza clock in tempo reale
+// Integration tests: the real KERNAL and BASIC, run cycle by cycle without the real-time clock
 [TestClass]
 public sealed class BootTests
 {
@@ -18,7 +18,7 @@ public sealed class BootTests
 
     private static void Enter(Board board, string line)
     {
-        // Il buffer di tastiera contiene 10 caratteri: le righe più lunghe vengono inserite a pezzi
+        // The keyboard buffer holds 10 characters: longer lines are typed in pieces
         for (int i = 0; i < line.Length; i += 9)
         {
             board.Type(line.Substring(i, Math.Min(9, line.Length - i)));
@@ -91,5 +91,49 @@ public sealed class BootTests
 
         var screen = string.Join("\n", board.ScreenLines());
         StringAssert.Contains(screen, "RUN\n 55\n");
+    }
+
+    [TestMethod]
+    public void Stop_ShouldEndTheRealTimeClock()
+    {
+        var board = NewBoard();
+        board.Start();
+        Thread.Sleep(200);
+        board.Stop();
+        long cycles = board.TotalCycles;
+        Thread.Sleep(100);
+
+        Assert.IsTrue(cycles > 0, "the clock never ran");
+        Assert.AreEqual(cycles, board.TotalCycles);   // stopped: no more cycles
+    }
+
+    // Measures time: it runs alone, other tests in parallel would slow it down
+    [TestMethod]
+    [DoNotParallelize]
+    public void FastForward_ShouldBootWithoutWaitingForRealTime()
+    {
+        var board = NewBoard();
+        board.Start();
+        var done = new ManualResetEventSlim();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        Exception? failure = null;
+        board.Enqueue(() =>
+        {
+            try
+            {
+                board.FastForward(TimeSpan.FromSeconds(3));
+            }
+            catch (Exception e)
+            {
+                failure = e;
+            }
+            done.Set();
+        });
+
+        Assert.IsTrue(done.Wait(TimeSpan.FromSeconds(10)), "not run");
+        Assert.IsNull(failure, failure?.ToString());
+        board.Stop();
+        Assert.IsTrue(clock.Elapsed < TimeSpan.FromSeconds(3), $"fast forward took {clock.Elapsed}");
+        CollectionAssert.Contains(board.ScreenLines(), "READY.");
     }
 }

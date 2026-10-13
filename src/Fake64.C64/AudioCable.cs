@@ -1,6 +1,6 @@
 namespace Fake64.C64;
 
-// Il cavo audio: collega l'uscita audio di una Board a un altoparlante. Dispose lo scollega
+// The audio cable: connects the audio output of a Board to a speaker. Dispose unplugs it
 public sealed class AudioCable : IDisposable
 {
     readonly AudioPort port;

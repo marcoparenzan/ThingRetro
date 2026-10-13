@@ -3,17 +3,17 @@ using static Fake64.Tests.TestHelpers;
 
 namespace Fake64.Tests;
 
-// Matrice della tastiera del C64 (Fake64.C64) e corrispondenza con i tasti del PC (Fake64.WinForms)
+// The C64 keyboard matrix (Fake64.C64) and its mapping to the PC keys (Fake64.WinForms)
 [TestClass]
 public sealed class KeyboardTests
 {
     const long CYCLES_PER_SECOND = 985248;
     const int FRAME_CYCLES = 312 * 63;
 
-    // Righe della matrice: una riga si seleziona mettendo a 0 il suo bit della porta A della CIA1
+    // Matrix rows: a row is selected by setting its bit of CIA1 port A to 0
     static byte Row(Board board, int row) => board.Keyboard.GetKeyboardState((byte)~(1 << row));
 
-    #region Matrice (Fake64.C64)
+    #region Matrix (Fake64.C64)
 
     [TestMethod]
     [DataRow(C64Key.F1, 0, 4)]
@@ -51,7 +51,7 @@ public sealed class KeyboardTests
 
     #endregion
 
-    #region Tastiera del PC (Fake64.WinForms)
+    #region PC keyboard (Fake64.WinForms)
 
     [TestMethod]
     [DataRow(Keys.F1, C64Key.F1, false)]
@@ -95,9 +95,9 @@ public sealed class KeyboardTests
 
     #endregion
 
-    #region Adattatore PcKeyboard
+    #region PcKeyboard adapter
 
-    // Controllo che genera gli eventi di tastiera come se avesse il focus
+    // Control that raises keyboard events as if it had the focus
     sealed class KeySource : Control
     {
         public void Down(Keys key) => OnKeyDown(new KeyEventArgs(key));
@@ -134,7 +134,7 @@ public sealed class KeyboardTests
         cable.Now = () => now;
 
         source.Down(Keys.A);
-        source.Up(Keys.A); // rilasciato subito, come con SendKeys
+        source.Up(Keys.A); // released at once, as with SendKeys
 
         Assert.IsTrue(board.Keyboard.IsPressed(C64Key.A));
         now += (long)PcKeyboard.MinimumHold.TotalMilliseconds - 1;
@@ -162,7 +162,7 @@ public sealed class KeyboardTests
 
     #endregion
 
-    // Integrazione: il KERNAL scandisce la matrice nell'IRQ e mette il codice PETSCII nel buffer a $0277
+    // Integration: the KERNAL scans the matrix in the IRQ and puts the PETSCII code into the buffer at $0277
     [TestMethod]
     [DataRow(Keys.F1, 133)]
     [DataRow(Keys.F3, 134)]
@@ -181,7 +181,7 @@ public sealed class KeyboardTests
         var board = NewBoard();
         board.RunCycles(3 * CYCLES_PER_SECOND);
 
-        // CPU in un loop con gli IRQ abilitati: il KERNAL scandisce la tastiera ma nessuno svuota il buffer
+        // CPU in a loop with IRQs enabled: the KERNAL scans the keyboard but nobody empties the buffer
         board.Load(0xC000, 0x4C, 0x00, 0xC0);
         board.Cpu.Status = 0x20;
         board.Poke(0x00C6, 0);
@@ -191,7 +191,7 @@ public sealed class KeyboardTests
         board.Keyboard.ReleaseAll();
         board.RunCycles(3 * FRAME_CYCLES);
 
-        Assert.IsTrue(board.Peek(0x00C6) >= 1, "nessun tasto nel buffer");
+        Assert.IsTrue(board.Peek(0x00C6) >= 1, "no key in the buffer");
         Assert.AreEqual(petscii, (int)board.Peek(0x0277));
     }
 }

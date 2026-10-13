@@ -5,22 +5,22 @@ namespace Fake64.WinForms;
 public enum ControlPortSource
 {
     None,
-    KeypadJoystick,    // joystick dal tastierino numerico
-    ArrowsJoystick,    // joystick da frecce + Ctrl
-    UsbJoystick,       // joystick o gamepad USB
-    MousePaddles,      // paddle dal mouse del PC
+    KeypadJoystick,    // joystick from the numeric keypad
+    ArrowsJoystick,    // joystick from arrows + Ctrl
+    UsbJoystick,       // USB joystick or gamepad
+    MousePaddles,      // paddles from the PC mouse
 }
 
-// Cosa è collegato a una porta; per il joystick USB anche quale dispositivo
+// What is connected to a port; for the USB joystick also which device
 public readonly record struct ControlPortChoice(ControlPortSource Source, int UsbJoystickId = 0)
 {
     public static ControlPortChoice None => new(ControlPortSource.None);
 }
 
-// Decide cosa è collegato alle due porte di controllo di una Board: crea il dispositivo (Joystick, Paddles),
-// lo collega alla presa e lo affida al simulatore che lo comanda (tastiera, joystick USB, mouse).
-// Ogni origine può essere in una sola porta: sceglierla per una porta la toglie dall'altra.
-// AddMenuItems mette le scelte in un menu (di solito il menu contestuale del monitor)
+// Decides what is connected to the two control ports of a Board: creates the device (Joystick, Paddles),
+// plugs it into the socket and hands it to the simulator that drives it (keyboard, USB joystick, mouse).
+// Each source can be in one port only: choosing it for a port removes it from the other.
+// AddMenuItems puts the choices into a menu (usually the monitor's context menu)
 public sealed class ControlPortSelector : IDisposable
 {
     readonly Board board;
@@ -33,7 +33,7 @@ public sealed class ControlPortSelector : IDisposable
         public IDisposable? Simulator;
     }
 
-    // input: il controllo che riceve tastiera e mouse (di solito il C64Monitor)
+    // input: the control that receives keyboard and mouse (usually the C64Monitor)
     public ControlPortSelector(Board board, Control input)
     {
         this.board = board;
@@ -44,7 +44,7 @@ public sealed class ControlPortSelector : IDisposable
 
     public ControlPortChoice this[int port] => Port(port).Choice;
 
-    // Tasti del PC usati da un joystick da tastiera: vanno esclusi dalla tastiera del C64
+    // PC keys used by a keyboard joystick: they must be kept away from the C64 keyboard
     public bool UsesKey(Keys key) =>
         ports.Any(connection => connection.Simulator is KeyboardJoystick keyboard && keyboard.UsesKey(key));
 
@@ -93,7 +93,7 @@ public sealed class ControlPortSelector : IDisposable
             case ControlPortSource.UsbJoystick:
                 {
                     var device = UsbJoystick.Connected().FirstOrDefault(d => d.Id == choice.UsbJoystickId);
-                    if (device is null) { connection.Choice = ControlPortChoice.None; break; } // non più collegato
+                    if (device is null) { connection.Choice = ControlPortChoice.None; break; } // no longer connected
                     var joystick = new Joystick();
                     connection.Simulator = new UsbJoystick(device, joystick);
                     Socket(port).Plug(joystick);
@@ -109,18 +109,18 @@ public sealed class ControlPortSelector : IDisposable
         }
     }
 
-    // Voci "Porta di controllo 1/2" (con le scelte, aggiornate a ogni apertura) e "Scambia le porte" (Ctrl+F12)
+    // "Control port 1/2" items (with the choices, refreshed at every opening) and "Swap ports" (Ctrl+F12)
     public void AddMenuItems(ToolStripItemCollection items)
     {
         for (int port = 1; port <= 2; port++)
         {
-            var menu = new ToolStripMenuItem($"Porta di controllo {port}");
+            var menu = new ToolStripMenuItem($"Control port {port}");
             int current = port;
-            menu.DropDownItems.Add(new ToolStripMenuItem("(aggiornamento)"));
+            menu.DropDownItems.Add(new ToolStripMenuItem("(updating)"));
             menu.DropDownOpening += (_, _) => FillPortMenu(menu, current);
             items.Add(menu);
         }
-        items.Add(new ToolStripMenuItem("Scambia le porte", null, (_, _) => SwapPorts()) { ShortcutKeys = Keys.Control | Keys.F12 });
+        items.Add(new ToolStripMenuItem("Swap ports", null, (_, _) => SwapPorts()) { ShortcutKeys = Keys.Control | Keys.F12 });
     }
 
     internal void FillPortMenu(ToolStripMenuItem menu, int port)
@@ -129,15 +129,15 @@ public sealed class ControlPortSelector : IDisposable
         void Add(string text, ControlPortChoice choice) =>
             menu.DropDownItems.Add(new ToolStripMenuItem(text, null, (_, _) => Select(port, choice)) { Checked = this[port] == choice });
 
-        Add("Niente", ControlPortChoice.None);
-        Add("Joystick: tastierino numerico (8 2 4 6, fuoco 0 o 5)", new(ControlPortSource.KeypadJoystick));
-        Add("Joystick: frecce, fuoco Ctrl", new(ControlPortSource.ArrowsJoystick));
+        Add("Nothing", ControlPortChoice.None);
+        Add("Joystick: numeric keypad (8 2 4 6, fire 0 or 5)", new(ControlPortSource.KeypadJoystick));
+        Add("Joystick: arrows, fire Ctrl", new(ControlPortSource.ArrowsJoystick));
         var usb = UsbJoystick.Connected();
         if (usb.Count == 0)
-            menu.DropDownItems.Add(new ToolStripMenuItem("Joystick USB: nessuno collegato") { Enabled = false });
+            menu.DropDownItems.Add(new ToolStripMenuItem("USB joystick: none connected") { Enabled = false });
         foreach (var device in usb)
-            Add($"Joystick USB: {device.Name}", new(ControlPortSource.UsbJoystick, device.Id));
-        Add("Paddle: mouse (clic per catturarlo, clic destro per liberarlo)", new(ControlPortSource.MousePaddles));
+            Add($"USB joystick: {device.Name}", new(ControlPortSource.UsbJoystick, device.Id));
+        Add("Paddles: mouse (click to capture it, right click to release it)", new(ControlPortSource.MousePaddles));
     }
 
     public void Dispose()

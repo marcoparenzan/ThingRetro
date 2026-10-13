@@ -1,40 +1,41 @@
 ; ----------------------------------------------------------------------------------------------------------
-; ULTIMAX - una cartuccia in modo Ultimax: il C64 senza KERNAL (diventa ultimax.crt)
+; ULTIMAX - a cartridge in Ultimax mode: the C64 without KERNAL (becomes ultimax.crt)
 ;
-; Una cartuccia che tiene bassa la linea GAME (e alta EXROM) mette il C64 in modo Ultimax, pensato per la
-; console MAX Machine: la ROM della cartuccia (ROMH) prende il posto del KERNAL a $E000-$FFFF, quindi anche
-; dei vettori di reset, NMI e IRQ a $FFFA-$FFFF. Della memoria restano visibili solo $0000-$0FFF, l'I/O e
-; le ROM della cartuccia: il resto non è collegato. Il BASIC e il KERNAL non ci sono: tutto è da fare.
+; A cartridge that holds the GAME line low (and EXROM high) puts the C64 in Ultimax mode, meant for the
+; MAX Machine console: the cartridge ROM (ROMH) takes the place of the KERNAL at $E000-$FFFF, and so also of
+; the reset, NMI and IRQ vectors at $FFFA-$FFFF. Of the memory only $0000-$0FFF, the I/O and the cartridge
+; ROMs remain visible: the rest is not connected. There is no BASIC and no KERNAL: everything is up to you.
 ;
-; Il codice parte dal vettore di reset, spegne il display (il bordo copre tutto lo schermo) e a ogni nuova
-; riga raster cambia il colore del bordo: un arcobaleno di righe orizzontali.
+; The code starts from the reset vector, turns the display off (the border covers the whole screen) and at
+; every new raster line changes the border color: a rainbow of horizontal lines.
 ; ----------------------------------------------------------------------------------------------------------
 
 VIC_CR1     = $D011
 RASTER      = $D012
 BORDER      = $D020
 
+            .initmem $FF                ; unused ROM bytes read $FF, as in a blank EPROM
             * = $E000
 
-reset:      SEI                         ; nessuno ha preparato la macchina: si parte da zero
+reset:      SEI                         ; nobody has set up the machine: we start from scratch
             CLD
             LDX #$FF
-            TXS                         ; stack in cima alla pagina 1
-            LDA #%00001011              ; display spento (bit 4 = 0), 25 righe, YSCROLL 3
+            TXS                         ; stack at the top of page 1
+            LDA #%00001011              ; display off (bit 4 = 0), 25 rows, YSCROLL 3
             STA VIC_CR1
 
 loop:       LDA RASTER
-same_line:  CMP RASTER                  ; aspetta che la riga raster cambi
+same_line:  CMP RASTER                  ; wait for the raster line to change
             BEQ same_line
             LDA RASTER
-            LSR                         ; un colore ogni due righe
-            STA BORDER                  ; il VIC-II usa solo i 4 bit bassi: 16 colori che si ripetono
+            LSR                         ; one color every two lines
+            STA BORDER                  ; the VIC-II uses only the 4 low bits: 16 colors that repeat
             JMP loop
 
-nmi:        RTI                         ; nessun NMI previsto
-irq:        RTI                         ; nessun IRQ abilitato
+nmi:        RTI                         ; no NMI expected
+irq:        RTI                         ; no IRQ enabled
 
-            * = $FFFA                   ; vettori della CPU, alla fine della ROMH
+            * = $FFFA                   ; CPU vectors, at the end of ROMH
             .word nmi                   ; $FFFA: NMI
             .word reset                 ; $FFFC: reset
-            .word irq                   ; $FFFE: IRQ e BRK
+            .word irq                   ; $FFFE: IRQ and BRK

@@ -2,13 +2,13 @@ using static Fake64.Tests.TestHelpers;
 
 namespace Fake64.Tests;
 
-// Zoccoli e piste della scheda: nello zoccolo entra qualunque oggetto con la piedinatura giusta
+// Sockets and traces of the board: any object with the right pinout fits the socket
 [TestClass]
 public sealed class SocketTests
 {
     const long CYCLES_PER_SECOND = 985248;
 
-    // Un "chip" che entra nello zoccolo del SID e registra ciò che passa sul bus
+    // A "chip" that fits the SID socket and records what goes through the bus
     sealed class SidProbe : I6581Pinout
     {
         public readonly List<(int Register, byte Value)> Writes = [];
@@ -33,13 +33,13 @@ public sealed class SocketTests
         board.SidSocket.Insert(probe);
         board.ParkCpu();
         board.Poke(0xD418, 0x0F);           // volume
-        board.Poke(0xD438, 0x07);           // i registri del SID si ripetono ogni 32 byte
+        board.Poke(0xD438, 0x07);           // the SID registers repeat every 32 bytes
         board.RunCycles(100);
 
         Assert.IsInstanceOfType<MOS6581>(original);
         CollectionAssert.AreEqual(new[] { (0x18, (byte)0x0F), (0x18, (byte)0x07) }, probe.Writes);
         Assert.AreEqual(0x5B, (int)board.Peek(0xD41B));
-        Assert.AreEqual(100, probe.Ticks);  // riceve il clock dalla scheda
+        Assert.AreEqual(100, probe.Ticks);  // it receives the clock from the board
     }
 
     [TestMethod]
@@ -74,7 +74,7 @@ public sealed class SocketTests
 
         board.RunCycles(312 * 63);
 
-        Assert.AreEqual(0, board.StolenCycles);   // nessun BA basso senza VIC-II
+        Assert.AreEqual(0, board.StolenCycles);   // no BA low without a VIC-II
         Assert.AreEqual(0xFF, (int)board.Peek(0xD020));
         Assert.IsFalse(board.IrqLine);
     }
@@ -82,8 +82,8 @@ public sealed class SocketTests
     [TestMethod]
     public void Cia2_ShouldTriggerNmiOncePerFallingEdge()
     {
-        // Gestore NMI (tramite il vettore $0318 del KERNAL) che conta le chiamate e non riconosce la CIA 2:
-        // la linea /NMI resta bassa, ma l'NMI scatta solo sul fronte di discesa
+        // NMI handler (through the KERNAL vector $0318) that counts the calls and does not acknowledge CIA 2:
+        // the /NMI line stays low, but the NMI triggers only on the falling edge
         var board = NewBoard();
         board.Poke(0x0318, 0x00, 0xC1);
         board.Poke(0xC100, 0xEE, 0x00, 0xC2, 0x4C, 0x03, 0xC1); // INC $C200 : JMP *

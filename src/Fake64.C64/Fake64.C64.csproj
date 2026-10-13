@@ -5,13 +5,15 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+		<!-- Code run at every cycle (a million times per second): optimized in Debug too, otherwise it cannot keep up -->
+		<Optimize>true</Optimize>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="Fake64.Tests" />
 	</ItemGroup>
 
-	<!-- La scheda madre del C64: monta i chip MOS (Fake64.Mos) negli zoccoli -->
+	<!-- The C64 motherboard: mounts the MOS chips (Fake64.Mos) in its sockets -->
 	<ItemGroup>
 		<ProjectReference Include="..\Fake64.Mos\Fake64.Mos.csproj" />
 	</ItemGroup>

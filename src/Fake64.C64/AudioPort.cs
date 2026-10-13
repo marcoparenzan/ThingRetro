@@ -1,14 +1,14 @@
 namespace Fake64.C64;
 
-// Uscita audio della Board (il pin AUDIO della presa A/V). Riceve a ogni ciclo il livello di AUDIO OUT del SID e
-// fa quello che fanno lo stadio d'uscita della scheda e la scheda audio del PC:
-// - ricampiona alla frequenza dell'altoparlante con la media dei cicli di ogni campione (un passa basso);
-// - toglie la componente continua come il condensatore di accoppiamento in uscita (passa alto a 16 Hz);
-// - converte in campioni a 16 bit, inviati all'altoparlante a blocchi di 10 ms
+// Audio output of the Board (the AUDIO pin of the A/V socket). It receives the level of the SID's AUDIO OUT at
+// every cycle and does what the board's output stage and the PC sound card do:
+// - resamples to the speaker's rate by averaging the cycles of each sample (a low-pass);
+// - removes the DC component like the output coupling capacitor (16 Hz high-pass);
+// - converts to 16-bit samples, sent to the speaker in 10 ms blocks
 public sealed class AudioPort
 {
     const double HIGH_PASS_HZ = 16;
-    const double GAIN = 0.3;            // tre voci a piena ampiezza restano entro la scala dei 16 bit
+    const double GAIN = 0.3;            // three voices at full amplitude stay within the 16-bit range
 
     readonly long clockHz;
     readonly object plugLock = new();
@@ -26,9 +26,9 @@ public sealed class AudioPort
         lock (plugLock)
         {
             if (state is not null && !ReferenceEquals(state.Speaker, speaker))
-                throw new InvalidOperationException("All'uscita audio è già collegato un altoparlante: scollegarlo prima di collegarne un altro");
+                throw new InvalidOperationException("A speaker is already connected to the audio output: unplug it before connecting another one");
             if (speaker.SampleRate <= 0 || speaker.SampleRate > clockHz)
-                throw new ArgumentException($"Frequenza di campionamento non valida: {speaker.SampleRate}", nameof(speaker));
+                throw new ArgumentException($"Invalid sample rate: {speaker.SampleRate}", nameof(speaker));
             state ??= new State(speaker, clockHz);
         }
     }
@@ -41,10 +41,10 @@ public sealed class AudioPort
         }
     }
 
-    // Chiamato dal thread di emulazione a ogni ciclo
+    // Called by the emulation thread at every cycle
     internal void Sample(double level) => state?.Add(level);
 
-    // Tutto lo stato del ricampionamento vive con il collegamento: un nuovo altoparlante riparte da zero
+    // All the resampling state lives with the connection: a new speaker starts from scratch
     sealed class State(ISpeaker speaker, long clockHz)
     {
         public readonly ISpeaker Speaker = speaker;
@@ -53,8 +53,8 @@ public sealed class AudioPort
         readonly double highPassFactor = 1 / (1 + 2 * Math.PI * HIGH_PASS_HZ / speaker.SampleRate);
         int length;
 
-        // Ogni ciclo aggiunge sampleRate a phase: quando supera la frequenza del clock è pronto un campione.
-        // Il conto è esatto, senza errori di arrotondamento che si accumulano
+        // Every cycle adds sampleRate to phase: when it exceeds the clock frequency a sample is ready.
+        // The count is exact, without rounding errors piling up
         long phase;
         double sum;
         int count;

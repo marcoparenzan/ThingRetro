@@ -13,7 +13,7 @@ static class TestHelpers
     public const byte FLAG_V = 0x40;
     public const byte FLAG_N = 0x80;
 
-    // Le ROM vere, copiate dalla cartella roms dell'app accanto ai test; lette una volta sola
+    // The real ROMs, copied from the app's roms folder next to the tests; read only once
     static readonly Lazy<SystemRoms> Roms = new(() =>
     {
         string folder = Path.Combine(AppContext.BaseDirectory, "roms");
@@ -23,10 +23,10 @@ static class TestHelpers
             chargen: File.ReadAllBytes(Path.Combine(folder, "chargen")));
     });
 
-    // Board senza clock in tempo reale: i test avanzano con RunCycles/StepInstruction
+    // Board without the real-time clock: the tests advance with RunCycles/StepInstruction
     public static Board NewBoard() => new Board(Roms.Value, startClock: false);
 
-    // I chip di serie negli zoccoli, con il loro tipo concreto per leggerne lo stato interno
+    // The stock chips in the sockets, with their concrete type to read their internal state
     extension(Board board)
     {
         public MOS6510 Cpu => (MOS6510)board.CpuSocket.Chip!;
@@ -35,7 +35,7 @@ static class TestHelpers
         public MOS6569 Vic => (MOS6569)board.VicSocket.Chip!;
         public MOS6581 Sid => (MOS6581)board.SidSocket.Chip!;
 
-        // Esegue cicli fino al completamento dell'istruzione corrente e all'inizio della successiva
+        // Runs cycles until the current instruction completes and the next one starts
         public void StepInstruction()
         {
             var cpu = board.Cpu;
@@ -51,25 +51,25 @@ static class TestHelpers
 
     public static byte Peek(this Board board, ushort addr) => board.Address(addr);
 
-    // Configura la porta della 6510 come fa il KERNAL ($00 = $2F: P0-P3 e P5 in uscita) e scrive $01.
-    // Dopo il reset la porta è tutta in ingresso: senza la direzione, scrivere $01 non cambia i pin
+    // Sets up the 6510 port as the KERNAL does ($00 = $2F: P0-P3 and P5 as outputs) and writes $01.
+    // After reset the port is all input: without the direction, writing $01 does not change the pins
     public static void SetCpuPort(this Board board, byte value)
     {
         board.Poke(0x0000, 0x2F);
         board.Poke(0x0001, value);
     }
 
-    // Carica un programma in RAM e posiziona la CPU sulla prima istruzione con gli IRQ disabilitati
+    // Loads a program into RAM and puts the CPU on its first instruction with IRQs disabled
     public static void Load(this Board board, ushort addr, params byte[] program)
     {
-        // Come un debugger: si cambia il PC solo fra due istruzioni, non a metà di una
+        // Like a debugger: the PC is changed only between two instructions, not in the middle of one
         while (!board.Cpu.IsInstructionBoundary) board.RunCycles(1);
         board.Poke(addr, program);
         board.Cpu.PC = addr;
         board.Cpu.Status = 0x24; // I + bit 5
     }
 
-    // Tiene la CPU in un loop (JMP $C000) così il KERNAL non tocca i registri dei chip
+    // Keeps the CPU in a loop (JMP $C000) so that the KERNAL does not touch the chip registers
     public static void ParkCpu(this Board board)
     {
         board.Load(0xC000, 0x4C, 0x00, 0xC0);
@@ -82,7 +82,7 @@ static class TestHelpers
         return board.TotalCycles - before;
     }
 
-    // Converte la memoria video ($0400) in testo, una stringa per riga
+    // Converts video memory ($0400) into text, one string per row
     public static string[] ScreenLines(this Board board)
     {
         var lines = new string[25];
@@ -99,6 +99,6 @@ static class TestHelpers
         return lines;
     }
 
-    // Inserisce testo nel buffer di tastiera del KERNAL (max 10 caratteri)
+    // Puts text into the KERNAL keyboard buffer (at most 10 characters)
     public static void Type(this Board board, string text) => board.TypeText(text);
 }

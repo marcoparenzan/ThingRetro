@@ -1,6 +1,6 @@
 ﻿namespace Fake64.Mos;
 
-// ALU: operazioni sui valori e sui flag, senza accessi al bus
+// ALU: operations on values and flags, without bus accesses
 public partial class MOS6502
 {
     private byte ASL(byte val)
@@ -73,8 +73,8 @@ public partial class MOS6502
         return ADC((byte)(~val));
     }
 
-    // Decimal mode del 6510 NMOS (stesso algoritmo di VICE): Z viene dal risultato binario,
-    // N e V dal valore intermedio prima della correzione della cifra alta
+    // Decimal mode of the NMOS 6510 (same algorithm as VICE): Z comes from the binary result,
+    // N and V from the intermediate value before the high digit is corrected
     private byte ADCDecimal(byte val)
     {
         int carry = (Status & FLAG_C) != 0 ? 1 : 0;
@@ -96,7 +96,7 @@ public partial class MOS6502
         return A;
     }
 
-    // In SBC decimale tutti i flag vengono dal risultato binario, solo A è corretto in BCD
+    // In decimal SBC all flags come from the binary result, only A is BCD-corrected
     private byte SBCDecimal(byte val)
     {
         int borrow = (Status & FLAG_C) != 0 ? 0 : 1;

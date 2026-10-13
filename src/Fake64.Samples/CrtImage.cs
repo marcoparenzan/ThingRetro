@@ -3,8 +3,8 @@ using System.Text;
 
 namespace Fake64.Samples;
 
-// Scrive un file .crt (formato VICE): intestazione di 64 byte e un pacchetto CHIP per ogni banco.
-// I campi numerici sono big-endian; EXROM e GAME indicano il livello delle linee (0 = attiva)
+// Writes a .crt file (VICE format): 64-byte header and one CHIP packet per bank.
+// Numeric fields are big-endian; EXROM and GAME give the level of the lines (0 = active)
 public static class CrtImage
 {
     public const int TypeNormal = 0;
@@ -38,10 +38,10 @@ public static class CrtImage
         return crt.ToArray();
     }
 
-    // ROM di 8 KB: il codice all'inizio, il resto a $FF come una EPROM vuota
+    // 8 KB ROM: the code at the start, the rest at $FF like a blank EPROM
     public static byte[] Rom8K(byte[] code)
     {
-        if (code.Length > 0x2000) throw new ArgumentException("Il codice non entra in 8 KB", nameof(code));
+        if (code.Length > 0x2000) throw new ArgumentException("The code does not fit in 8 KB", nameof(code));
         var rom = new byte[0x2000];
         Array.Fill(rom, (byte)0xFF);
         code.CopyTo(rom, 0);

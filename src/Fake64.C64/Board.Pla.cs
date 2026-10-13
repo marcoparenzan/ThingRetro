@@ -3,16 +3,16 @@ using Fake64.Mos;
 namespace Fake64.C64;
 
 /*
-    Il PLA decide cosa vede la CPU combinando i pin P0-P2 della 6510 (LORAM, HIRAM, CHAREN)
-    con le linee GAME ed EXROM della porta di espansione (attive basse, alte senza cartuccia):
+    The PLA decides what the CPU sees by combining pins P0-P2 of the 6510 (LORAM, HIRAM, CHAREN)
+    with the GAME and EXROM lines of the expansion port (active low, high without a cartridge):
 
-    Senza cartuccia (EXROM = 1, GAME = 1):
-      $A000 BASIC se LORAM e HIRAM, $E000 KERNAL se HIRAM,
-      $D000 I/O se CHAREN altrimenti ROM caratteri (tutto RAM se LORAM = HIRAM = 0)
-    Cartuccia 8K (EXROM = 0, GAME = 1):  in più ROML a $8000 se LORAM e HIRAM
-    Cartuccia 16K (EXROM = 0, GAME = 0): in più ROMH a $A000 (al posto del BASIC) se HIRAM
-    Ultimax (EXROM = 1, GAME = 0): ROML a $8000, ROMH a $E000, I/O sempre a $D000,
-      $1000-$7FFF e $A000-$CFFF scollegati; la porta $01 viene ignorata
+    No cartridge (EXROM = 1, GAME = 1):
+      $A000 BASIC if LORAM and HIRAM, $E000 KERNAL if HIRAM,
+      $D000 I/O if CHAREN, otherwise character ROM (all RAM if LORAM = HIRAM = 0)
+    8K cartridge (EXROM = 0, GAME = 1):  plus ROML at $8000 if LORAM and HIRAM
+    16K cartridge (EXROM = 0, GAME = 0): plus ROMH at $A000 (instead of BASIC) if HIRAM
+    Ultimax (EXROM = 1, GAME = 0): ROML at $8000, ROMH at $E000, I/O always at $D000,
+      $1000-$7FFF and $A000-$CFFF unconnected; port $01 is ignored
  */
 public partial class Board
 {
@@ -24,7 +24,7 @@ public partial class Board
     bool romhAtA000;
     bool ultimax;
 
-    // Ingressi del PLA: i pin della porta della CPU (pull-up se lo zoccolo è vuoto) e le linee della cartuccia
+    // PLA inputs: the pins of the CPU port (pull-ups if the socket is empty) and the cartridge lines
     void MemoryMap()
     {
         var state = cpu?.Port.Pins ?? 0xFF;
@@ -55,12 +55,12 @@ public partial class Board
         ioAreaVisible = charen && !allRam;
     }
 
-    // In modalità Ultimax queste aree non sono collegate a niente
+    // In Ultimax mode these areas are not connected to anything
     bool IsUnmappedInUltimax(ushort addr) =>
         ultimax && ((addr >= 0x1000 && addr < 0x8000) || (addr >= 0xA000 && addr < 0xD000));
 
-    // La memoria come la vede la CPU, compresi i registri della porta a $0000/$0001
-    // (per debugger, test e strumenti esterni; la CPU stessa usa il bus)
+    // Memory as the CPU sees it, including the port registers at $0000/$0001
+    // (for debuggers, tests and external tools; the CPU itself uses the bus)
     public byte Address(ushort addr)
     {
         if (addr <= 0x0001 && cpu is not null)
@@ -78,7 +78,7 @@ public partial class Board
         BusWrite(addr, value);
     }
 
-    // Bus della CPU decodificato dal PLA
+    // CPU bus decoded by the PLA
     byte BusRead(ushort addr)
     {
         if (IsUnmappedInUltimax(addr))
@@ -119,11 +119,11 @@ public partial class Board
             return;
         }
 
-        // Le scritture nelle aree ROM (BASIC, KERNAL, caratteri, cartuccia) finiscono nella RAM sottostante
+        // Writes to the ROM areas (BASIC, KERNAL, characters, cartridge) end up in the RAM underneath
         ram64.Address(addr, value);
     }
 
-    // Area I/O: il PLA attiva il /CS di un chip; uno zoccolo vuoto lascia il bus alto ($FF)
+    // I/O area: the PLA activates the /CS of a chip; an empty socket leaves the bus high ($FF)
     byte ReadIo(ushort addr)
     {
         if (addr < 0xD400) return vic?.Read(addr & 0x3F) ?? 0xFF;
@@ -146,23 +146,23 @@ public partial class Board
         else { if (cartridge is null) ram64.Address(addr, value); else cartridge.WriteIo2(addr & 0xFF, value); }
     }
 
-    // Bus della CPU: A0-A15 e D0-D7 passano per il PLA
+    // CPU bus: A0-A15 and D0-D7 go through the PLA
     sealed class CpuBus(Board board) : IBus
     {
         public byte Read(ushort address) => board.BusRead(address);
         public void Write(ushort address, byte value) => board.BusWrite(address, value);
     }
 
-    // Banco di 16 KB visto dal VIC-II: A14/A15 arrivano da PA0/PA1 della CIA 2, invertiti.
-    // Si ricalcola solo quando la porta cambia (o la CIA 2 viene tolta: i pull-up danno il banco 0)
+    // 16 KB bank seen by the VIC-II: A14/A15 come from PA0/PA1 of CIA 2, inverted.
+    // Recomputed only when the port changes (or CIA 2 is removed: the pull-ups give bank 0)
     int vicBank;
 
     void UpdateVicBank() => vicBank = 3 - ((cia2?.PortA.Pins ?? 0xFF) & 0x03);
 
     internal int VicBank => vicBank;
 
-    // Bus video: il VIC-II vede sempre la RAM (mai BASIC, KERNAL o I/O), tranne la ROM caratteri
-    // a $1000-$1FFF nei banchi 0 e 2; in Ultimax vede ROMH della cartuccia a $3000-$3FFF
+    // Video bus: the VIC-II always sees RAM (never BASIC, KERNAL or I/O), except the character ROM
+    // at $1000-$1FFF in banks 0 and 2; in Ultimax it sees the cartridge's ROMH at $3000-$3FFF
     internal byte VicRead(int addr)
     {
         addr &= 0x3FFF;

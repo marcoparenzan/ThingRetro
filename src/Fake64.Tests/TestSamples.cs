@@ -5,17 +5,17 @@ using static Fake64.Tests.TestHelpers;
 
 namespace Fake64.Tests;
 
-// Gli esempi di samples/ eseguiti nell'emulatore: se il generatore o l'emulatore si rompono, se ne accorgono i test
+// The samples of samples/ run in the emulator: if the generator or the emulator breaks, the tests notice
 [TestClass]
 public sealed class SampleTests
 {
     const long CYCLES_PER_SECOND = 985248;
     const int FRAME_CYCLES = 312 * 63;
-    const int LEFT = 42, TOP = 42; // angolo in alto a sinistra dell'area di display nel frame buffer
+    const int LEFT = 42, TOP = 42; // top left corner of the display area in the frame buffer
 
     static Sample Get(string fileName) => SampleSet.All.Single(sample => sample.FileName == fileName);
 
-    // Avvio, caricamento e RUN, come fa l'app con un .prg trascinato sulla finestra
+    // Boot, load and RUN, as the app does with a .prg dropped on the window
     static Board Run(string fileName, double seconds = 1)
     {
         var board = NewBoard();
@@ -36,11 +36,11 @@ public sealed class SampleTests
 
     static string Screen(Board board) => string.Join("\n", board.ScreenLines());
 
-    // Colori dei pixel di una riga di schermo (in pixel del frame buffer)
+    // Colors of the pixels of a screen line (in frame buffer pixels)
     static HashSet<byte> RowColors(Board board, int y) =>
         Enumerable.Range(LEFT, 320).Select(x => board.Vic.PixelAt(x, y)).ToHashSet();
 
-    // Valori assunti da un registro campionandolo per un certo tempo
+    // Values taken by a register when sampled over some time
     static HashSet<int> Sample(Board board, ushort address, double seconds, int samples = 40)
     {
         var values = new HashSet<int>();
@@ -52,12 +52,12 @@ public sealed class SampleTests
         return values;
     }
 
-    #region Tokenizzatore BASIC
+    #region BASIC tokenizer
 
     [TestMethod]
     public void Tokenizer_ShouldProduceTheSameBytesAsTheC64()
     {
-        // 10 PRINT 6*7: PRINT = $99, * = $AC, collegamento alla riga successiva a $080B
+        // 10 PRINT 6*7: PRINT = $99, * = $AC, link to the next line at $080B
         var program = BasicTokenizer.Tokenize("10 PRINT 6*7");
 
         CollectionAssert.AreEqual(new byte[]
@@ -71,11 +71,11 @@ public sealed class SampleTests
     {
         var program = BasicTokenizer.Tokenize("10 PRINT \"TO\":REM GOTO\n20 DATA AND,1:PRINT");
 
-        // Riga 10: PRINT "TO" : REM GOTO (TO e GOTO restano testo)
+        // Line 10: PRINT "TO" : REM GOTO (TO and GOTO stay text)
         CollectionAssert.AreEqual(
             new byte[] { 0x99, 0x20, 0x22, 0x54, 0x4F, 0x22, 0x3A, 0x8F, 0x20, 0x47, 0x4F, 0x54, 0x4F },
             program[6..19]);
-        // Riga 20: DATA AND,1 : PRINT (dopo i due punti si tokenizza di nuovo)
+        // Line 20: DATA AND,1 : PRINT (after the colon tokenizing starts again)
         int line20 = program[2] | program[3] << 8;
         int offset = line20 - 0x0801 + 2 + 4;
         CollectionAssert.AreEqual(new byte[] { 0x83, 0x20, 0x41, 0x4E, 0x44, 0x2C, 0x31, 0x3A, 0x99, 0x00 }, program[offset..(offset + 10)]);
@@ -90,7 +90,7 @@ public sealed class SampleTests
     {
         var board = Run("hello.prg");
 
-        // Colori 0-15 tranne il 6 (blu come lo sfondo); il colore è anche la colonna di partenza
+        // Colors 0-15 except 6 (blue like the background); the color is also the starting column
         var screen = board.ScreenLines();
         for (int line = 0; line < 15; line++)
         {
@@ -105,9 +105,9 @@ public sealed class SampleTests
     {
         var screen = Screen(Run("math.prg"));
 
-        // 4*ATN(1) in virgola mobile del BASIC: le ultime cifre dipendono dall'arrotondamento dell'arcotangente
-        StringAssert.Contains(screen, " 42\n 1024\nPI GRECO 3.14159");
-        StringAssert.Contains(screen, "RADICE DI 2 1.41421356");
+        // 4*ATN(1) in BASIC floating point: the last digits depend on the rounding of the arctangent
+        StringAssert.Contains(screen, " 42\n 1024\nPI 3.14159");
+        StringAssert.Contains(screen, "SQUARE ROOT OF 2 1.41421356");
     }
 
     [TestMethod]
@@ -119,7 +119,7 @@ public sealed class SampleTests
         Assert.AreEqual(13, (int)board.Peek(0x07F8));
         int x = board.Peek(0xD000), y = board.Peek(0xD001);
         board.RunCycles(CYCLES_PER_SECOND / 2);
-        Assert.IsTrue(board.Peek(0xD000) != x || board.Peek(0xD001) != y, "lo sprite non si muove");
+        Assert.IsTrue(board.Peek(0xD000) != x || board.Peek(0xD001) != y, "the sprite does not move");
     }
 
     [TestMethod]
@@ -137,9 +137,9 @@ public sealed class SampleTests
 
         Press(C64Key.F1);
         Press(C64Key.F7, C64Key.LeftShift);         // F8
-        Press(C64Key.CursorDown, C64Key.LeftShift); // cursore su
+        Press(C64Key.CursorDown, C64Key.LeftShift); // cursor up
 
-        CollectionAssert.IsSubsetOf(new[] { "F1", "F8", "CURSORE SU" }, board.ScreenLines());
+        CollectionAssert.IsSubsetOf(new[] { "F1", "F8", "CURSOR UP" }, board.ScreenLines());
     }
 
     [TestMethod]
@@ -156,8 +156,8 @@ public sealed class SampleTests
         joystick.Fire = true;
         board.RunCycles(CYCLES_PER_SECOND / 4);
 
-        Assert.IsTrue(board.Peek(0xD000) > x, "lo sprite non si è spostato a destra");
-        Assert.AreEqual(13, board.Peek(0xD027) & 0x0F); // verde chiaro con il fuoco premuto
+        Assert.IsTrue(board.Peek(0xD000) > x, "the sprite did not move to the right");
+        Assert.AreEqual(13, board.Peek(0xD027) & 0x0F); // light green with fire pressed
     }
 
     [TestMethod]
@@ -173,21 +173,21 @@ public sealed class SampleTests
         paddles.FireA = true;
         board.RunCycles(CYCLES_PER_SECOND / 4);
         Assert.AreEqual(13, board.Peek(0xD027) & 0x0F);
-        StringAssert.Contains(Screen(board), "POSIZIONE 55");
+        StringAssert.Contains(Screen(board), "POSITION 55");
     }
 
     #endregion
 
     #region SID
 
-    // Un altoparlante che conserva i campioni ricevuti
+    // A speaker that keeps the samples it receives
     sealed class Recorder : ISpeaker
     {
         public readonly List<short> Samples = [];
         public int SampleRate => 44100;
         public void Play(ReadOnlySpan<short> samples) => Samples.AddRange(samples.ToArray());
 
-        // Livello (RMS) di un tratto, in secondi dall'inizio della registrazione
+        // Level (RMS) of a stretch, in seconds from the start of the recording
         public double Level(double from, double to)
         {
             var part = Samples.Skip((int)(from * SampleRate)).Take((int)((to - from) * SampleRate)).ToArray();
@@ -212,8 +212,8 @@ public sealed class SampleTests
     {
         var (board, speaker) = RunWithSpeaker("sound.prg", seconds: 4);
 
-        CollectionAssert.Contains(board.ScreenLines(), "DO RE MI FA SOL LA SI DO");
-        Assert.IsTrue(speaker.Level(0.5, 1.5) > 1000, $"livello {speaker.Level(0.5, 1.5):F0}");
+        CollectionAssert.Contains(board.ScreenLines(), "C D E F G A B C");
+        Assert.IsTrue(speaker.Level(0.5, 1.5) > 1000, $"level {speaker.Level(0.5, 1.5):F0}");
     }
 
     [TestMethod]
@@ -221,9 +221,9 @@ public sealed class SampleTests
     {
         var (board, speaker) = RunWithSpeaker("music.prg", seconds: 3);
 
-        StringAssert.StartsWith(board.ScreenLines()[0], "MUSICA DAL SID, SUONATA DALL'IRQ");
-        Assert.IsTrue(speaker.Level(1, 3) > 1000, $"livello {speaker.Level(1, 3):F0}");
-        Assert.AreEqual(0x08, (int)board.Peek(0x0315));                         // il vettore IRQ punta al programma
+        StringAssert.StartsWith(board.ScreenLines()[0], "MUSIC FROM THE SID, PLAYED BY THE IRQ");
+        Assert.IsTrue(speaker.Level(1, 3) > 1000, $"level {speaker.Level(1, 3):F0}");
+        Assert.AreEqual(0x08, (int)board.Peek(0x0315));                         // the IRQ vector points to the program
         board.TypeText("?1+1\r");
         board.RunCycles(CYCLES_PER_SECOND / 2);
         StringAssert.Contains(Screen(board), "?1+1\n 2\n");
@@ -231,7 +231,7 @@ public sealed class SampleTests
 
     #endregion
 
-    #region Interrupt e CPU
+    #region Interrupts and CPU
 
     [TestMethod]
     public void Irq_ShouldToggleTheBackgroundAndKeepBasicAlive()
@@ -249,9 +249,9 @@ public sealed class SampleTests
     {
         var board = Run("nmi.prg");
 
-        // 20 NMI al secondo, un colore ogni 10: circa 2 colori al secondo
+        // 20 NMIs per second, one color every 10: about 2 colors per second
         int colors = Sample(board, 0xD020, seconds: 3).Count;
-        Assert.IsTrue(colors >= 5, $"colori del bordo: {colors}");
+        Assert.IsTrue(colors >= 5, $"border colors: {colors}");
     }
 
     [TestMethod]
@@ -262,7 +262,7 @@ public sealed class SampleTests
         int Counter()
         {
             var digits = Enumerable.Range(0, 4).Select(i => board.Peek((ushort)(0x0400 + i)) - 0x30).ToArray();
-            Assert.IsTrue(digits.All(d => d is >= 0 and <= 9), "cifre non decimali: " + string.Join(",", digits));
+            Assert.IsTrue(digits.All(d => d is >= 0 and <= 9), "non-decimal digits: " + string.Join(",", digits));
             return digits[0] * 1000 + digits[1] * 100 + digits[2] * 10 + digits[3];
         }
 
@@ -271,7 +271,7 @@ public sealed class SampleTests
         int after = Counter();
 
         Assert.IsTrue(after - before is >= 98 and <= 102, $"{before} -> {after}");
-        StringAssert.StartsWith(board.ScreenLines()[0][4..], "  <- CONTATORE BCD");
+        StringAssert.StartsWith(board.ScreenLines()[0][4..], "  <- BCD COUNTER");
     }
 
     #endregion
@@ -284,7 +284,7 @@ public sealed class SampleTests
         var board = Run("multicolor.prg");
 
         Assert.AreEqual(0x10, board.Peek(0xD016) & 0x10);
-        var colors = RowColors(board, TOP + 8 * 3); // riga di testo 3: color RAM = 3 (ciano)
+        var colors = RowColors(board, TOP + 8 * 3); // text row 3: color RAM = 3 (cyan)
         CollectionAssert.IsSubsetOf(new byte[] { 6, 2, 7, 3 }, colors.ToArray());
     }
 
@@ -297,7 +297,7 @@ public sealed class SampleTests
         for (int row = 2, background = 0; row <= 8; row += 2, background++)
         {
             byte expected = new byte[] { 6, 2, 5, 0 }[background];
-            Assert.IsTrue(RowColors(board, TOP + 8 * row).Contains(expected), $"sfondo della riga {row}");
+            Assert.IsTrue(RowColors(board, TOP + 8 * row).Contains(expected), $"background of row {row}");
         }
     }
 
@@ -328,7 +328,7 @@ public sealed class SampleTests
         var board = Run("sprites.prg");
 
         Assert.AreEqual(0xFF, (int)board.Peek(0xD015));
-        Assert.AreEqual("COLLISIONI: 11000000", board.ScreenLines()[22]);
+        Assert.AreEqual("COLLISIONS: 11000000", board.ScreenLines()[22]);
         Assert.AreEqual(0x30, (int)board.Peek(0xD01C));
     }
 
@@ -352,14 +352,34 @@ public sealed class SampleTests
 
         Assert.AreEqual(1, board.VicBank);
         Assert.AreEqual(0x44, (int)board.Peek(0x0288));
-        Assert.AreEqual(0x18 ^ 0xFF, (int)board.Peek(0x6008)); // prima riga della A invertita (nella ROM: $18)
+        Assert.AreEqual(0x18 ^ 0xFF, (int)board.Peek(0x6008)); // first row of the reversed A (in ROM: $18)
         var bankScreen = Enumerable.Range(0, 1000).Select(i => board.Peek((ushort)(0x4400 + i))).ToArray();
-        Assert.IsTrue(bankScreen.Contains((byte)18), "il testo non è nello schermo a $4400"); // R di READY
+        Assert.IsTrue(bankScreen.Contains((byte)18), "the text is not in the screen at $4400"); // R of READY
+    }
+
+    [TestMethod]
+    public void Borders_ShouldOpenTheBottomBorderAndShowSprites()
+    {
+        var board = Run("borders.prg", seconds: 2);
+
+        // Raster line 260, in the bottom border: blue background instead of the light blue border, and the sprites (lines 256-276)
+        int y = 260 - 9;
+        Assert.AreEqual(6, (int)board.Vic.PixelAt(LEFT + 300, y));
+        Assert.AreEqual(14, (int)board.Vic.PixelAt(LEFT - 10, y));     // the side borders stay
+        // At least 3 sprites out of 4: the one that scrolls to an X under the (closed) side border is not visible
+        Assert.IsTrue(new byte[] { 7, 1, 3, 13 }.Count(RowColors(board, y).Contains) >= 3);
+
+        // The border stays open at every frame and BASIC answers
+        board.RunCycles(FRAME_CYCLES * 10);
+        Assert.AreEqual(6, (int)board.Vic.PixelAt(LEFT + 300, y));
+        board.TypeText("?1+1\r");
+        board.RunCycles(CYCLES_PER_SECOND / 2);
+        StringAssert.Contains(Screen(board), "?1+1\n 2\n");
     }
 
     #endregion
 
-    #region Cartucce
+    #region Cartridges
 
     [TestMethod]
     public void HelloCartridge_ShouldStartByItself()
@@ -386,8 +406,8 @@ public sealed class SampleTests
         var board = Insert("banks.crt");
 
         var screen = board.ScreenLines();
-        Assert.AreEqual("QUESTO TESTO E' NEL BANCO 0", screen[0]);
-        StringAssert.StartsWith(screen[1], "E QUESTO NEL BANCO 1");
+        Assert.AreEqual("THIS TEXT IS IN BANK 0", screen[0]);
+        StringAssert.StartsWith(screen[1], "AND THIS IS IN BANK 1");
         Assert.AreEqual("Magic Desk", board.Cartridge!.TypeName);
     }
 
@@ -396,9 +416,9 @@ public sealed class SampleTests
     [TestMethod]
     public void SamplesFolder_ShouldMatchTheGenerator()
     {
-        // I file in samples/ devono essere quelli prodotti dal generatore (dotnet run --project src/Fake64.Samples)
+        // The files in samples/ must be the ones produced by the generator (dotnet run --project src/Fake64.Samples)
         string folder = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "samples");
-        if (!Directory.Exists(folder)) Assert.Inconclusive("Cartella samples non trovata");
+        if (!Directory.Exists(folder)) Assert.Inconclusive("samples folder not found");
 
         foreach (var sample in SampleSet.All)
             CollectionAssert.AreEqual(sample.Content, File.ReadAllBytes(Path.Combine(folder, sample.FileName)), sample.FileName);

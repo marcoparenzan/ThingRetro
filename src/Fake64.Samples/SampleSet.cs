@@ -1,57 +1,59 @@
+using Fake64.Asm;
 using System.Reflection;
 
 namespace Fake64.Samples;
 
-// Un esempio: il file da caricare nell'emulatore e i sorgenti da cui nasce (in samples/src)
+// A sample: the file to load into the emulator and the sources it is built from (in samples/src)
 public sealed record Sample(string FileName, string Description, byte[] Content, IReadOnlyList<string> Sources);
 
-// I programmi di esempio di samples/. I sorgenti (.bas e .asm commentati) stanno in samples/src e sono inclusi
-// in questo progetto come risorse: generatore e test leggono gli stessi file
+// The sample programs of samples/. The sources (commented .bas and .asm) live in samples/src and are included
+// in this project as resources: the generator and the tests read the same files
 public static class SampleSet
 {
     public static IReadOnlyList<Sample> All { get; } =
     [
         // BASIC
-        Basic("hello.prg", "BASIC e colori del testo", "hello.bas"),
-        Basic("math.prg", "Espressioni in BASIC", "math.bas"),
-        Basic("sprite.prg", "Uno sprite espanso che rimbalza", "sprite.bas"),
-        Basic("keys.prg", "Tasti funzione e tasti cursore", "keys.bas"),
-        Basic("joystick.prg", "Joystick nella porta 2", "joystick.bas"),
-        Basic("paddle.prg", "Paddle nella porta 1", "paddle.bas"),
-        Basic("sound.prg", "Una scala suonata dal SID", "sound.bas"),
+        Basic("hello.prg", "BASIC and text colors", "hello.bas"),
+        Basic("math.prg", "Expressions in BASIC", "math.bas"),
+        Basic("sprite.prg", "A bouncing expanded sprite", "sprite.bas"),
+        Basic("keys.prg", "Function keys and cursor keys", "keys.bas"),
+        Basic("joystick.prg", "Joystick in port 2", "joystick.bas"),
+        Basic("paddle.prg", "Paddles in port 1", "paddle.bas"),
+        Basic("sound.prg", "A scale played by the SID", "sound.bas"),
 
-        // Linguaggio macchina: interrupt e CPU
-        Program("sys.prg", "Linguaggio macchina a $C000, avviato con SYS 49152", "sys.asm"),
-        Program("rasterbars.prg", "Raster interrupt del VIC-II: una barra nel bordo", "rasterbars.asm"),
-        Program("irq.prg", "Interrupt del timer della CIA 1 agganciato al KERNAL", "irq.asm"),
-        Program("nmi.prg", "NMI dal timer della CIA 2", "nmi.asm"),
-        Program("decimal.prg", "Modo decimale (BCD): un contatore a 4 cifre", "decimal.asm"),
+        // Machine language: interrupts and CPU
+        Program("sys.prg", "Machine language at $C000, started with SYS 49152", "sys.asm"),
+        Program("rasterbars.prg", "VIC-II raster interrupt: a bar in the border", "rasterbars.asm"),
+        Program("irq.prg", "CIA 1 timer interrupt hooked into the KERNAL", "irq.asm"),
+        Program("nmi.prg", "NMI from the CIA 2 timer", "nmi.asm"),
+        Program("decimal.prg", "Decimal mode (BCD): a 4-digit counter", "decimal.asm"),
 
-        // Linguaggio macchina: SID
-        Program("music.prg", "Tre voci del SID suonate dall'interrupt: PWM, filtro, rumore", "music.asm"),
+        // Machine language: SID
+        Program("music.prg", "Three SID voices played by the interrupt: PWM, filter, noise", "music.asm"),
 
-        // Linguaggio macchina: VIC-II
-        Program("multicolor.prg", "Testo multicolor con un set di caratteri in RAM", "multicolor.asm"),
-        Program("ecm.prg", "Extended color mode: quattro colori di sfondo", "ecm.asm"),
-        Program("bitmap.prg", "Bitmap ad alta risoluzione", "bitmap.asm"),
+        // Machine language: VIC-II
+        Program("multicolor.prg", "Multicolor text with a character set in RAM", "multicolor.asm"),
+        Program("ecm.prg", "Extended color mode: four background colors", "ecm.asm"),
+        Program("bitmap.prg", "High-resolution bitmap", "bitmap.asm"),
         Program("mcbitmap.prg", "Bitmap multicolor", "mcbitmap.asm"),
-        Program("sprites.prg", "Otto sprite: espansione, multicolor, priorità, collisioni", "sprites.asm"),
-        Program("scroll.prg", "Scroll fine orizzontale di una riga", "scroll.asm"),
-        Program("vicbank.prg", "Banco del VIC-II e caratteri copiati dalla ROM", "vicbank.asm"),
+        Program("sprites.prg", "Eight sprites: expansion, multicolor, priority, collisions", "sprites.asm"),
+        Program("scroll.prg", "Horizontal fine scroll of one line", "scroll.asm"),
+        Program("vicbank.prg", "VIC-II bank and characters copied from ROM", "vicbank.asm"),
+        Program("borders.prg", "Top and bottom borders open, with sprites inside", "borders.asm"),
 
-        // Cartucce
-        Cartridge("hello.crt", "Cartuccia 8K con avvio automatico", "HELLO CART", CrtImage.TypeNormal,
+        // Cartridges
+        Cartridge("hello.crt", "8K cartridge with autostart", "HELLO CART", CrtImage.TypeNormal,
             exromActive: true, gameActive: false, (0, "cartridge.asm")),
-        Cartridge("ultimax.crt", "Cartuccia Ultimax: un C64 senza KERNAL", "ULTIMAX", CrtImage.TypeNormal,
+        Cartridge("ultimax.crt", "Ultimax cartridge: a C64 without KERNAL", "ULTIMAX", CrtImage.TypeNormal,
             exromActive: false, gameActive: true, (0, "ultimax.asm")),
-        Cartridge("banks.crt", "Cartuccia Magic Desk con due banchi", "BANKS", CrtImage.TypeMagicDesk,
+        Cartridge("banks.crt", "Magic Desk cartridge with two banks", "BANKS", CrtImage.TypeMagicDesk,
             exromActive: true, gameActive: false, (0, "banks0.asm"), (1, "banks1.asm")),
     ];
 
     public static string Source(string fileName)
     {
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("samples/" + fileName)
-            ?? throw new FileNotFoundException($"Sorgente non trovato: samples/src/{fileName}");
+            ?? throw new FileNotFoundException($"Source not found: samples/src/{fileName}");
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }
@@ -62,7 +64,7 @@ public static class SampleSet
     static Sample Program(string fileName, string description, string source) =>
         new(fileName, description, Assembler.Assemble(Source(source), source).Prg, [source]);
 
-    // Ogni banco è un sorgente assemblato a $8000 (ROML) o a $E000 (ROMH, Ultimax), riempito fino a 8 KB
+    // Each bank is a source assembled at $8000 (ROML) or at $E000 (ROMH, Ultimax), filled up to 8 KB
     static Sample Cartridge(string fileName, string description, string name, int type, bool exromActive, bool gameActive,
         params (int Bank, string Source)[] banks)
     {

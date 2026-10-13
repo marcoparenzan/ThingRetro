@@ -3,9 +3,10 @@ using Fake64.C64;
 
 namespace Fake64;
 
-// Finestra dell'app: ospita un C64Monitor e collega i pezzi. Lo stesso schema (Board, monitor,
-// MonitorCable, PcKeyboard, PcSpeakers con AudioCable, ControlPortSelector) funziona in qualunque form, anche insieme
-// ad altri controlli. Clic destro sul monitor: porte di controllo, scambio delle porte, audio, reset
+// A C64: a window hosting a C64Monitor and wiring the pieces together. It works on its own or as a tab of the
+// studio (MDI child). The same wiring (Board, monitor, MonitorCable, PcKeyboard, PcSpeakers with AudioCable,
+// ControlPortSelector) works in any form, next to other controls too.
+// Right click on the monitor: control ports, port swap, audio, reset
 public partial class Fake64Form : Form
 {
     readonly Board board;
@@ -15,21 +16,21 @@ public partial class Fake64Form : Form
     readonly PcSpeakers? speakers;
     readonly AudioCable? audioCable;
     readonly ControlPortSelector controlPorts;
-    readonly AppSettings settings = AppSettings.Load();
+    readonly AppSettings settings = AppSettings.Current;
 
     public Fake64Form(SystemRoms roms, string? startupFile = null)
     {
         board = new Board(roms);
-        Text = "Fake64";
+        Text = "C64";
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = monitor.Size;
         Controls.Add(monitor);
 
-        // I collegamenti espliciti: uscita video -> monitor, tastiera del PC (sul monitor) -> tastiera del C64
+        // The explicit connections: video output -> monitor, PC keyboard (on the monitor) -> C64 keyboard
         monitorCable = new MonitorCable(board.VideoOut, monitor);
         keyboardCable = new PcKeyboard(monitor, board.Keyboard);
 
-        // Uscita audio -> casse del PC. Senza un dispositivo audio l'emulatore funziona lo stesso, muto
+        // Audio output -> PC speakers. Without an audio device the emulator still works, silently
         try
         {
             speakers = new PcSpeakers { Muted = !settings.Audio };
@@ -37,8 +38,8 @@ public partial class Fake64Form : Form
         }
         catch (InvalidOperationException) { }
 
-        // Porte di controllo: joystick dalla tastiera o USB, paddle dal mouse; i tasti del joystick
-        // non arrivano alla tastiera del C64
+        // Control ports: joystick from the keyboard or USB, paddles from the mouse; the joystick keys
+        // do not reach the C64 keyboard
         controlPorts = new ControlPortSelector(board, monitor);
         controlPorts.Select(1, settings.Port1);
         controlPorts.Select(2, settings.Port2);
@@ -56,7 +57,7 @@ public partial class Fake64Form : Form
             settings.Save();
         };
         menu.Items.Add(audio);
-        menu.Items.Add(new ToolStripMenuItem("Reset", null, (_, _) => board.Enqueue(board.Reset)));
+        menu.Items.Add(new ToolStripMenuItem("Reset", null, (_, _) => Reset()));
         monitor.ContextMenuStrip = menu;
 
         monitor.AllowDrop = true;
@@ -69,27 +70,29 @@ public partial class Fake64Form : Form
             if (DroppedFile(e) is string path) Open(path);
         };
 
-        Shown += async (_, _) =>
+        Shown += (_, _) =>
         {
             monitor.Focus();
-            if (startupFile is null) return;
-            // Una cartuccia riavvia la macchina; un programma va caricato quando il BASIC è pronto
-            if (!MediaLoader.IsCartridge(startupFile)) await Task.Delay(MediaLoader.BootTime);
-            Open(startupFile);
+            if (startupFile is not null) Run(startupFile);
         };
+
+        // As a tab: whenever the tab comes to the front the keyboard goes to the C64
+        Activated += (_, _) => monitor.Focus();
     }
 
-    static string? DroppedFile(DragEventArgs e) =>
-        e.Data?.GetData(DataFormats.FileDrop) is string[] files && files.Length == 1 && MediaLoader.IsSupported(files[0])
-            ? files[0]
-            : null;
+    public void Reset() => board.Enqueue(board.Reset);
 
-    void Open(string path)
+    // Restarts the machine and runs a .prg (or inserts a .crt)
+    public void Run(string path) => LoadFile(path, () => MediaLoader.Run(board, path));
+
+    // Loads a file into the running machine, as when it is dropped on the monitor
+    public void Open(string path) => LoadFile(path, () => MediaLoader.Open(board, path));
+
+    void LoadFile(string path, Func<string> load)
     {
         try
         {
-            var description = MediaLoader.Open(board, path);
-            Text = $"Fake64 - {description}";
+            Text = $"C64 - {load()}";
         }
         catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException or ArgumentException)
         {
@@ -97,6 +100,11 @@ public partial class Fake64Form : Form
         }
         monitor.Focus();
     }
+
+    static string? DroppedFile(DragEventArgs e) =>
+        e.Data?.GetData(DataFormats.FileDrop) is string[] files && files.Length == 1 && MediaLoader.IsSupported(files[0])
+            ? files[0]
+            : null;
 
     void SaveControlPorts()
     {
@@ -107,6 +115,7 @@ public partial class Fake64Form : Form
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        board.Stop();
         controlPorts.Dispose();
         keyboardCable.Dispose();
         audioCable?.Dispose();

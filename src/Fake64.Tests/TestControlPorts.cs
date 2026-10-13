@@ -2,7 +2,7 @@ using static Fake64.Tests.TestHelpers;
 
 namespace Fake64.Tests;
 
-// Porte di controllo: la presa DE-9, i dispositivi e il cablaggio verso CIA 1 e SID
+// Control ports: the DE-9 socket, the devices and the wiring to CIA 1 and the SID
 [TestClass]
 public sealed class ControlPortTests
 {
@@ -10,7 +10,7 @@ public sealed class ControlPortTests
     const int FRAME_CYCLES = 312 * 63;
     const int POT_CYCLES = 512;
 
-    // CIA 1 come la lascia il KERNAL: porta A in uscita, porta B in ingresso
+    // CIA 1 as the KERNAL leaves it: port A output, port B input
     static Board BoardWithKernalCiaSetup()
     {
         var board = NewBoard();
@@ -21,7 +21,7 @@ public sealed class ControlPortTests
         return board;
     }
 
-    // Commutatore delle linee POT: PA6 = porta 1, PA7 = porta 2
+    // POT line switch: PA6 = port 1, PA7 = port 2
     static void SelectPotPort(Board board, int port) => board.Poke(0xDC00, port == 1 ? (byte)0x40 : (byte)0x80);
 
     #region Joystick
@@ -50,7 +50,7 @@ public sealed class ControlPortTests
         joystick.Right = true;
         joystick.Fire = true;
         Assert.AreEqual(0x07, board.Peek(0xDC00) & 0x1F);
-        Assert.AreEqual(0x1F, board.Peek(0xDC01) & 0x1F); // la porta 1 non c'entra
+        Assert.AreEqual(0x1F, board.Peek(0xDC01) & 0x1F); // port 1 is not involved
     }
 
     [TestMethod]
@@ -69,11 +69,11 @@ public sealed class ControlPortTests
     [TestMethod]
     public void JoystickInPort1_ShouldTypePhantomKeysDuringKeyboardScan()
     {
-        // Come sul C64 vero: i contatti della porta 1 sono sulle stesse linee delle colonne della tastiera
+        // As on the real C64: the contacts of port 1 are on the same lines as the keyboard columns
         var board = NewBoard();
         board.RunCycles(3 * CYCLES_PER_SECOND);
         board.Load(0xC000, 0x4C, 0x00, 0xC0);
-        board.Cpu.Status = 0x20;  // IRQ abilitati: il KERNAL scandisce la tastiera
+        board.Cpu.Status = 0x20;  // IRQs enabled: the KERNAL scans the keyboard
         board.Poke(0x00C6, 0);
         var joystick = new Joystick();
         board.ControlPort1.Plug(joystick);
@@ -81,7 +81,7 @@ public sealed class ControlPortTests
         joystick.Fire = true;
         board.RunCycles(3 * FRAME_CYCLES);
 
-        Assert.IsTrue(board.Peek(0x00C6) > 0, "nessun tasto fantasma nel buffer");
+        Assert.IsTrue(board.Peek(0x00C6) > 0, "no phantom key in the buffer");
     }
 
     [TestMethod]
@@ -98,7 +98,7 @@ public sealed class ControlPortTests
 
     #endregion
 
-    #region Paddle e SID
+    #region Paddles and SID
 
     [TestMethod]
     public void Paddles_ShouldBeReadByTheSidThroughThePotSwitch()
@@ -119,7 +119,7 @@ public sealed class ControlPortTests
         Assert.AreEqual(10, (int)board.Peek(0xD419));
         Assert.AreEqual(20, (int)board.Peek(0xD41A));
 
-        board.Poke(0xDC00, 0x00); // nessuna porta selezionata: linee libere
+        board.Poke(0xDC00, 0x00); // no port selected: lines floating
         board.RunCycles(POT_CYCLES);
         Assert.AreEqual(0xFF, (int)board.Peek(0xD419));
     }
@@ -136,7 +136,7 @@ public sealed class ControlPortTests
 
         paddles.PositionA = 60;
         board.RunCycles(100);
-        Assert.AreEqual(50, (int)board.Peek(0xD419)); // misura in corso: resta il valore precedente
+        Assert.AreEqual(50, (int)board.Peek(0xD419)); // measurement in progress: the previous value stays
         board.RunCycles(POT_CYCLES);
         Assert.AreEqual(60, (int)board.Peek(0xD419));
     }
@@ -149,10 +149,10 @@ public sealed class ControlPortTests
         board.ControlPort1.Plug(paddles);
 
         paddles.FireA = true;
-        Assert.AreEqual(0x1B, board.Peek(0xDC01) & 0x1F); // pin 3 (sinistra)
+        Assert.AreEqual(0x1B, board.Peek(0xDC01) & 0x1F); // pin 3 (left)
         paddles.FireA = false;
         paddles.FireB = true;
-        Assert.AreEqual(0x17, board.Peek(0xDC01) & 0x1F); // pin 4 (destra)
+        Assert.AreEqual(0x17, board.Peek(0xDC01) & 0x1F); // pin 4 (right)
     }
 
     #endregion

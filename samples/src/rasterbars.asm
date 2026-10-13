@@ -1,68 +1,68 @@
 ; ----------------------------------------------------------------------------------------------------------
-; RASTERBARS - una barra rossa nel bordo, disegnata con il raster interrupt del VIC-II
+; RASTERBARS - a red bar in the border, drawn with the VIC-II raster interrupt
 ;
-; Il VIC-II disegna lo schermo riga per riga (312 righe raster in PAL). Il registro $D012 contiene la riga
-; in corso; scrivendoci un valore si chiede al VIC-II di generare un interrupt (IRQ) quando il pennello
-; elettronico arriva a quella riga. Qui:
-;   - a riga 100 il bordo diventa rosso e si chiede il prossimo interrupt a riga 150
-;   - a riga 150 il bordo torna azzurro e si chiede il prossimo interrupt a riga 100
-; Il risultato è una barra rossa ferma nel bordo, mentre il BASIC continua a funzionare.
+; The VIC-II draws the screen line by line (312 raster lines on PAL). Register $D012 holds the current line;
+; writing a value to it asks the VIC-II to generate an interrupt (IRQ) when the electron beam reaches that
+; line. Here:
+;   - at line 100 the border turns red and the next interrupt is requested at line 150
+;   - at line 150 the border turns light blue again and the next interrupt is requested at line 100
+; The result is a still red bar in the border, while BASIC keeps working.
 ;
-; Il vettore di IRQ ($0314) è condiviso con il timer della CIA 1, che 60 volte al secondo fa leggere la
-; tastiera al KERNAL: il gestore controlla chi ha chiesto l'interrupt e passa al KERNAL quelli della CIA.
+; The IRQ vector ($0314) is shared with the CIA 1 timer, which 60 times per second has the KERNAL read the
+; keyboard: the handler checks who asked for the interrupt and passes the CIA ones on to the KERNAL.
 ; ----------------------------------------------------------------------------------------------------------
 
-VIC_CR1     = $D011         ; controllo 1: il bit 7 è il nono bit della riga raster
-VIC_RASTER  = $D012         ; riga raster (in lettura: quella attuale; in scrittura: quella dell'interrupt)
-VIC_IRQ     = $D019         ; interrupt avvenuti (bit 7 = il VIC-II tiene bassa la linea /IRQ)
-VIC_IRQEN   = $D01A         ; interrupt abilitati (bit 0 = raster)
-BORDER      = $D020         ; colore del bordo
-IRQ_VECTOR  = $0314         ; il KERNAL salta qui a ogni IRQ (dopo aver salvato i registri)
-KERNAL_IRQ  = $EA31         ; gestore IRQ del KERNAL: tastiera, cursore, orologio
-KERNAL_RTI  = $EA81         ; fine del gestore: ripristina A, X, Y e fa RTI
+VIC_CR1     = $D011         ; control 1: bit 7 is the ninth bit of the raster line
+VIC_RASTER  = $D012         ; raster line (read: the current one; written: the one for the interrupt)
+VIC_IRQ     = $D019         ; interrupts that happened (bit 7 = the VIC-II holds the /IRQ line low)
+VIC_IRQEN   = $D01A         ; interrupts enabled (bit 0 = raster)
+BORDER      = $D020         ; border color
+IRQ_VECTOR  = $0314         ; the KERNAL jumps here at every IRQ (after saving the registers)
+KERNAL_IRQ  = $EA31         ; KERNAL IRQ handler: keyboard, cursor, clock
+KERNAL_RTI  = $EA81         ; end of the handler: restores A, X, Y and does RTI
 
 RED         = 2
 LIGHT_BLUE  = 14
-TOP         = 100           ; riga in cui inizia la barra
-BOTTOM      = 150           ; riga in cui finisce
-MIDDLE      = 120           ; una riga qualsiasi fra le due, per capire quale interrupt è arrivato
+TOP         = 100           ; line where the bar starts
+BOTTOM      = 150           ; line where it ends
+MIDDLE      = 120           ; any line between the two, to tell which interrupt arrived
 
             * = $0801
-            .basic                      ; 10 SYS2061: RUN fa partire il codice che segue
+            .basic                      ; 10 SYS2061: RUN starts the code that follows
 
-            SEI                         ; niente interrupt mentre si cambia il vettore
+            SEI                         ; no interrupts while the vector changes
             LDA #$01
-            STA VIC_IRQEN               ; abilita l'interrupt raster
+            STA VIC_IRQEN               ; enable the raster interrupt
             LDA #TOP
-            STA VIC_RASTER              ; primo interrupt a riga 100...
+            STA VIC_RASTER              ; first interrupt at line 100...
             LDA VIC_CR1
             AND #$7F
-            STA VIC_CR1                 ; ...con il nono bit a 0 (righe 0-255)
+            STA VIC_CR1                 ; ...with the ninth bit at 0 (lines 0-255)
             LDA #<irq
             STA IRQ_VECTOR
             LDA #>irq
-            STA IRQ_VECTOR+1            ; da ora gli IRQ passano dal nostro gestore
+            STA IRQ_VECTOR+1            ; from now on the IRQs go through our handler
             CLI
-            RTS                         ; torna al BASIC: la barra va avanti da sola
+            RTS                         ; back to BASIC: the bar goes on by itself
 
-; Gestore degli interrupt: lo chiama il KERNAL con A, X e Y già salvati sullo stack
+; Interrupt handler: called by the KERNAL with A, X and Y already saved on the stack
 irq:        LDA VIC_IRQ
-            BMI raster                  ; bit 7 a 1: l'interrupt viene dal VIC-II
-            JMP KERNAL_IRQ              ; altrimenti è il timer della CIA 1: lo gestisce il KERNAL
+            BMI raster                  ; bit 7 set: the interrupt comes from the VIC-II
+            JMP KERNAL_IRQ              ; otherwise it is the CIA 1 timer: the KERNAL handles it
 
-raster:     STA VIC_IRQ                 ; conferma: scrivere 1 nei bit li azzera e rilascia la linea /IRQ
+raster:     STA VIC_IRQ                 ; acknowledge: writing 1 to the bits clears them and releases /IRQ
             LDA VIC_RASTER
-            CMP #MIDDLE                 ; siamo in alto o in basso?
+            CMP #MIDDLE                 ; are we at the top or at the bottom?
             BCS bottom
 
-            LDA #RED                    ; inizio della barra
+            LDA #RED                    ; start of the bar
             STA BORDER
             LDA #BOTTOM
-            STA VIC_RASTER              ; il prossimo interrupt arriva a fine barra
+            STA VIC_RASTER              ; the next interrupt comes at the end of the bar
             JMP KERNAL_RTI
 
-bottom:     LDA #LIGHT_BLUE             ; fine della barra
+bottom:     LDA #LIGHT_BLUE             ; end of the bar
             STA BORDER
             LDA #TOP
-            STA VIC_RASTER              ; il prossimo interrupt arriva al prossimo frame
+            STA VIC_RASTER              ; the next interrupt comes in the next frame
             JMP KERNAL_RTI

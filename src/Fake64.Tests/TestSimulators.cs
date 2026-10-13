@@ -3,11 +3,11 @@ using static Fake64.Tests.TestHelpers;
 
 namespace Fake64.Tests;
 
-// Simulatori dei dispositivi di controllo: tastiera e joystick USB come joystick, mouse come paddle
+// Control device simulators: keyboard and USB joystick as joystick, mouse as paddles
 [TestClass]
 public sealed class SimulatorTests
 {
-    // Controllo che genera gli eventi di tastiera e mouse come se avesse il focus
+    // Control that raises keyboard and mouse events as if it had the focus
     sealed class InputSource : Control
     {
         public void Down(Keys key) => OnKeyDown(new KeyEventArgs(key));
@@ -15,7 +15,7 @@ public sealed class SimulatorTests
         public void Blur() => OnLostFocus(EventArgs.Empty);
     }
 
-    #region Joystick da tastiera
+    #region Keyboard joystick
 
     [TestMethod]
     [DataRow(Keys.NumPad8, true, false, false, false, false)]
@@ -67,17 +67,17 @@ public sealed class SimulatorTests
 
         source.Down(Keys.Up);
 
-        Assert.IsFalse(board.Keyboard.IsPressed(C64Key.CursorDown)); // non è il tasto cursore
+        Assert.IsFalse(board.Keyboard.IsPressed(C64Key.CursorDown)); // it is not the cursor key
         Assert.IsTrue(((Joystick)board.ControlPort2.Device!).Up);
         board.ParkCpu();
-        board.Poke(0xDC02, 0xFF);                          // porta A in uscita, come la lascia il KERNAL
+        board.Poke(0xDC02, 0xFF);                          // port A as output, as the KERNAL leaves it
         board.Poke(0xDC00, 0x7F);
-        Assert.AreEqual(0x1E, board.Peek(0xDC00) & 0x1F);  // il C64 lo legge dalla porta 2
+        Assert.AreEqual(0x1E, board.Peek(0xDC00) & 0x1F);  // the C64 reads it from port 2
     }
 
     #endregion
 
-    #region Joystick USB
+    #region USB joystick
 
     static readonly UsbJoystick.AxisRange Axis = new(0, 65535);
     const int Center = 32767, Centered = 0xFFFF;
@@ -86,7 +86,7 @@ public sealed class SimulatorTests
     public void UsbJoystick_CenteredStickShouldCloseNothing()
     {
         Assert.AreEqual(new UsbJoystick.State(false, false, false, false, false), UsbJoystick.Map(Center, Center, Axis, Axis, Centered, 0));
-        Assert.AreEqual(new UsbJoystick.State(false, false, false, false, false), UsbJoystick.Map(Center + 9000, Center - 9000, Axis, Axis, Centered, 0)); // zona morta
+        Assert.AreEqual(new UsbJoystick.State(false, false, false, false, false), UsbJoystick.Map(Center + 9000, Center - 9000, Axis, Axis, Centered, 0)); // dead zone
     }
 
     [TestMethod]
@@ -118,7 +118,7 @@ public sealed class SimulatorTests
 
     #endregion
 
-    #region Paddle dal mouse
+    #region Mouse paddles
 
     [TestMethod]
     public void MousePaddles_MovingRightShouldTurnClockwiseAndClamp()
@@ -128,7 +128,7 @@ public sealed class SimulatorTests
         using var simulator = new MousePaddles(source, paddles);
 
         simulator.MoveBy(28);
-        Assert.AreEqual(100, (int)paddles.PositionA);   // senso orario: il valore diminuisce
+        Assert.AreEqual(100, (int)paddles.PositionA);   // clockwise: the value decreases
         simulator.MoveBy(-50);
         Assert.AreEqual(150, (int)paddles.PositionA);
         simulator.MoveBy(-1000);
@@ -143,7 +143,7 @@ public sealed class SimulatorTests
 
     #endregion
 
-    #region Selettore
+    #region Selector
 
     [TestMethod]
     public void Selector_ShouldPlugTheRightDevice()
@@ -212,12 +212,12 @@ public sealed class SimulatorTests
         var port2 = (ToolStripMenuItem)menu.Items[1];
         selector.FillPortMenu(port2, 2);
 
-        Assert.AreEqual("Porta di controllo 1", menu.Items[0].Text);
+        Assert.AreEqual("Control port 1", menu.Items[0].Text);
         Assert.AreEqual(Keys.Control | Keys.F12, ((ToolStripMenuItem)menu.Items[2]).ShortcutKeys);
         var items = port2.DropDownItems.OfType<ToolStripMenuItem>().ToList();
-        Assert.IsTrue(items.Single(item => item.Checked).Text!.StartsWith("Joystick: tastierino"));
-        Assert.IsTrue(items.Any(item => item.Text!.StartsWith("Paddle: mouse")));
-        Assert.IsTrue(items.Any(item => item.Text!.StartsWith("Joystick USB")));
+        Assert.IsTrue(items.Single(item => item.Checked).Text!.StartsWith("Joystick: numeric keypad"));
+        Assert.IsTrue(items.Any(item => item.Text!.StartsWith("Paddles: mouse")));
+        Assert.IsTrue(items.Any(item => item.Text!.StartsWith("USB joystick")));
     }
 
     #endregion

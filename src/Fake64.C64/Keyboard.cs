@@ -1,8 +1,8 @@
 namespace Fake64.C64;
 
-// I 64 tasti della matrice del C64. Il valore è riga * 8 + colonna:
-// la riga è il bit della porta A della CIA1 che la seleziona, la colonna il bit letto sulla porta B.
-// RESTORE non fa parte della matrice (è collegato alla linea NMI)
+// The 64 keys of the C64 matrix. The value is row * 8 + column:
+// the row is the bit of CIA1 port A that selects it, the column the bit read on port B.
+// RESTORE is not part of the matrix (it is wired to the NMI line)
 public enum C64Key
 {
     Delete = 0, Return, CursorRight, F7, F1, F3, F5, CursorDown,
@@ -15,17 +15,17 @@ public enum C64Key
     D1 = 56, LeftArrow, Control, D2, Space, Commodore, Q, RunStop,
 }
 
-// Tastiera del C64: la matrice di 8x8 contatti letta dalla CIA1.
-// Chi la usa (ad esempio un adattatore per la tastiera del PC) comunica quali tasti sono premuti
+// The C64 keyboard: the 8x8 contact matrix read by CIA1.
+// Whoever uses it (for example an adapter for the PC keyboard) tells which keys are pressed
 public class Keyboard
 {
-    // Una riga per bit della porta A; un bit a 0 = tasto premuto. Sostituita in blocco, quindi
-    // può essere aggiornata da un altro thread mentre la CIA1 la legge
+    // One row per bit of port A; a bit at 0 = key pressed. Replaced as a whole, so it can be
+    // updated from another thread while CIA1 reads it
     volatile byte[] matrix = NewMatrix();
 
     static byte[] NewMatrix() => [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
 
-    // Colonne lette dalla CIA1 (porta B) con le righe selezionate dai bit a 0 della porta A
+    // Columns read by CIA1 (port B) with the rows selected by the bits at 0 of port A
     public byte GetKeyboardState(byte rowSelectionMask)
     {
         var rows = matrix;
@@ -38,7 +38,7 @@ public class Keyboard
         return result;
     }
 
-    // Imposta l'insieme completo dei tasti premuti; quelli non elencati risultano rilasciati
+    // Sets the complete set of pressed keys; the keys not listed are released
     public void SetPressedKeys(IEnumerable<C64Key> keys)
     {
         var rows = NewMatrix();

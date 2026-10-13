@@ -1,206 +1,241 @@
 # Fake64
 
-Un emulatore del Commodore 64 (PAL) in C#, scritto per essere letto: il codice ricalca la scheda madre
-vera, con i chip MOS negli zoccoli, le piste che li collegano e i cavi verso monitor e tastiera.
+A Commodore 64 (PAL) emulator in C#, written to be read: the code mirrors the real motherboard, with the MOS
+chips in their sockets, the traces that connect them and the cables to the monitor, the speakers and the keyboard.
+It comes with a small studio to write 6502 assembly and run it right away.
 
-![Avvio e una riga di BASIC](images/fake64-ready.png)
-![Raster bar con un raster interrupt e uno sprite espanso](images/fake64-rasterbars.png)
+![Boot and a line of BASIC](images/fake64-ready.png)
+![Raster bars with a raster interrupt and an expanded sprite](images/fake64-rasterbars.png)
 
-## Cosa funziona
+## What works
 
-- **Avvio completo** con le ROM originali (KERNAL, BASIC, caratteri) fino a `READY.`, BASIC, programmi in
-  linguaggio macchina, alla velocità di un C64 PAL (985.248 cicli al secondo, 50 frame al secondo).
-- **CPU 6510 ciclo per ciclo**: un accesso al bus per ciclo, nello stesso ordine del chip (letture fittizie,
-  doppia scrittura nelle istruzioni lettura-modifica-scrittura), tutti i 256 opcode compresi quelli non
-  documentati, modo decimale, RDY e AEC, interrupt controllati all'ultimo ciclo. Verificata con il
-  *6502 functional test* di Klaus Dormann e con le *SingleStepTests* di Tom Harte (vedi [Test](#test)).
-- **VIC-II**: tutti i modi grafici (testo standard, multicolor, extended color; bitmap standard e multicolor),
-  bordi 38/40 colonne e 24/25 righe, scroll fine, 8 sprite con espansione, multicolor, priorità e collisioni,
-  raster interrupt, bad line con i 3 cicli di preavviso di BA. I cambi di registro a metà riga (split raster)
-  cadono nel punto giusto con la precisione di un ciclo.
-- **SID 6581**: tre voci con oscillatori a 24 bit, triangolo, dente di sega, impulso, rumore (registro a
-  scorrimento a 23 bit), sync e modulazione ad anello, inviluppi ADSR con i tempi del chip (compreso l'"ADSR bug"),
-  filtro passa basso/banda/alto con risonanza, `OSC3`/`ENV3`, campioni a 4 bit scrivendo il volume. Tutto avanza
-  a ogni ciclo; la scheda ricampiona l'uscita a 44,1 kHz e l'app la suona sulle casse del PC.
-- **CIA 6526**: timer A e B (anche in cascata), TOD, interrupt, porte parallele; tastiera e banco del VIC-II
-  collegati come sulla scheda.
-- **Programmi `.prg`** (da riga di comando o trascinandoli sulla finestra): i programmi BASIC partono da soli.
-- **Cartucce `.crt`**: Normal 8K/16K/Ultimax, Ocean, C64 Game System / System 3, Magic Desk, EasyFlash
-  (in sola lettura).
-- **Tastiera del PC** con mappatura posizionale, tasti funzione F1-F8 e tasti cursore.
-- **Porte di controllo** (prese DE-9) con joystick, paddle e mouse 1351: i contatti digitali arrivano alla CIA 1,
-  le linee POT al SID attraverso il commutatore analogico comandato dalla CIA 1. Nell'app il joystick si comanda
-  dalla tastiera del PC o da un joystick/gamepad USB, i paddle dal mouse del PC.
+- **Full boot** with the original ROMs (KERNAL, BASIC, characters) up to `READY.`, BASIC, machine language
+  programs, at the speed of a PAL C64 (985,248 cycles per second, 50 frames per second).
+- **Cycle-stepped 6510 CPU**: one bus access per cycle, in the same order as the chip (dummy reads, double write
+  in read-modify-write instructions), all 256 opcodes including the undocumented ones, decimal mode, RDY and AEC,
+  interrupts polled at the last cycle. Verified with Klaus Dormann's *6502 functional test* and Tom Harte's
+  *SingleStepTests* (see [Tests](#tests)).
+- **VIC-II**: all graphics modes (standard, multicolor and extended color text; standard and multicolor bitmap),
+  38/40 column and 24/25 row borders, fine scrolling, 8 sprites with expansion, multicolor, priority and
+  collisions, raster interrupt, bad lines with the 3 cycles of BA warning. Sprites steal their DMA cycles from the
+  CPU (2 per sprite per line, plus the warning) and follow the chip's counters, so multiplexers work. The borders
+  are the chip's two flip-flops: they open with the demo tricks (top and bottom by changing the rows between
+  lines 248 and 250, sides by changing the columns at cycle 56), showing the idle byte and the sprites. Register
+  changes in the middle of a line (raster splits) land at the right point with the precision of a cycle.
+- **SID 6581**: three voices with 24-bit oscillators, triangle, sawtooth, pulse, noise (23-bit shift register),
+  sync and ring modulation, ADSR envelopes with the chip's timing (the "ADSR bug" included), low/band/high-pass
+  filter with resonance, `OSC3`/`ENV3`, 4-bit samples by writing the volume. Everything advances at every cycle;
+  the board resamples the output to 44.1 kHz and the app plays it on the PC speakers.
+- **CIA 6526**: timers A and B (cascaded too), TOD, interrupts, parallel ports; keyboard and VIC-II bank wired
+  as on the board.
+- **`.prg` programs** (from the command line, the studio or dragged onto a C64): BASIC programs start by themselves.
+- **`.crt` cartridges**: Normal 8K/16K/Ultimax, Ocean, C64 Game System / System 3, Magic Desk, EasyFlash
+  (read-only).
+- **PC keyboard** with positional mapping, function keys F1-F8 and cursor keys.
+- **Control ports** (DE-9 sockets) with joystick, paddles and 1351 mouse: the digital contacts reach CIA 1, the
+  POT lines reach the SID through the analog switch driven by CIA 1. In the app the joystick is driven by the PC
+  keyboard or by a USB joystick/gamepad, the paddles by the PC mouse.
+- **Studio**: file explorer, assembly editor (Monaco) with 6502 syntax highlighting, built-in assembler,
+  F5 to assemble and run in a C64 tab.
 
-Non ancora: drive 1541 e immagini disco/nastro (`.d64`, `.t64`), accessi DMA degli
-sprite. Vedi [Limiti noti](#limiti-noti).
+Not yet: the 1541 drive and disk/tape images (`.d64`, `.t64`). See [Known limits](#known-limits).
 
-## Struttura
+## Structure
 
-| Progetto | Contenuto |
-|---|---|
-| `src/Fake64.Mos` | I chip MOS come componenti autonomi: `MOS6502` (nucleo della CPU), `MOS6510` (CPU con porta di I/O), `MOS6526` (CIA), `MOS6569` (VIC-II PAL), `MOS6581` (SID). Ogni chip implementa la propria **piedinatura** (`I6510Pinout`, `I6526Pinout`, `I6569Pinout`, `I6581Pinout`) e non sa in quale computer è montato |
-| `src/Fake64.C64` | La **scheda madre**: zoccoli, PLA, RAM, color RAM, ROM, matrice della tastiera, porta di espansione, uscite video e audio |
-| `src/Fake64.Prg` | Caricamento dei file `.prg` e scrittura nel buffer di tastiera del KERNAL |
-| `src/Fake64.Crt` | Formato `.crt` e tipi di cartuccia |
-| `src/Fake64.WinForms` | `C64Monitor` (lo schermo, uno UserControl), `PcKeyboard` (il cavo della tastiera), `PcSpeakers` (le casse), simulatori di joystick e paddle |
-| `src/Fake64` | L'app Windows: una finestra che ospita il monitor |
-| `src/Fake64.Samples` | Generatore degli esempi: tokenizzatore BASIC V2, assembler 6502, writer `.crt` |
-| `src/Fake64.Tests` | Test (MSTest) |
-| `samples` | Programmi di esempio pronti da caricare, con i sorgenti BASIC e assembly commentati in `samples/src` |
-| `tools` | Script di supporto (download delle suite di test della CPU) |
+| Project | Contents |
+| --- | --- |
+| `src/Fake64.Mos` | The MOS chips as standalone components: `MOS6502` (CPU core), `MOS6510` (CPU with I/O port), `MOS6526` (CIA), `MOS6569` (PAL VIC-II), `MOS6581` (SID). Each chip implements its own **pinout** (`I6510Pinout`, `I6526Pinout`, `I6569Pinout`, `I6581Pinout`) and does not know which computer it is mounted in |
+| `src/Fake64.C64` | The **motherboard**: sockets, PLA, RAM, color RAM, ROMs, keyboard matrix, expansion port, control ports, video and audio outputs |
+| `src/Fake64.Prg` | Loading `.prg` files and writing into the KERNAL keyboard buffer |
+| `src/Fake64.Crt` | The `.crt` format and the cartridge types |
+| `src/Fake64.Asm` | 6502/6510 assembler: labels, constants, expressions, directives, errors with their line |
+| `src/Fake64.WinForms` | `C64Monitor` (the screen, a UserControl), `PcKeyboard` (the keyboard cable), `PcSpeakers` (the speakers), joystick and paddle simulators |
+| `src/Fake64` | The Windows app: the studio (explorer, editors, C64 tabs) |
+| `src/Fake64.Samples` | Sample generator: BASIC V2 tokenizer, `.crt` writer |
+| `src/Fake64.Tests` | Tests (MSTest) |
+| `samples` | Sample programs ready to load, with the commented BASIC and assembly sources in `samples/src` |
+| `tools` | Helper scripts (download of the CPU test suites) |
 
-L'architettura è descritta in [docs/ARCHITETTURA.md](docs/ARCHITETTURA.md).
+The architecture is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-### Il modello fisico in codice
+### The physical model in code
 
 ```csharp
-var board = new Board(roms);                       // la scheda, con i chip di serie negli zoccoli
+var board = new Board(roms);                       // the board, with the stock chips in the sockets
 
-board.SidSocket.Remove();                          // si toglie il 6581...
-board.SidSocket.Insert(new MySid());               // ...e si mette qualunque cosa con la piedinatura I6581Pinout
+board.SidSocket.Remove();                          // take the 6581 out...
+board.SidSocket.Insert(new MySid());               // ...and put in anything with the I6581Pinout pinout
 board.Reset();
 
 var monitor = new C64Monitor { Dock = DockStyle.Fill };
 form.Controls.Add(monitor);
-var video = new MonitorCable(board.VideoOut, monitor);   // il cavo del monitor
-var keys  = new PcKeyboard(monitor, board.Keyboard);     // il cavo della tastiera
-var audio = new AudioCable(board.AudioOut, new PcSpeakers()); // il cavo audio verso le casse del PC
+var video = new MonitorCable(board.VideoOut, monitor);        // the monitor cable
+var keys  = new PcKeyboard(monitor, board.Keyboard);          // the keyboard cable
+var audio = new AudioCable(board.AudioOut, new PcSpeakers()); // the audio cable to the PC speakers
 ```
 
-Uno zoccolo vuoto si comporta come sul C64: il bus legge `$FF` e le linee restano inattive (il C64 si avvia
-anche senza SID).
+An empty socket behaves as on the C64: the bus reads `$FF` and the lines stay inactive (the C64 boots without a
+SID too).
 
-Le porte di controllo funzionano allo stesso modo: nella presa entra qualunque dispositivo che implementa i
-pin della DE-9 (`IControlPortDevice`).
+The control ports work the same way: any device that implements the DE-9 pins (`IControlPortDevice`) fits the
+socket.
 
 ```csharp
 var joystick = new Joystick();
-board.ControlPort2.Plug(joystick);        // quasi tutti i giochi usano la porta 2
+board.ControlPort2.Plug(joystick);        // almost every game uses port 2
 joystick.Fire = true;
 
 board.ControlPort1.Plug(new Paddles { PositionA = 128 });   // Le Mans, REVS...
-// oppure: board.ControlPort1.Plug(new Mouse1351());        // GEOS
+// or: board.ControlPort1.Plug(new Mouse1351());            // GEOS
 ```
 
-## Compilare ed eseguire
+## Building and running
 
-Servono il [.NET 10 SDK](https://dotnet.microsoft.com/) e Windows per l'app (le librerie dei chip, della scheda
-e dei formati sono `net10.0`).
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/) and Windows for the app (the chip, board, format and
+assembler libraries are `net10.0`). The editor uses WebView2, which is part of Windows 11.
 
 ```powershell
 dotnet build src/Fake64.sln
-dotnet run --project src/Fake64                      # avvio normale
-dotnet run --project src/Fake64 -- gioco.prg         # carica un programma dopo l'avvio
-dotnet run --project src/Fake64 -- cartuccia.crt     # avvia con una cartuccia inserita
+dotnet run --project src/Fake64                      # the studio
+dotnet run --project src/Fake64 -- program.asm       # the studio with a source open
+dotnet run --project src/Fake64 -- game.prg          # the studio with a C64 running a program
+dotnet run --project src/Fake64 -- cartridge.crt     # the studio with a C64 and a cartridge
 ```
 
-Le ROM stanno in `src/Fake64/roms` (`kernal`, `basic`, `chargen`) e vengono copiate accanto all'eseguibile.
-Sono le ROM originali del C64, protette da copyright.
+The ROMs are in `src/Fake64/roms` (`kernal`, `basic`, `chargen`) and are copied next to the executable.
+They are the original C64 ROMs, protected by copyright.
 
-### Esempi
+### The studio
 
-La cartella [samples](samples/README.md) contiene una ventina di programmi pronti da trascinare sulla finestra,
-ciascuno su un argomento del C64: BASIC, interrupt (raster, CIA, NMI), modo decimale, tutti i modi grafici del VIC-II,
-sprite, scroll fine, banchi del VIC-II, joystick e paddle, cartucce (avvio automatico, Ultimax, banchi). I sorgenti
-in `samples/src` sono BASIC e assembly 6502 commentato riga per riga: sono pensati per imparare.
+The main window holds tabs (at the bottom) with assembly editors and C64s, and a file explorer on the left.
+
+- **Explorer**: double click opens a folder or a file; ".." and Backspace go up. New folder, new `.asm` file
+  (with a minimal program, opened once its name is confirmed), rename (F2), delete to the recycle bin (Del),
+  move with cut and paste (Ctrl+X, Ctrl+V) or by dragging onto a folder; files dragged in from Windows Explorer
+  are copied. The last folder is remembered; the first time it is `samples/src`.
+- **Editor**: [Monaco](https://microsoft.github.io/monaco-editor/) in WebView2, with the 6502 language built from
+  the assembler itself: colors, the description of each instruction on hover, go to definition (F12) of labels
+  and constants, completion. Assembly errors are marked on their line. Monaco comes from a CDN: the first start
+  needs an internet connection, then WebView2 keeps it in its cache.
+- **Keys**: Ctrl+S saves, **F7** assembles and writes the `.prg` next to the source, **F5** assembles and runs it
+  in the editor's own C64 tab: the machine restarts, the KERNAL boots at full speed, then the program starts with
+  `RUN` (BASIC, or machine code with the `.basic` stub) or `SYS` to its first byte. **Shift+F5** assembles and runs it in a
+  separate Fake64 window (a new process, `Fake64.exe --c64 file.prg`). Ctrl+W closes a tab;
+  a middle click on a tab closes it too.
+- **Main file**: a project is usually a main file that includes the others with `!source`. F5, F7 and Shift+F5
+  assemble the main file of the folder, set with **Set as main file** (right click in the explorer, or the Build
+  menu; it is shown in bold). Without one the studio follows the `!source` lines up to the file that nobody
+  includes. Errors are marked in the file they are in.
+- **C64 tabs**: while a C64 tab is active the PC keyboard is the C64 keyboard: F5, Ctrl+S and the other
+  shortcuts go to the C64, not to the menu. Closing the tab stops the machine.
+
+### Samples
+
+The [samples](samples/README.md) folder holds about twenty programs, each on a C64 topic: BASIC, interrupts
+(raster, CIA, NMI), decimal mode, all the VIC-II graphics modes, sprites, fine scrolling, VIC-II banks, open
+borders, SID sound, joystick and paddles, cartridges (autostart, Ultimax, banks). The sources in `samples/src` are
+BASIC and 6502 assembly commented line by line: they are meant for learning, and they open in the studio.
 
 ```powershell
 dotnet run --project src/Fake64 -- samples/rasterbars.prg
 ```
 
-### Uso
+### Using a C64
 
-- **Programmi e cartucce**: trascinare un `.prg` o un `.crt` sulla finestra. Un programma BASIC (anche con lo
-  stub `SYS`, come la maggior parte dei giochi) parte con `RUN`; per il linguaggio macchina il titolo della
-  finestra indica l'indirizzo da usare con `SYS`. Una cartuccia riavvia la macchina.
-- **Tastiera**: i tasti arrivano al C64 quando il monitor ha il focus (un clic sul monitor glielo dà).
-  La mappatura è posizionale, come in VICE: lo Shift del PC arriva al C64.
+- **Programs and cartridges**: drag a `.prg` or a `.crt` onto a C64. A BASIC program (also with the `SYS` stub,
+  like most games) starts with `RUN`; for machine language the tab title shows the address to use with `SYS`.
+  A cartridge restarts the machine.
+- **Keyboard**: the keys reach the C64 while the monitor has the focus (a click on the monitor gives it).
+  The mapping is positional, as in VICE: the PC Shift reaches the C64.
 
-| Tasto del PC | Tasto del C64 |
-|---|---|
+| PC key | C64 key |
+| --- | --- |
 | F1, F3, F5, F7 | F1, F3, F5, F7 |
 | F2, F4, F6, F8 | Shift + F1, F3, F5, F7 |
-| Freccia destra / giù | CRSR → / CRSR ↓ |
-| Freccia sinistra / su | Shift + CRSR → / CRSR ↓ |
+| Right / down arrow | CRSR → / CRSR ↓ |
+| Left / up arrow | Shift + CRSR → / CRSR ↓ |
 | Esc | RUN/STOP |
 | Backspace | INST/DEL |
-| `;` e `'` (a destra della L) | `:` e `;` |
+| `;` and `'` (right of L) | `:` and `;` |
 | `\` | ↑ |
 
-### Joystick e paddle
+### Joystick and paddles
 
-Clic destro sul monitor: per ciascuna porta di controllo si sceglie cosa è collegato. La scelta resta fra un
-avvio e l'altro; il predefinito è il joystick dal tastierino nella porta 2, quella usata da quasi tutti i giochi.
-**Scambia le porte** (Ctrl+F12) serve per i giochi che vogliono il joystick nella porta 1.
+Right click on the monitor: for each control port you choose what is connected. The choice is kept between runs;
+the default is the keypad joystick in port 2, the one almost every game uses. **Swap ports** (Ctrl+F12) is for
+the games that want the joystick in port 1. The same menu has **Audio** (mute) and **Reset**.
 
-| Scelta | Comandi |
-|---|---|
-| Joystick: tastierino numerico | 8 su, 2 giù, 4 sinistra, 6 destra; 7, 9, 1, 3 diagonali; 0 o 5 fuoco (Bloc Num attivo) |
-| Joystick: frecce, fuoco Ctrl | per i portatili senza tastierino; in questo modo le frecce non fanno da tasti cursore del C64 |
-| Joystick USB | joystick o gamepad USB (API joystick di Windows): leva principale o pad direzionale, pulsanti 1-4 per il fuoco |
-| Paddle: mouse | clic sul monitor per catturare il mouse, movimento orizzontale per girare la manopola, pulsante sinistro come pulsante del paddle, clic destro per liberarlo |
+| Choice | Controls |
+| --- | --- |
+| Joystick: numeric keypad | 8 up, 2 down, 4 left, 6 right; 7, 9, 1, 3 diagonals; 0 or 5 fire (Num Lock on) |
+| Joystick: arrows, fire Ctrl | for laptops without a keypad; in this mode the arrows are not the C64 cursor keys |
+| USB joystick | USB joystick or gamepad (Windows joystick API): main stick or directional pad, buttons 1-4 for fire |
+| Paddles: mouse | click on the monitor to capture the mouse, horizontal movement turns the knob, left button is the paddle button, right click releases it |
 
-I tasti usati dal joystick non arrivano alla tastiera del C64. Una stessa origine può essere in una sola porta.
+The keys used by the joystick do not reach the C64 keyboard. A source can be in one port only.
 
-### Usare il C64 in un'altra applicazione
+### Using the C64 in another application
 
-`C64Monitor` è un normale UserControl: si può mettere in qualunque form, anche insieme ad altri controlli.
-Il monitor mantiene le proporzioni (`KeepAspectRatio`), riceve la tastiera solo quando ha il focus e offre
-`CaptureFrame()` per una copia dell'ultimo frame. Per caricare file da codice:
+`C64Monitor` is a normal UserControl: it can go into any form, together with other controls. The monitor keeps
+its proportions (`KeepAspectRatio`), receives the keyboard only when it has the focus and offers `CaptureFrame()`
+for a copy of the last frame. To load files from code:
 
 ```csharp
 using Fake64.Crt;
 using Fake64.Prg;
 
-board.Enqueue(() => board.LoadPrg(File.ReadAllBytes("gioco.prg")));   // sul thread di emulazione
+board.Enqueue(() => board.LoadPrg(File.ReadAllBytes("game.prg")));   // on the emulation thread
 board.Enqueue(() => board.TypeText("RUN\r"));
-board.Enqueue(() => board.InsertCartridge(CrtFile.Load("cartuccia.crt")));
+board.Enqueue(() => board.InsertCartridge(CrtFile.Load("cartridge.crt")));
 ```
 
-## Test
+`Board.Stop()` stops the emulation thread; `Board.FastForward(time)`, called on the emulation thread, runs the
+given time as fast as possible (the studio uses it for the KERNAL boot).
+
+## Tests
 
 ```powershell
 dotnet test src/Fake64.Tests
 ```
 
-Circa 170 test propri: CPU (anche da sola, su un bus finto che registra ogni ciclo), CIA, VIC-II e grafica pixel
-per pixel, zoccoli e piste, tastiera, monitor, programmi, cartucce, esempi, e avvio completo con KERNAL e BASIC.
+About 260 tests of its own: CPU (also alone, on a fake bus that records every cycle), CIA, VIC-II and graphics
+pixel by pixel, sprite DMA and open borders, SID and audio output, sockets and traces, keyboard, control ports and
+simulators, monitor, assembler, programs, cartridges, samples, and full boot with KERNAL and BASIC.
 
-Due suite esterne verificano la CPU contro il chip vero. Non sono nel repository (licenze GPL-3.0 e MIT); si
-scaricano con:
+Two external suites check the CPU against the real chip. They are not in the repository (GPL-3.0 and MIT
+licenses); they are downloaded with:
 
 ```powershell
-./tools/Download-CpuTests.ps1                 # entrambe (circa 1 GB)
-./tools/Download-CpuTests.ps1 -SkipSingleStep # solo Klaus Dormann (pochi KB)
+./tools/Download-CpuTests.ps1                 # both (about 1 GB)
+./tools/Download-CpuTests.ps1 -SkipSingleStep # only Klaus Dormann (a few KB)
 ```
 
-| Suite | Cosa verifica |
-|---|---|
-| [6502 functional test](https://github.com/Klaus2m5/6502_65C02_functional_tests) (Klaus Dormann, GPL-3.0) | Tutte le istruzioni documentate, i flag e il modo decimale |
-| [SingleStepTests 6502](https://github.com/SingleStepTests/65x02) (Tom Harte, MIT) | 10.000 casi per opcode: stato finale **e accessi al bus ciclo per ciclo** |
+| Suite | What it checks |
+| --- | --- |
+| [6502 functional test](https://github.com/Klaus2m5/6502_65C02_functional_tests) (Klaus Dormann, GPL-3.0) | All the documented instructions, the flags and decimal mode |
+| [SingleStepTests 6502](https://github.com/SingleStepTests/65x02) (Tom Harte, MIT) | 10,000 cases per opcode: final state **and bus accesses cycle by cycle** |
 
-Risultato attuale: il functional test arriva alla trappola di successo, e nelle SingleStepTests passano tutti i
-237 opcode verificati (2.370.000 casi).
+Current result: the functional test reaches its success trap, and in the SingleStepTests all the 237 checked
+opcodes pass (2,370,000 cases).
 
-Senza i file i test corrispondenti risultano *Inconclusive*. Dalle SingleStepTests sono esclusi i 12 opcode
-`JAM` e i 7 opcode instabili (`XAA`, `LXA`, `SHA`, `SHX`, `SHY`, `TAS`), il cui comportamento dipende dal
-singolo chip.
+Without the files the matching tests are *Inconclusive*. The 12 `JAM` opcodes and the 7 unstable opcodes
+(`XAA`, `LXA`, `SHA`, `SHX`, `SHY`, `TAS`), whose behaviour depends on the individual chip, are excluded from the
+SingleStepTests.
 
-## Limiti noti
+## Known limits
 
-- **SID**: filtro e mixer, che sul 6581 sono analogici, sono approssimati: la frequenza di taglio segue la
-  formula lineare del datasheet (la curva reale varia da chip a chip), le forme d'onda combinate sono l'AND dei
-  bit (sul chip sono più deboli), manca la distorsione del filtro. Non sono modellati l'ingresso EXT IN e
-  l'8580.
-- **Porte di controllo**: il mouse del PC non simula ancora il 1351; la penna ottica e il modo joystick del
-  1351 non sono modellati. Il joystick USB è verificato solo nei test (conversione delle letture), non con
-  tutti i dispositivi.
-- **Drive 1541, `.d64`/`.t64`**: non ancora emulati.
-- **VIC-II**: gli accessi DMA degli sprite non rubano cicli alla CPU; non si aprono i bordi con i trucchi
-  delle demo; la grafica di una riga viene calcolata con i dati di memoria di fine riga (solo i cambi di
-  registro sono precisi al ciclo).
-- **CPU**: il reset legge subito il vettore invece di impiegare 7 cicli; non è modellato il ritardo degli
-  interrupt dopo un salto condizionato preso senza cambio di pagina.
-- **CIA**: non sono modellati i pin CNT, SP e FLAG; il TOD è contato internamente invece che dalla rete a 50 Hz.
-- **EasyFlash**: in sola lettura (i giochi che salvano su flash non salvano).
+- **SID**: filter and mixer, which are analog on the 6581, are approximated: the cutoff frequency follows the
+  datasheet's linear formula (the real curve varies from chip to chip), combined waveforms are the AND of the bits
+  (weaker on the chip), the filter distortion is missing. The EXT IN input and the 8580 are not modelled.
+- **Control ports**: the PC mouse does not simulate the 1351 yet; the light pen and the 1351 joystick mode are
+  not modelled. The USB joystick is verified only in the tests (conversion of the readings), not with every device.
+- **1541 drive, `.d64`/`.t64`**: not emulated yet.
+- **VIC-II**: the graphics of a line are computed with the memory contents at the end of the line (only register
+  changes are cycle exact); the sequencer is "idle" outside the 200 display lines instead of following its
+  counters, so FLD, FLI, VSP and linecrunch do not work; sprite crunch and the light pen are not modelled.
+- **CPU**: reset reads the vector at once instead of taking 7 cycles; the interrupt delay after a taken branch
+  that does not cross a page is not modelled.
+- **CIA**: the CNT, SP and FLAG pins are not modelled; the TOD is counted internally instead of from the 50 Hz
+  mains.
+- **EasyFlash**: read-only (games that save to flash do not save).
+- **Studio editor**: Monaco is loaded from the jsDelivr CDN, so the first start needs an internet connection.

@@ -1,10 +1,10 @@
 namespace Fake64.Samples;
 
-// Trasforma un programma BASIC V2 in testo nel formato .prg che il C64 avrebbe in memoria dopo averlo
-// digitato: righe collegate, numeri di riga a 16 bit, parole chiave sostituite dai token ($80-$CB).
-// Segue le regole del KERNAL (CRUNCH): le parole chiave si cercano nell'ordine della tabella, non dentro
-// le virgolette, non dopo REM e non nelle righe di DATA fino ai due punti. Come sul C64, una variabile
-// che contiene una parola chiave (es. TOTAL contiene TO) viene tokenizzata anch'essa
+// Turns a BASIC V2 program in text into the .prg format the C64 would have in memory after it was typed in:
+// linked lines, 16-bit line numbers, keywords replaced by tokens ($80-$CB).
+// It follows the KERNAL rules (CRUNCH): keywords are searched in table order, not inside quotes, not after
+// REM and not in DATA lines up to the colon. As on the C64, a variable that contains a keyword
+// (e.g. TOTAL contains TO) is tokenized too
 public static class BasicTokenizer
 {
     public const ushort BasicStart = 0x0801;
@@ -23,7 +23,7 @@ public static class BasicTokenizer
     const byte TokenRem = 0x8F;
     const byte TokenPrint = 0x99;
 
-    // Programma completo, con l'indirizzo di caricamento $0801 nei primi due byte
+    // Complete program, with the load address $0801 in the first two bytes
     public static byte[] Tokenize(string source)
     {
         var program = new List<byte> { BasicStart & 0xFF, BasicStart >> 8 };
@@ -36,9 +36,9 @@ public static class BasicTokenizer
 
             int digits = 0;
             while (digits < line.Length && char.IsDigit(line[digits])) digits++;
-            if (digits == 0) throw new FormatException($"Riga senza numero: \"{line}\"");
+            if (digits == 0) throw new FormatException($"Line without a number: \"{line}\"");
             int number = int.Parse(line[..digits]);
-            if (number > 63999) throw new FormatException($"Numero di riga oltre 63999: {number}");
+            if (number > 63999) throw new FormatException($"Line number above 63999: {number}");
 
             byte[] body = Crunch(line[digits..].TrimStart());
             ushort next = (ushort)(address + 2 + 2 + body.Length + 1);
@@ -48,7 +48,7 @@ public static class BasicTokenizer
             address = next;
         }
 
-        program.AddRange([0, 0]); // fine del programma
+        program.AddRange([0, 0]); // end of the program
         return program.ToArray();
     }
 
@@ -60,7 +60,7 @@ public static class BasicTokenizer
         while (i < text.Length)
         {
             char c = char.ToUpperInvariant(text[i]);
-            if (c > 0x7F) throw new FormatException($"Carattere non ASCII: '{text[i]}'");
+            if (c > 0x7F) throw new FormatException($"Non-ASCII character: '{text[i]}'");
 
             if (inRem || (inQuotes && c != '"') || (inData && c != ':' && c != '"'))
             {
@@ -97,12 +97,12 @@ public static class BasicTokenizer
         return -1;
     }
 
-    // Programma BASIC di una riga che esegue il codice macchina subito dopo: 10 SYS2061 ($080D)
+    // One-line BASIC program that runs the machine code right after it: 10 SYS2061 ($080D)
     public static byte[] SysStub(byte[] machineCode)
     {
         var stub = Tokenize("10 SYS2061");
         if (stub.Length - 2 != 0x080D - BasicStart)
-            throw new InvalidOperationException("Lo stub SYS deve terminare a $080D");
+            throw new InvalidOperationException("The SYS stub must end at $080D");
         return [.. stub, .. machineCode];
     }
 }

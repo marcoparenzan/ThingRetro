@@ -1,7 +1,7 @@
 namespace Fake64.Mos;
 
-// Tabella dei 256 opcode del 6510 NMOS, compresi quelli non documentati: mnemonico e modo di indirizzamento.
-// Il tipo di accesso (lettura, scrittura, lettura-modifica-scrittura...) deriva dall'operazione
+// Table of the 256 opcodes of the NMOS 6510, undocumented ones included: mnemonic and addressing mode.
+// The kind of access (read, write, read-modify-write...) follows from the operation
 public partial class MOS6502
 {
     internal enum Mode { Imp, Acc, Imm, Zp, ZpX, ZpY, Abs, AbsX, AbsY, IndX, IndY, Rel, Ind }
@@ -13,7 +13,7 @@ public partial class MOS6502
         ADC, AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, BRK, BVC, BVS, CLC, CLD, CLI, CLV, CMP, CPX, CPY,
         DEC, DEX, DEY, EOR, INC, INX, INY, JMP, JSR, LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP,
         ROL, ROR, RTI, RTS, SBC, SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA,
-        // non documentati
+        // undocumented
         SLO, RLA, SRE, RRA, SAX, LAX, DCP, ISC, ANC, ALR, ARR, XAA, AXS, LXA, LAS, SHA, SHX, SHY, TAS, JAM,
     }
 
@@ -53,7 +53,7 @@ public partial class MOS6502
                 "imp" => Mode.Imp, "acc" => Mode.Acc, "imm" => Mode.Imm, "zp" => Mode.Zp, "zpx" => Mode.ZpX,
                 "zpy" => Mode.ZpY, "abs" => Mode.Abs, "abx" => Mode.AbsX, "aby" => Mode.AbsY, "izx" => Mode.IndX,
                 "izy" => Mode.IndY, "rel" => Mode.Rel, "ind" => Mode.Ind,
-                _ => throw new InvalidOperationException($"Modo sconosciuto per l'opcode ${opcode:X2}"),
+                _ => throw new InvalidOperationException($"Unknown mode for opcode ${opcode:X2}"),
             };
             instructions[opcode] = new Instruction(op, mode, KindOf(op, mode));
         }

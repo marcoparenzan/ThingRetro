@@ -1,25 +1,25 @@
 ; ----------------------------------------------------------------------------------------------------------
-; IRQ - agganciarsi all'interrupt del timer della CIA 1
+; IRQ - hooking into the CIA 1 timer interrupt
 ;
-; Il KERNAL programma il timer A della CIA 1 perché generi un IRQ 60 volte al secondo: a ogni interrupt
-; legge la tastiera, fa lampeggiare il cursore e aggiorna l'orologio TI. Prima di eseguire il proprio
-; gestore il KERNAL salva A, X e Y e salta all'indirizzo scritto nel vettore $0314.
+; The KERNAL programs timer A of CIA 1 to generate an IRQ 60 times per second: at every interrupt it reads
+; the keyboard, blinks the cursor and updates the TI clock. Before running its own handler the KERNAL saves
+; A, X and Y and jumps to the address written in vector $0314.
 ;
-; Questo programma mette nel vettore un proprio gestore: ogni 30 interrupt (mezzo secondo) cambia il colore
-; dello sfondo fra blu e nero, poi prosegue nel gestore del KERNAL. Così tastiera e BASIC continuano a
-; funzionare: il programma torna al BASIC e lo sfondo lampeggia "da solo".
+; This program puts its own handler in the vector: every 30 interrupts (half a second) it toggles the
+; background color between blue and black, then carries on into the KERNAL handler. So keyboard and BASIC
+; keep working: the program returns to BASIC and the background blinks "by itself".
 ; ----------------------------------------------------------------------------------------------------------
 
-IRQ_VECTOR  = $0314         ; vettore IRQ del KERNAL (normalmente punta a $EA31)
-KERNAL_IRQ  = $EA31         ; gestore del KERNAL: tastiera, cursore, orologio, poi RTI
-BACKGROUND  = $D021         ; colore dello sfondo
-COUNT       = $FB           ; contatore degli interrupt (pagina zero libera)
-PERIOD      = 30            ; interrupt fra un cambio e l'altro: 30 / 60 Hz = mezzo secondo
+IRQ_VECTOR  = $0314         ; KERNAL IRQ vector (normally points to $EA31)
+KERNAL_IRQ  = $EA31         ; KERNAL handler: keyboard, cursor, clock, then RTI
+BACKGROUND  = $D021         ; background color
+COUNT       = $FB           ; interrupt counter (free zero page)
+PERIOD      = 30            ; interrupts between two changes: 30 / 60 Hz = half a second
 
             * = $0801
             .basic
 
-            SEI                         ; un IRQ a metà del cambio di vettore salterebbe a un indirizzo sbagliato
+            SEI                         ; an IRQ halfway through the vector change would jump to a wrong address
             LDA #<irq
             STA IRQ_VECTOR
             LDA #>irq
@@ -34,6 +34,6 @@ irq:        DEC COUNT
             LDA #PERIOD
             STA COUNT
             LDA BACKGROUND
-            EOR #%00000110              ; 6 (blu) <-> 0 (nero): cambia i bit che li distinguono
+            EOR #%00000110              ; 6 (blue) <-> 0 (black): flips the bits that tell them apart
             STA BACKGROUND
-kernal:     JMP KERNAL_IRQ              ; il resto del lavoro lo fa il KERNAL, che termina con RTI
+kernal:     JMP KERNAL_IRQ              ; the KERNAL does the rest of the work, ending with RTI

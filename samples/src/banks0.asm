@@ -1,13 +1,13 @@
 ; ----------------------------------------------------------------------------------------------------------
-; BANKS (banco 0) - cartuccia Magic Desk con più banchi da 8 KB (diventa banks.crt con banks1.asm)
+; BANKS (bank 0) - Magic Desk cartridge with several 8 KB banks (becomes banks.crt together with banks1.asm)
 ;
-; Una cartuccia può contenere più di 8 KB mostrandone 8 alla volta a $8000-$9FFF. Nelle Magic Desk il banco
-; si sceglie scrivendo il suo numero a $DE00 (area I/O 1, collegata alla porta di espansione); il bit 7 a 1
-; scollega la cartuccia.
+; A cartridge can hold more than 8 KB by showing 8 at a time at $8000-$9FFF. In Magic Desk cartridges the bank
+; is selected by writing its number to $DE00 (I/O 1 area, wired to the expansion port); bit 7 set
+; disconnects the cartridge.
 ;
-; Il problema: cambiare banco mentre la CPU esegue codice da $8000 cambia il codice sotto i suoi piedi.
-; Per questo la routine che cambia banco viene copiata in RAM ($C000) ed eseguita da lì: legge il testo a
-; $8100 nel banco 0 e nel banco 1, lo stampa, e rimette il banco 0 prima di tornare.
+; The problem: switching bank while the CPU runs code from $8000 changes the code under its feet.
+; That is why the routine that switches banks is copied into RAM ($C000) and run from there: it reads the text
+; at $8100 in bank 0 and in bank 1, prints it, and selects bank 0 again before returning.
 ; ----------------------------------------------------------------------------------------------------------
 
 IOINIT      = $FF84
@@ -15,13 +15,13 @@ RAMTAS      = $FF87
 RESTOR      = $FF8A
 CINT        = $FF81
 CHROUT      = $FFD2
-BANK        = $DE00         ; registro del banco della Magic Desk
-TEXT        = $8100         ; ogni banco ha il suo testo qui
-RAM_ROUTINE = $C000         ; dove si copia la routine che cambia banco
+BANK        = $DE00         ; Magic Desk bank register
+TEXT        = $8100         ; each bank has its text here
+RAM_ROUTINE = $C000         ; where the bank switching routine is copied
 
             * = $8000
             .word start, start
-            .byte $C3, $C2, $CD, '8', '0'   ; firma "CBM80": avvio automatico
+            .byte $C3, $C2, $CD, '8', '0'   ; "CBM80" signature: autostart
 
 start:      JSR IOINIT
             JSR RAMTAS
@@ -34,11 +34,11 @@ copy:       LDA routine,X
             DEX
             BPL copy
             JSR RAM_ROUTINE
-done:       JMP done                    ; di nuovo nel banco 0: questo codice c'è ancora
+done:       JMP done                    ; back in bank 0: this code is still there
 
-; Questa parte viene eseguita a $C000, non dove è stata assemblata: usa solo salti relativi e indirizzi fissi
-routine:    LDY #0                      ; banco da leggere
-next_bank:  STY BANK                    ; da qui $8000-$9FFF mostra il banco Y
+; This part runs at $C000, not where it was assembled: it uses only relative branches and fixed addresses
+routine:    LDY #0                      ; bank to read
+next_bank:  STY BANK                    ; from here $8000-$9FFF shows bank Y
             LDX #0
 print:      LDA TEXT,X
             BEQ printed
@@ -49,10 +49,10 @@ printed:    INY
             CPY #2
             BNE next_bank
             LDA #0
-            STA BANK                    ; di nuovo il banco 0, prima di tornare al codice in ROM
+            STA BANK                    ; bank 0 again, before returning to the code in ROM
             RTS
 routine_end:
 
             * = TEXT
-            .text "QUESTO TESTO E' NEL BANCO 0"
+            .text "THIS TEXT IS IN BANK 0"
             .byte 13, 0

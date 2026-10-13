@@ -64,8 +64,8 @@ public partial class MOS6526
 
     void Clock()
     {
-        // Il Timer B (in modalità conteggio) deve vedere l'underflow di A di questo ciclo,
-        // anche se il blocco del Timer A azzera il segnale pendente
+        // Timer B (when counting underflows) must see this cycle's underflow of A,
+        // even though the Timer A block clears the pending signal
         bool timerAUnderflowed = timerARunning && pendingTimerAUnderflow;
 
         // Handle Timer A
@@ -166,8 +166,8 @@ public partial class MOS6526
 
     private void CheckInterrupts()
     {
-        // La linea /IRQ (bit 7) si attiva quando un evento abilitato si verifica e resta attiva
-        // finché l'ICR non viene letto; chi è collegato al pin la legge tramite Irq
+        // The /IRQ line (bit 7) goes active when an enabled event happens and stays active
+        // until the ICR is read; whatever is wired to the pin reads it through Irq
         if ((interruptStatus & interruptControl & 0x1F) != 0)
             interruptStatus |= 0x80;
     }

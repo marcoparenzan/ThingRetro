@@ -1,8 +1,8 @@
 namespace Fake64.C64;
 
-// Dispositivo collegato alla porta di espansione: il contratto elettrico che la Board conosce.
-// ROML compare a $8000-$9FFF, ROMH a $A000-$BFFF (modo 16K) o a $E000-$FFFF (Ultimax).
-// I tipi concreti e il formato dei file (.crt) stanno fuori dalla scheda, nel progetto Fake64.Crt
+// Device connected to the expansion port: the electrical contract the Board knows.
+// ROML appears at $8000-$9FFF, ROMH at $A000-$BFFF (16K mode) or at $E000-$FFFF (Ultimax).
+// The concrete types and the file format (.crt) live outside the board, in the Fake64.Crt project
 public abstract class Cartridge
 {
     protected Cartridge(string name, bool exrom, bool game)
@@ -17,14 +17,14 @@ public abstract class Cartridge
     public string Name { get; }
     public abstract string TypeName { get; }
 
-    // Linee della porta di espansione, attive basse: true = alta (inattiva)
+    // Expansion port lines, active low: true = high (inactive)
     public bool Exrom { get; private set; }
     public bool Game { get; private set; }
 
     readonly bool initialExrom;
     readonly bool initialGame;
 
-    // Avvisa la Board che deve ricalcolare la mappa di memoria
+    // Tells the Board to recompute the memory map
     internal Action? LinesChanged;
 
     protected void SetLines(bool exrom, bool game)
@@ -35,17 +35,17 @@ public abstract class Cartridge
         LinesChanged?.Invoke();
     }
 
-    // Stato all'accensione o dopo il pulsante di reset
+    // State at power on or after the reset button
     public virtual void Reset()
     {
         SetLines(initialExrom, initialGame);
     }
 
-    // offset: 0-$1FFF all'interno della finestra da 8 KB
+    // offset: 0-$1FFF within the 8 KB window
     public abstract byte ReadRoml(int offset);
     public abstract byte ReadRomh(int offset);
 
-    // I/O 1 ($DE00-$DEFF) e I/O 2 ($DF00-$DFFF); null = nessun dispositivo risponde (bus aperto)
+    // I/O 1 ($DE00-$DEFF) and I/O 2 ($DF00-$DFFF); null = no device answers (open bus)
     public virtual byte? ReadIo1(int offset) => null;
     public virtual byte? ReadIo2(int offset) => null;
     public virtual void WriteIo1(int offset, byte value) { }

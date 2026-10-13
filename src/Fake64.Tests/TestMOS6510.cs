@@ -69,7 +69,7 @@ public sealed class MOS6510Tests
 
         Assert.AreEqual(0xC100, (int)board.Cpu.PC);
         Assert.AreEqual(0xC0, (int)board.Peek((ushort)(0x0100 + sp)));       // high byte
-        Assert.AreEqual(0x02, (int)board.Peek((ushort)(0x0100 + sp - 1)));   // low byte: $C002 = ultimo byte di JSR
+        Assert.AreEqual(0x02, (int)board.Peek((ushort)(0x0100 + sp - 1)));   // low byte: $C002 = last byte of JSR
 
         board.StepInstruction();
 
@@ -79,7 +79,7 @@ public sealed class MOS6510Tests
     [TestMethod]
     public void Rts_ShouldJumpToPushedAddressPlusOne()
     {
-        // Il trucco usato dal BASIC per eseguire i comandi: push di (destinazione - 1), poi RTS
+        // The trick BASIC uses to run its commands: push (target - 1), then RTS
         var board = NewBoard();
         board.Load(0xC000, 0xA9, 0xC1, 0x48, 0xA9, 0xFF, 0x48, 0x60); // LDA #$C1; PHA; LDA #$FF; PHA; RTS
 
@@ -137,7 +137,7 @@ public sealed class MOS6510Tests
     {
         var board = NewBoard();
         board.Poke(0xC1FF, 0x34);
-        board.Poke(0xC100, 0x12); // il byte alto viene letto da $C100, non da $C200
+        board.Poke(0xC100, 0x12); // the high byte is read from $C100, not from $C200
         board.Poke(0xC200, 0x56);
         board.Load(0xC000, 0x6C, 0xFF, 0xC1); // JMP ($C1FF)
 
@@ -180,9 +180,9 @@ public sealed class MOS6510Tests
     public void Branch_ShouldTakeTwoThreeOrFourCycles()
     {
         var board = NewBoard();
-        // Il cambio di pagina si misura rispetto all'indirizzo che segue il branch ($C0FE -> $C103)
-        board.Load(0xC0F8, 0xA9, 0x01, 0xF0, 0x00, 0xD0, 0x05); // LDA #$01; BEQ (non preso); BNE +5 (preso, cambia pagina)
-        board.Poke(0xC103, 0xD0, 0x00);                        // BNE +0 (preso, stessa pagina)
+        // Page crossing is measured from the address following the branch ($C0FE -> $C103)
+        board.Load(0xC0F8, 0xA9, 0x01, 0xF0, 0x00, 0xD0, 0x05); // LDA #$01; BEQ (not taken); BNE +5 (taken, crosses a page)
+        board.Poke(0xC103, 0xD0, 0x00);                        // BNE +0 (taken, same page)
 
         board.StepInstruction();
         long notTaken = board.CyclesOf(board.StepInstruction);
@@ -205,21 +205,21 @@ public sealed class MOS6510Tests
         var board = NewBoard();
         board.Load(0xC000, 0xEA, 0xEA, 0xEA, 0xEA, 0x58, 0xEA); // NOP x4; CLI; NOP
 
-        // CIA1 Timer A continuo con interrupt abilitato
+        // CIA1 Timer A continuous with interrupt enabled
         board.Poke(0xDC0D, 0x7F);
         board.Poke(0xDC04, 0x02, 0x00);
         board.Poke(0xDC0D, 0x81);
         board.Poke(0xDC0E, 0x11);
 
-        for (int i = 0; i < 4; i++) board.StepInstruction(); // con I attivo l'IRQ resta in attesa
+        for (int i = 0; i < 4; i++) board.StepInstruction(); // with I set the IRQ stays pending
         Assert.IsTrue(board.Cia1.Irq);
         Assert.AreEqual(0xC004, (int)board.Cpu.PC);
 
         board.StepInstruction(); // CLI
-        board.StepInstruction(); // come sul 6502 vero, dopo CLI viene eseguita ancora un'istruzione
+        board.StepInstruction(); // as on the real 6502, one more instruction runs after CLI
         Assert.AreEqual(0xC006, (int)board.Cpu.PC);
 
-        board.StepInstruction(); // IRQ servito, poi la prima istruzione dell'handler
+        board.StepInstruction(); // IRQ served, then the first instruction of the handler
 
         ushort irqVector = (ushort)(board.Peek(0xFFFE) | board.Peek(0xFFFF) << 8);
         Assert.IsTrue(board.Cpu.PC > irqVector && board.Cpu.PC <= irqVector + 3, $"PC={board.Cpu.PC:X4}");

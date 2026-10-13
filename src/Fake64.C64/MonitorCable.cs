@@ -1,7 +1,7 @@
 namespace Fake64.C64;
 
-// Il cavo del monitor: collega l'uscita video di una Board a uno schermo.
-// Finché il cavo esiste lo schermo riceve un frame ogni 1/50 di secondo; Dispose lo scollega
+// The monitor cable: connects the video output of a Board to a screen.
+// While the cable exists the screen receives a frame every 1/50 of a second; Dispose unplugs it
 public sealed class MonitorCable : IDisposable
 {
     readonly VideoPort port;

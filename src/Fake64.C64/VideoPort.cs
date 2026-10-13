@@ -2,8 +2,8 @@ using Fake64.Mos;
 
 namespace Fake64.C64;
 
-// Uscita video della Board (la presa del monitor): a fine frame il VIC-II invia l'immagine
-// al monitor collegato, se c'è. Il collegamento si fa con un MonitorCable
+// Video output of the Board (the monitor socket): at the end of a frame the VIC-II sends the picture
+// to the connected monitor, if any. The connection is made with a MonitorCable
 public sealed class VideoPort
 {
     volatile IScreen? monitor;
@@ -17,7 +17,7 @@ public sealed class VideoPort
     internal void Plug(IScreen screen)
     {
         if (monitor is not null && !ReferenceEquals(monitor, screen))
-            throw new InvalidOperationException("Alla porta video è già collegato un monitor: scollegarlo prima di collegarne un altro");
+            throw new InvalidOperationException("A monitor is already connected to the video port: unplug it before connecting another one");
         monitor = screen;
     }
 
@@ -26,7 +26,7 @@ public sealed class VideoPort
         if (ReferenceEquals(monitor, screen)) monitor = null;
     }
 
-    // Chiamato dal thread di emulazione alla fine di ogni frame
+    // Called by the emulation thread at the end of every frame
     internal unsafe void Present(I6569Pinout vicii)
     {
         var screen = monitor;

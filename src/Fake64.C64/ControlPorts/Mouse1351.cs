@@ -1,11 +1,11 @@
 namespace Fake64.C64;
 
-// Mouse Commodore 1351 in modo proporzionale (quello usato da GEOS). Il mouse conta il movimento e lo
-// presenta sulle linee POT: POT X e POT Y valgono (posizione mod 64) * 2, il bit 0 è un bit di rumore
-// che i driver ignorano. Il pulsante sinistro chiude il pin del fuoco, il destro quello di "su".
-// Il driver legge la differenza fra due letture successive, quindi conta solo il movimento.
-// Non modellati: il modo joystick (pulsante destro premuto all'accensione) e la sincronizzazione
-// del mouse con la misura del SID
+// Commodore 1351 mouse in proportional mode (the one GEOS uses). The mouse counts the movement and presents
+// it on the POT lines: POT X and POT Y are (position mod 64) * 2, bit 0 is a noise bit the drivers ignore.
+// The left button closes the fire pin, the right one the "up" pin.
+// The driver reads the difference between two successive readings, so only the movement counts.
+// Not modelled: joystick mode (right button held at power on) and the synchronization of the mouse
+// with the SID's measurement
 public sealed class Mouse1351 : IControlPortDevice
 {
     const int RightButtonBit = 0x01, LeftButtonBit = 0x10;
@@ -13,7 +13,7 @@ public sealed class Mouse1351 : IControlPortDevice
     int x, y;
     int buttons;
 
-    // Movimento in "mickey": x verso destra, y verso l'alto (come i contatori del 1351)
+    // Movement in "mickeys": x to the right, y upwards (like the 1351 counters)
     public void Move(int dx, int dy)
     {
         Interlocked.Add(ref x, dx);

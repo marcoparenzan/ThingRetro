@@ -1,10 +1,10 @@
 namespace Fake64.Mos;
 
-// MOS 6502 NMOS: il nucleo della CPU, senza periferiche integrate. La 6510 del C64 lo estende con la
-// porta di I/O a $0000/$0001 (vedi MOS6510)
+// MOS 6502 NMOS: the CPU core, without on-chip peripherals. The C64's 6510 extends it with the
+// I/O port at $0000/$0001 (see MOS6510)
 public partial class MOS6502
 {
-    // Pin collegati dalla scheda
+    // Pins wired by the board
     public IBus? Bus { get; set; }
     public Func<bool> IrqInput { get; set; } = () => false;
     public Func<bool> NmiInput { get; set; } = () => false;
@@ -24,14 +24,14 @@ public partial class MOS6502
         jammed = false;
         nmiPending = false;
         nmiWasLow = false;
-        // Semplificazione: il chip impiega 7 cicli prima di leggere il vettore; qui lo legge subito
+        // Simplification: the chip takes 7 cycles before reading the vector; here it is read at once
         PC = ReadWord(0xFFFC);
     }
 
-    // Reset delle periferiche integrate, prima della lettura del vettore
+    // Reset of the on-chip peripherals, before the vector is read
     protected virtual void OnReset() { }
 
-    // internal per permettere ai test di preparare e verificare lo stato della CPU
+    // internal so that the tests can set up and check the CPU state
     internal byte A, X, Y, SP;
     internal ushort PC;
     internal byte Status;
@@ -45,7 +45,7 @@ public partial class MOS6502
     const byte FLAG_V = 1 << 6;
     const byte FLAG_N = 1 << 7;
 
-    // Un accesso al bus per ciclo
+    // One bus access per cycle
     protected virtual byte ReadByte(ushort addr) => Bus?.Read(addr) ?? 0xFF;
 
     protected virtual void WriteByte(ushort addr, byte val) => Bus?.Write(addr, val);
@@ -78,13 +78,13 @@ public partial class MOS6502
     {
         int result = reg - val;
 
-        // Imposta il flag Carry (C) se reg >= val
+        // Carry (C) set if reg >= val
         Status = (byte)((Status & ~FLAG_C) | (reg >= val ? FLAG_C : 0));
 
-        // Imposta il flag Zero (Z) se reg == val
+        // Zero (Z) set if reg == val
         Status = (byte)((Status & ~FLAG_Z) | ((result == 0) ? FLAG_Z : 0));
 
-        // Imposta il flag Negative (N) in base al bit più significativo del risultato
+        // Negative (N) from the most significant bit of the result
         Status = (byte)((Status & ~FLAG_N) | ((result & 0x80) != 0 ? FLAG_N : 0));
     }
 }

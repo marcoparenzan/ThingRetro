@@ -1,16 +1,16 @@
 namespace Fake64.Mos;
 
-// MOS 6510: un 6502 con una porta di I/O integrata (P0-P5) ai registri $0000 (direzione) e $0001 (dati).
-// Sul C64 P0-P2 decidono la mappa di memoria (LORAM, HIRAM, CHAREN) e P3-P5 vanno al registratore
+// MOS 6510: a 6502 with an on-chip I/O port (P0-P5) at registers $0000 (direction) and $0001 (data).
+// On the C64 P0-P2 select the memory map (LORAM, HIRAM, CHAREN) and P3-P5 go to the datasette
 public class MOS6510 : MOS6502, I6510Pinout
 {
     public ParallelPort Port { get; } = new();
 
-    // Al reset la porta è tutta in ingresso: i pin valgono quanto imposto dall'esterno (pull-up).
-    // Il Changed della porta permette alla scheda di aggiornare la mappa di memoria prima del vettore
+    // At reset the port is all input: the pins are what the outside imposes (pull-ups).
+    // The port's Changed event lets the board update the memory map before the vector is read
     protected override void OnReset() => Port.Reset();
 
-    // Registri della porta come li vede la CPU: $00 = direzione, $01 = livello dei pin
+    // The port registers as the CPU sees them: $00 = direction, $01 = pin levels
     public byte ReadPort(ushort addr) => addr == 0 ? Port.Direction : Port.Pins;
 
     public void WritePort(ushort addr, byte value)
@@ -19,8 +19,8 @@ public class MOS6510 : MOS6502, I6510Pinout
         else Port.Latch = value;
     }
 
-    // L'indirizzo va comunque sul bus: in lettura il dato del bus viene ignorato, in scrittura arriva
-    // anche al bus (sul C64, nella RAM sottostante)
+    // The address goes on the bus anyway: on a read the bus data is ignored, on a write it also reaches
+    // the bus (on the C64, the RAM underneath)
     protected override byte ReadByte(ushort addr)
     {
         byte value = base.ReadByte(addr);

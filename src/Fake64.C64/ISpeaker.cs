@@ -1,8 +1,8 @@
 namespace Fake64.C64;
 
-// Altoparlante (casse, amplificatore, registratore...) collegato all'uscita audio della Board tramite un AudioCable.
-// Riceve campioni mono a 16 bit con segno, alla frequenza che dichiara. Play viene chiamato dal thread
-// di emulazione ogni 10 ms di audio emulato: l'implementazione deve copiare i campioni e tornare subito
+// Speaker (PC speakers, amplifier, recorder...) connected to the Board's audio output through an AudioCable.
+// It receives signed 16-bit mono samples at the rate it declares. Play is called by the emulation thread
+// every 10 ms of emulated audio: the implementation must copy the samples and return at once
 public interface ISpeaker
 {
     int SampleRate { get; }
