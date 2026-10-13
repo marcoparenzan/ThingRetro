@@ -1,3 +1,4 @@
+using Thing64.Build;
 using Thing64.Cli;
 using Spectre.Console.Cli;
 

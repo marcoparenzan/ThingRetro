@@ -30,6 +30,7 @@
     <ProjectReference Include="..\Thing64.Crt\Thing64.Crt.csproj" />
     <ProjectReference Include="..\Thing64.Prg\Thing64.Prg.csproj" />
     <ProjectReference Include="..\Thing64.Basic\Thing64.Basic.csproj" />
+    <ProjectReference Include="..\Thing64.Build\Thing64.Build.csproj" />
     <ProjectReference Include="..\Thing64\Thing64.csproj" />
     <ProjectReference Include="..\Thing64.WinForms\Thing64.WinForms.csproj" />
   </ItemGroup>

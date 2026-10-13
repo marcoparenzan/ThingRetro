@@ -1,3 +1,4 @@
+using Thing64.Build;
 using System.ComponentModel;
 using System.Globalization;
 using Thing64.Asm;
@@ -159,6 +160,20 @@ sealed class BuildCommand : Command<BuildCommand.Settings>
 
         var table = new Table().Border(TableBorder.Simple)
             .AddColumn("File").AddColumn(new TableColumn("Bytes").RightAligned()).AddColumn("Sources").AddColumn("Description");
+        foreach (string asset in manifest.AssetFiles())
+        {
+            try
+            {
+                var result = manifest.BuildAsset(asset);
+                foreach (string file in result.Files)
+                    table.AddRow(Markup.Escape(file), "", Markup.Escape(Path.GetFileName(asset)), Markup.Escape(result.Conversion.Summary));
+            }
+            catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException or System.Text.Json.JsonException)
+            {
+                AnsiConsole.MarkupLineInterpolated($"[red]{asset}: {e.Message}[/]");
+                return 1;
+            }
+        }
         foreach (var output in manifest.Outputs)
         {
             byte[] bytes;

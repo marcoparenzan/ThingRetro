@@ -1,0 +1,637 @@
+@page "/project/{Name}"
+@implements IAsyncDisposable
+@implements Thing64.WebStudio.Assistant.IStudioHost
+@inject ProjectStore Store
+@inject WebComputerSite Computer
+@inject IJSRuntime JS
+@using Thing64.Graphics
+
+@* A project: files on the left; tabs with the C64 and the open files (Monaco), the build log below them. F7 builds,
+   F5 builds, runs and shows the C64, Ctrl+S saves. Files and builds live on the server, the editor in the browser
+   (wwwroot/js/studio.js), the C64 in WebAssembly in an iframe, or in a window of its own *@
+<PageTitle>@Name · Thing64 Studio</PageTitle>
+
+<SectionContent SectionName="header">
+    <nav class="flex min-w-0 items-center gap-2 text-sm">
+        <a href="" class="text-night-400 hover:text-chip-600">Projects</a>
+        <span class="text-night-300">/</span>
+        <span class="truncate font-semibold">@Name</span>
+    </nav>
+    <div class="ml-auto flex items-center gap-2">
+        <button @onclick="() => showAssistant = !showAssistant" title="Show or hide RalfAI, the assistant"
+                class="@(showAssistant ? "border-chip-400 text-chip-600" : "border-night-200") rounded-md border px-3 py-1.5 text-sm hover:border-chip-400">✦ RalfAI</button>
+        <button @onclick="SaveAll" disabled="@(dirty.Count == 0)" title="Save all (Ctrl+S saves the current file)"
+                class="rounded-md border border-night-200 px-3 py-1.5 text-sm hover:border-chip-400 disabled:opacity-40">Save</button>
+        <button @onclick="() => Build(run: false)" title="Build (F7)"
+                class="rounded-md border border-night-200 px-3 py-1.5 text-sm hover:border-chip-400">Build <kbd class="text-night-400">F7</kbd></button>
+        <button @onclick="() => Build(run: true)" title="Build and run in the C64 (F5)"
+                class="rounded-md bg-night-900 px-4 py-1.5 text-sm font-semibold text-chip-400 hover:bg-night-700">▶ Run <kbd class="text-night-300">F5</kbd></button>
+    </div>
+</SectionContent>
+
+@if (error is not null)
+{
+    <p class="p-8 text-red-700">@error</p>
+}
+else
+{
+<div class="flex h-full">
+    @* Files *@
+    <aside class="flex w-64 shrink-0 flex-col border-r border-night-800 bg-night-950 text-sm text-night-100">
+        <div class="flex items-center gap-1 border-b border-night-800 px-2 py-1.5">
+            <span class="mr-auto pl-1 text-xs font-semibold tracking-wider text-night-300 uppercase">Files</span>
+            <button class="tool" title="New file" @onclick='() => StartEdit("file")'>＋📄</button>
+            <button class="tool" title="New folder" @onclick='() => StartEdit("folder")'>＋📁</button>
+            <label class="tool cursor-pointer" title="Import an image (any format) as C64 graphics">🖼<input id="import-image" type="file" accept="image/*" hidden /></label>
+            <button class="tool" title="Rename" disabled="@(selected is null)" @onclick='() => StartEdit("rename")'>✎</button>
+            <button class="tool" title="Delete" disabled="@(selected is null)" @onclick="DeleteSelected">🗑</button>
+            <button class="tool" title="Refresh" @onclick="Refresh">⟳</button>
+        </div>
+        @if (editMode is not null)
+        {
+            <form class="border-b border-night-800 p-2" @onsubmit="ApplyEdit">
+                <label class="mb-1 block text-xs text-night-300">@EditLabel</label>
+                <input @bind="editName" @bind:event="oninput" @ref="editInput" @onkeydown="EditKey"
+                       class="w-full rounded border border-night-600 bg-night-800 px-2 py-1 font-mono text-white focus:border-chip-400 focus:outline-none" />
+            </form>
+        }
+        <div class="min-h-0 flex-1 overflow-auto py-1">
+            @if (tree is not null)
+            {
+                @foreach (var child in tree.Children) { @Entry((child, 0)) }
+            }
+        </div>
+    </aside>
+
+    @* The tabs: the C64 first, then the open files; below them the build log *@
+    <section class="flex min-w-0 flex-1 flex-col bg-night-900">
+        <div class="flex shrink-0 overflow-x-auto border-b border-night-800 bg-night-950">
+            <div class="@(showComputer ? "border-chip-400 bg-night-900 text-white" : computerOn ? "border-transparent text-chip-400 hover:text-white" : "border-transparent text-night-400 hover:text-chip-400")
+                        flex shrink-0 cursor-pointer items-center gap-2 border-t-2 border-r border-r-night-800 px-3 py-1.5 text-sm font-semibold"
+                 @onclick="ShowComputer" title="@(computerOn ? "The C64 (F5 builds, runs and shows it)" : "The C64 is off: click (or F5) to turn it on")">
+                ▶ C64
+                @if (computerOn)
+                {
+                    <button class="font-normal text-night-400 hover:text-white" title="Turn the C64 off"
+                            @onclick="TurnComputerOff" @onclick:stopPropagation>✕</button>
+                }
+            </div>
+            @foreach (var tab in tabs)
+            {
+                <div class="@(tab == active && !showComputer ? "border-chip-400 bg-night-900 text-white" : "border-transparent text-night-300 hover:text-white")
+                            group flex shrink-0 cursor-pointer items-center gap-2 border-t-2 px-3 py-1.5 text-sm"
+                     @onclick="() => Show(tab)" title="@tab">
+                    <span>@FileName(tab)</span>
+                    @if (dirty.Contains(tab)) { <span class="text-chip-400">●</span> }
+                    <button class="text-night-400 hover:text-white" title="Close"
+                            @onclick="() => CloseTab(tab)" @onclick:stopPropagation>✕</button>
+                </div>
+            }
+        </div>
+        <div class="relative min-h-0 flex-1">
+            @* The editor and the C64 stay in the page: the hidden one is only hidden, so the C64 keeps running *@
+            <div id="editor" class="absolute inset-0 @(showComputer || IsGraphics(active) ? "invisible" : null)"></div>
+            @foreach (var tab in tabs.Where(IsGraphics))
+            {
+                <GraphicsEditor @key="tab" @ref="graphicsEditors[tab]" Project="project!" Path="@tab" Visible="@(tab == active && !showComputer)"
+                                OnDirty="changed => Changed(tab, changed)" />
+            }
+            @if (tabs.Count == 0 && !showComputer)
+            {
+                <div class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-night-400">
+                    <img src="img/thing64-chip-256.png" alt="" class="h-24 w-24 opacity-40" />
+                    <p>Open a file on the left. <kbd class="text-chip-400">F5</kbd> builds and runs the project.</p>
+                </div>
+            }
+            <div class="absolute inset-0 flex flex-col p-3 @(showComputer ? null : "invisible")">
+                @if (!Computer.Available)
+                {
+                    <div class="max-w-2xl rounded-lg border border-night-700 p-4 text-sm text-night-200">
+                        The C64 is the published web computer, and it is not in <code class="font-mono text-chip-300">@Computer.Folder</code>.
+                        Publish it with
+                        <pre class="mt-2 overflow-x-auto rounded bg-night-900 p-2 font-mono text-xs text-chip-300">dotnet publish src/Thing64.WebComputer -c Release -o artifacts/web</pre>
+                        and restart the studio.
+                    </div>
+                }
+                else if (computerWindow)
+                {
+                    <div class="flex flex-1 flex-col items-center justify-center gap-3 text-night-300">
+                        <img src="img/thing64-chip-256.png" alt="" class="h-24 w-24 opacity-40" />
+                        <p>The C64 is in its own window: programs run there.</p>
+                        <button class="rounded-md border border-night-600 px-3 py-1.5 text-sm hover:border-chip-400" @onclick="FocusComputerWindow">Show the window</button>
+                    </div>
+                }
+                else if (!computerOn)
+                {
+                    <div class="flex flex-1 flex-col items-center justify-center gap-3 text-night-300">
+                        <img src="img/thing64-chip-256.png" alt="" class="h-24 w-24 opacity-40" />
+                        <p>The C64 is off. <kbd class="text-chip-400">F5</kbd> builds the project and runs it.</p>
+                        <button class="rounded-md border border-night-600 px-3 py-1.5 text-sm hover:border-chip-400" @onclick="ShowComputer">Turn it on</button>
+                    </div>
+                }
+                else
+                {
+                    <iframe id="computer" src="computer/?embedded" title="C64" allow="autoplay; gamepad" class="min-h-0 w-full flex-1"></iframe>
+                }
+                <div class="mt-2 flex shrink-0 items-center gap-4 text-xs">
+                    <span class="text-night-300">@computerStatus</span>
+                    <span class="ml-auto text-night-400">Click the screen to type · Esc is RUN/STOP · joystick: numeric keypad or gamepad</span>
+                    @if (Computer.Available && computerOn && !computerWindow)
+                    {
+                        <button class="rounded border border-night-600 px-2 py-1 text-night-200 hover:border-chip-400" title="Move the C64 to a window of its own"
+                                @onclick="OpenComputerWindow">⧉ Own window</button>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="h-36 shrink-0 overflow-auto border-t border-night-800 bg-night-950 px-3 py-2 font-mono text-xs">
+            @if (log.Count == 0)
+            {
+                <span class="text-night-400">Build log</span>
+            }
+            @foreach (var message in log)
+            {
+                @if (message.File is not null && message.Line > 0)
+                {
+                    <div class="cursor-pointer text-red-400 hover:underline" @onclick="() => GoTo(message.File, message.Line)">@message.Text</div>
+                }
+                else
+                {
+                    <div class="@(message.IsError ? "text-red-400" : "text-night-200")">@message.Text</div>
+                }
+            }
+        </div>
+    </section>
+
+    @if (showAssistant && project is not null)
+    {
+        <AssistantPanel Project="project" Host="this" />
+    }
+</div>
+}
+
+@code {
+    [Parameter] public string Name { get; set; } = "";
+
+    Project? project;
+    ProjectEntry? tree;
+    string? error;
+    string? selected;                               // the entry selected in the tree (relative path)
+    readonly HashSet<string> expanded = [];         // open folders
+    readonly List<string> tabs = [];                // open files
+    readonly HashSet<string> dirty = [];            // open files with changes not saved
+    string? active;
+    List<BuildMessage> log = [];
+    string computerStatus = "";
+    bool showAssistant = true;
+    bool showComputer;
+    bool computerOn;                                // off until the first F5 or click: no WebAssembly until needed                              // the C64 tab is the active one
+    bool computerWindow;                            // the C64 is in a window of its own, not in the tab
+    DotNetObjectReference<ProjectPage>? self;
+    bool editorReady;
+
+    string? editMode;                               // file, folder, rename
+    string editName = "";
+    ElementReference editInput;
+
+    static readonly string[] TextFiles = [".asm", ".a", ".s", ".inc", ".bas", ".json", ".txt", ".md", ".cfg", ".h"];
+
+    protected override void OnParametersSet()
+    {
+        try
+        {
+            project = Store.Open(Name);
+            tree = project.Tree();
+            error = null;
+        }
+        catch (Exception e) when (e is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            error = e.Message;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && project is not null)
+        {
+            self = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("thing64Studio.init", "editor", self, new
+            {
+                mnemonics = Thing64.Asm.Assembler.Mnemonics,
+                directives = Thing64.Asm.Assembler.Directives,
+                descriptions = Thing64.Asm.InstructionSet.Descriptions,
+            });
+            editorReady = true;
+            // The main source opens by itself
+            if (tree!.Children.FirstOrDefault(e => e.Name.Equals("main.asm", StringComparison.OrdinalIgnoreCase)) is { } main)
+                await Open(main.Path);
+            StateHasChanged();
+        }
+        if (editMode is not null) await editInput.FocusAsync();
+    }
+
+    // The tree, one row per entry, folders indented and collapsible
+    RenderFragment Entry((ProjectEntry entry, int depth) item) => __builder =>
+    {
+        var (entry, depth) = item;
+        bool open = expanded.Contains(entry.Path);
+        string icon = entry.IsFolder ? (open ? "▾ 📂" : "▸ 📁") : FileIcon(entry.Name);
+        <div class="@(entry.Path == selected ? "bg-night-700 text-white" : "hover:bg-night-800") flex cursor-pointer items-center gap-1.5 truncate py-0.5 pr-2"
+             style="padding-left: @(8 + depth * 14)px"
+             @onclick="() => Select(entry)" @ondblclick="() => Activate(entry)" title="@entry.Path">
+            <span class="shrink-0 text-xs">@icon</span>
+            <span class="truncate @(entry.Path == active ? "text-chip-300" : null)">@entry.Name</span>
+        </div>
+        @if (entry.IsFolder && open)
+        {
+            @foreach (var child in entry.Children) { @Entry((child, depth + 1)) }
+        }
+    };
+
+    static string FileIcon(string name) => Path.GetExtension(name).ToLowerInvariant() switch
+    {
+        ".asm" or ".a" or ".s" or ".inc" => "⚙",
+        ".bas" => "📝",
+        ".prg" => "💾",
+        ".crt" => "🎮",
+        ".json" => "🧩",
+        _ => "📄",
+    };
+
+    static string FileName(string path) => path[(path.LastIndexOf('/') + 1)..];
+
+    // A click selects; on a folder it also opens or closes it, on a file it opens it
+    async Task Select(ProjectEntry entry)
+    {
+        selected = entry.Path;
+        if (entry.IsFolder)
+        {
+            if (!expanded.Remove(entry.Path)) expanded.Add(entry.Path);
+        }
+        else if (IsText(entry.Path))
+        {
+            await Open(entry.Path);
+        }
+    }
+
+    // A double click on a program or a cartridge runs it; on a PNG it opens it as graphics
+    async Task Activate(ProjectEntry entry)
+    {
+        if (entry.IsFolder) return;
+        string extension = Path.GetExtension(entry.Path).ToLowerInvariant();
+        if (extension is ".prg" or ".crt") await RunFile(entry.Path);
+        else if (extension == ".png") await OpenGraphicsFor(entry.Path);
+    }
+
+    // A double click on a PNG: the graphics asset made from it, or a new one
+    async Task OpenGraphicsFor(string image)
+    {
+        string folder = (Path.GetDirectoryName(image) ?? "").Replace('\\', '/');
+        string asset = Combine(folder, Path.GetFileNameWithoutExtension(image) + GraphicsAsset.Extension);
+        if (!File.Exists(project!.FullPath(asset)))
+        {
+            project.WriteText(asset, GraphicsBuilder.NewAsset(Path.GetFileName(image)).ToJson());
+            Refresh();
+        }
+        await Open(asset);
+    }
+
+    static bool IsText(string path) => TextFiles.Contains(Path.GetExtension(path).ToLowerInvariant());
+
+    async Task Open(string path)
+    {
+        if (!editorReady || project is null) return;
+        if (IsGraphics(path))
+        {
+            if (!tabs.Contains(path)) tabs.Add(path);
+            await Show(path);
+            return;
+        }
+        if (!tabs.Contains(path))
+        {
+            string text;
+            try { text = project.ReadText(path); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Report(e.Message); return; }
+            await JS.InvokeVoidAsync("thing64Studio.open", path, text);
+            tabs.Add(path);
+        }
+        await Show(path);
+    }
+
+    async Task Show(string path)
+    {
+        active = path;
+        showComputer = false;
+        if (!IsGraphics(path)) await JS.InvokeVoidAsync("thing64Studio.show", path);
+    }
+
+    // Graphics assets open in the graphics editor, not in Monaco
+    static bool IsGraphics(string? path) => path?.EndsWith(GraphicsAsset.Extension, StringComparison.OrdinalIgnoreCase) == true;
+
+    readonly Dictionary<string, GraphicsEditor> graphicsEditors = [];
+
+    // An image chosen with the import button (studio.js has already made it a PNG): saved in the selected folder,
+    // with a new .gfx.json next to it, which opens
+    [JSInvokable]
+    public async Task ImageImported(string fileName, byte[] png)
+    {
+        try
+        {
+            string folder = TargetFolder;
+            string stem = string.Concat(System.IO.Path.GetFileNameWithoutExtension(fileName).Select(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' ? c : '-')).Trim('-');
+            if (stem.Length == 0) stem = "image";
+            string name = stem;
+            for (int n = 2; File.Exists(project!.FullPath(Combine(folder, name + ".png"))) || File.Exists(project.FullPath(Combine(folder, name + GraphicsAsset.Extension))); n++)
+                name = $"{stem}-{n}";
+            await File.WriteAllBytesAsync(project.FullPath(Combine(folder, name + ".png")), png);
+            string asset = Combine(folder, name + GraphicsAsset.Extension);
+            project.WriteText(asset, GraphicsBuilder.NewAsset(name + ".png").ToJson());
+            selected = asset;
+            ExpandTo(asset);
+            Refresh();
+            await Open(asset);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Report(e.Message);
+        }
+        StateHasChanged();
+    }
+
+    static string Combine(string folder, string file) => folder.Length == 0 ? file : folder + "/" + file;
+
+    async Task ShowComputer()
+    {
+        showComputer = true;
+        computerOn = true;
+        await JS.InvokeVoidAsync("thing64Studio.focusComputer");
+    }
+
+    async Task OpenComputerWindow()
+    {
+        computerWindow = await JS.InvokeAsync<bool>("thing64Studio.openComputerWindow");
+        if (!computerWindow) Report("The browser did not open the window: allow pop-ups for the studio");
+    }
+
+    // Off: the iframe goes away (no more cycles, no more sound), and so does the window of the C64 if it is open
+    async Task TurnComputerOff()
+    {
+        if (computerWindow) await JS.InvokeVoidAsync("thing64Studio.closeComputerWindow");
+        computerWindow = false;
+        computerOn = false;
+        computerStatus = "";
+        if (active is not null) await Show(active); else showComputer = false;
+    }
+
+    async Task FocusComputerWindow() => await JS.InvokeVoidAsync("thing64Studio.focusComputer");
+
+    // The window of the C64 was closed: the C64 comes back in its tab
+    [JSInvokable]
+    public void ComputerWindowClosed()
+    {
+        computerWindow = false;
+        StateHasChanged();
+    }
+
+    async Task CloseTab(string path)
+    {
+        if (dirty.Contains(path) && !await JS.InvokeAsync<bool>("confirm", $"{FileName(path)} has changes that are not saved. Close it anyway?"))
+            return;
+        if (IsGraphics(path)) graphicsEditors.Remove(path);
+        else await JS.InvokeVoidAsync("thing64Studio.close", path);
+        int index = tabs.IndexOf(path);
+        tabs.Remove(path);
+        dirty.Remove(path);
+        if (active == path)
+        {
+            active = tabs.Count == 0 ? null : tabs[Math.Min(index, tabs.Count - 1)];
+            if (active is not null) await Show(active);
+        }
+    }
+
+    async Task GoTo(string path, int line)
+    {
+        await Open(path);
+        await JS.InvokeVoidAsync("thing64Studio.reveal", path, line);
+    }
+
+    // From the editor (studio.js)
+    [JSInvokable]
+    public async Task Command(string name)
+    {
+        switch (name)
+        {
+            case "save": if (active is not null) await Save(active); break;
+            case "build": await Build(run: false); break;
+            case "run": await Build(run: true); break;
+        }
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void Changed(string path, bool changed)
+    {
+        if (changed) dirty.Add(path); else dirty.Remove(path);
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void ComputerStatus(string text)
+    {
+        computerStatus = text;
+        StateHasChanged();
+    }
+
+    async Task<bool> Save(string path)
+    {
+        try
+        {
+            if (graphicsEditors.TryGetValue(path, out var graphics))
+            {
+                await graphics.Save();
+                dirty.Remove(path);
+                return true;
+            }
+            project!.WriteText(path, await JS.InvokeAsync<string>("thing64Studio.text", path));
+            await JS.InvokeVoidAsync("thing64Studio.saved", path);
+            dirty.Remove(path);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Report(e.Message);
+            return false;
+        }
+    }
+
+    async Task<bool> SaveAll()
+    {
+        foreach (var path in dirty.ToList())
+            if (!await Save(path)) return false;
+        return true;
+    }
+
+    // Saves everything, builds (the manifest, or the active source), marks the errors; then runs the first output
+    async Task Build(bool run)
+    {
+        if (project is null || !await SaveAll()) return;
+        var report = project.Build(active);
+        log = report.Messages.ToList();
+        log.Insert(0, new BuildMessage($"{DateTime.Now:HH:mm:ss} {(report.Succeeded ? "Build succeeded" : "Build failed")}", !report.Succeeded));
+
+        await JS.InvokeVoidAsync("thing64Studio.clearMarkers");
+        foreach (var message in report.Messages.Where(m => m.IsError && m.File is not null && m.Line > 0))
+        {
+            await Open(message.File!);
+            await JS.InvokeVoidAsync("thing64Studio.markers", message.File, new[] { new { line = message.Line, message = message.Text } });
+        }
+        if (report.Messages.FirstOrDefault(m => m.IsError && m.File is not null && m.Line > 0) is { } first)
+            await GoTo(first.File!, first.Line);
+
+        Refresh();
+        if (report.Succeeded && run && report.Run is not null) await RunFile(report.Run);
+    }
+
+    async Task RunFile(string path)
+    {
+        if (!Computer.Available) { Report("The web computer is not published: see the C64 tab"); return; }
+        computerStatus = $"Running {FileName(path)}";
+        showComputer = true;
+        computerOn = true;
+        await JS.InvokeVoidAsync("thing64Studio.run", FileName(path), project!.ReadBytes(path));
+    }
+
+    void Report(string text) => log = [new BuildMessage(text, IsError: true)];
+
+    // RalfAI (IStudioHost): it runs programs, and changes files that may be open in a tab. Its calls come from other
+    // threads, so they go through InvokeAsync
+    Task Thing64.WebStudio.Assistant.IStudioHost.RunAsync(string path) => InvokeAsync(async () =>
+    {
+        await RunFile(path);
+        StateHasChanged();
+    });
+
+    Task Thing64.WebStudio.Assistant.IStudioHost.FilesChangedAsync(IReadOnlyCollection<string> paths) => InvokeAsync(async () =>
+    {
+        foreach (string path in paths.Where(tabs.Contains))
+        {
+            if (dirty.Contains(path))
+            {
+                log = [.. log, new BuildMessage($"RalfAI changed {path}, which has changes not saved here: saving would overwrite RalfAI's version", true)];
+                continue;
+            }
+            if (File.Exists(project!.FullPath(path)) && graphicsEditors.TryGetValue(path, out var graphics))
+                await graphics.Load();
+            else if (File.Exists(project.FullPath(path)))
+                await JS.InvokeVoidAsync("thing64Studio.reload", path, project.ReadText(path));
+            else
+                await CloseTab(path);
+        }
+        Refresh();
+        StateHasChanged();
+    });
+
+    void Refresh()
+    {
+        if (project is not null) tree = project.Tree();
+    }
+
+    // New file, new folder, rename: a small form above the tree
+    string EditLabel => editMode switch
+    {
+        "file" => $"New file in /{TargetFolder}",
+        "folder" => $"New folder in /{TargetFolder}",
+        _ => $"Rename {selected}",
+    };
+
+    // New entries go in the selected folder, or next to the selected file
+    string TargetFolder => selected is null ? ""
+        : Directory.Exists(project!.FullPath(selected)) ? selected
+        : (Path.GetDirectoryName(selected) ?? "").Replace('\\', '/');
+
+    void StartEdit(string mode)
+    {
+        editMode = mode;
+        editName = mode switch { "file" => "new.asm", "rename" => FileName(selected!), _ => "" };
+    }
+
+    void EditKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") editMode = null;
+    }
+
+    async Task ApplyEdit()
+    {
+        try
+        {
+            switch (editMode)
+            {
+                case "file":
+                    selected = project!.CreateFile(TargetFolder, editName);
+                    ExpandTo(selected);
+                    Refresh();
+                    await Open(selected);
+                    break;
+                case "folder":
+                    selected = project!.CreateFolder(TargetFolder, editName);
+                    ExpandTo(selected);
+                    break;
+                case "rename":
+                    if (!await CloseTabsUnder(selected!)) return;
+                    selected = project!.Rename(selected!, editName);
+                    break;
+            }
+            editMode = null;
+            Refresh();
+        }
+        catch (Exception e) when (e is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Report(e.Message);
+        }
+    }
+
+    void ExpandTo(string path)
+    {
+        for (string? folder = Path.GetDirectoryName(path)?.Replace('\\', '/'); !string.IsNullOrEmpty(folder); folder = Path.GetDirectoryName(folder)?.Replace('\\', '/'))
+            expanded.Add(folder);
+    }
+
+    async Task DeleteSelected()
+    {
+        if (selected is null || !await JS.InvokeAsync<bool>("confirm", $"Delete {selected}?")) return;
+        try
+        {
+            if (!await CloseTabsUnder(selected)) return;
+            project!.Delete(selected);
+            selected = null;
+            Refresh();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Report(e.Message);
+        }
+    }
+
+    // Before a rename or a delete: the open files in there are closed (asking for the ones with changes)
+    async Task<bool> CloseTabsUnder(string path)
+    {
+        foreach (var tab in tabs.Where(t => t == path || t.StartsWith(path + "/")).ToList())
+        {
+            await CloseTab(tab);
+            if (tabs.Contains(tab)) return false;
+        }
+        return true;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (editorReady) await JS.InvokeVoidAsync("thing64Studio.dispose");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        self?.Dispose();
+    }
+}

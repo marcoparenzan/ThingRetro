@@ -27,13 +27,18 @@ flowchart LR
     Computer --> WinForms
     Studio --> Computer
     Studio --> Asm
-    Cli --> Asm
-    Cli --> Basic
-    Cli --> Crt
+    Build[Thing64.Build<br/>builds, manifests]
+    Build --> Asm
+    Build --> Basic
+    Build --> Crt
+    Cli --> Build
     Cli -. starts .-> Studio
     Web[Thing64.WebComputer<br/>C64 in the browser]
     Web --> Prg
     Web --> Crt
+    WebStudio[Thing64.WebStudio<br/>studio in the browser]
+    WebStudio --> Build
+    WebStudio -. iframe .-> Web
 ```
 
 - **`Thing64.Mos`** depends on nothing: a `MOS6526` could sit in a 1571 drive, a `MOS6502` in any computer.
@@ -274,11 +279,67 @@ A Blazor WebAssembly app with the same `Board`, chips, `.prg` and `.crt` code as
 - **Speed**: Release builds are AOT-compiled to WebAssembly (`RunAOTCompilation`); the interpreter is about 15 times
   slower, too slow for a cycle-exact C64.
 
+- **Embedded**: with `?embedded` the page shows only the screen and its controls, and runs the programs a page of
+  the same origin sends with `postMessage` (`{ type: 'load', name, bytes }`); it answers `ready` when it can
+  receive them and `status` after each load. The base is relative (`<base href="./">`), so the site works in any
+  folder.
+
+## The studio in the browser (`Thing64.WebStudio`)
+
+A Blazor Server app: the server owns the files and the builds, the browser shows them.
+
+- **`ProjectStore` and `Project`**: the projects folder and one project folder. Every path from the browser goes
+  through `Project.FullPath`, which refuses paths outside the project. `Project.Build` builds the `thing64.json`
+  manifest with `BuildManifest` (or the open source with `ProgramBuilder`) and returns the log, with file and line
+  for each error, and the output to run.
+- **`ProjectPage.razor`**: the tree, the tabs (the C64 first, then the open files) and the build log. The editor
+  and the C64 are both always in the page and only the active one is visible, so the C64 is not restarted when
+  switching tabs. The editor lives in the browser
+  (`wwwroot/js/studio.js`): one Monaco model per open file, which tells the page when a file changes (`Changed`)
+  and sends the keys F5, F7 and Ctrl+S (`Command`); the page reads the text from it to save.
+- **Graphics** (`GraphicsEditor.razor`): one editor per open `.gfx.json`, kept in the page while hidden like the
+  Monaco models; each change converts again off the circuit's thread (`Converter.Convert`), and the preview travels
+  as a PNG data URL. The pictures are served by `/project-files/{project}/{path}`, through `Project.FullPath`.
+  Imported images become PNG in the browser (`createImageBitmap` and a canvas), since the converter reads PNG only.
+- **RalfAI** (`Assistant/`, `AssistantPanel.razor`): the `AgentEngine` of the RalfAI packages with a
+  `Thing64AgentContext`, an `IAgentContext` whose system prompt describes the C64, the assembler and the project,
+  and whose tools are the studio's: `Files_List/Read/Write/Delete` (through `Project`, so inside the folder),
+  `Project_Build` (the errors as `file(line): reason`, so the agent can fix them and build again), `Project_Run`
+  and `Asm_Instruction`. The page is the agent's `IStudioHost`: it runs programs and reloads the open files the agent
+  changed (a file with unsaved changes is left alone, with a warning). The engine keeps the conversation and the
+  costs in the project's `.ralfai/` folder; the voice tools are switched off, since the studio is a server.
+- **The 6502 language** (`Thing64.Asm/Editor/asm6502.js`: colors, hover help, completion, go to definition) is
+  shared with the desktop studio and fed with the assembler's own lists of instructions and directives.
+- **The C64** is the published web computer, served at `/computer/` from the same origin and shown in an iframe,
+  or opened in a window of its own (then the iframe is removed): the page sends the built program with
+  `postMessage` to whichever is open, once it has said `ready`. Same origin also means the same `localStorage`, so the
+  ROMs are chosen once.
+- **Styles**: Tailwind (the browser build, from the CDN), with a theme made of the two colors of the logo: night
+  (`#05083a`) and chip (`#7c8af7`). Files from the rest of the repository (logo, icons, `asm6502.js`) are embedded
+  in the assembly and served by `Program.cs`.
+
+## Graphics (`Thing64.Graphics`)
+
+From a picture to the data the VIC-II reads, with no external libraries.
+
+- **`Png`** reads every PNG (all color types and depths, not interlaced) and writes RGBA: the format of the assets and
+  of the previews.
+- **`C64Palette`**: pepto (the emulator's colors) and colodore; distances use the "redmean" weighted RGB.
+- **`Converter`**: the picture is resized to the mode's resolution (multicolor pixels are twice as wide), averaging
+  the pixels each C64 pixel covers; the shared colors are the ones the picture uses most (unless fixed); then each
+  cell gets the combination of free colors that keeps its pixels closest to the picture (2 of 16 in a hires bitmap
+  cell, 3 of 16 in multicolor, ...), judged with the dithering thresholds already applied, so that a flat color gets
+  the two colors around it. Pixels are placed with no dithering, an ordered (Bayer 4x4) one or Floyd-Steinberg.
+  Characters are kept once; above the limit the least used one is replaced by the most similar, until it fits.
+  Tiles are blocks of characters with their colors, kept once, and a map.
+- **`GraphicsAsset`** (`.gfx.json`) holds the settings; **`GraphicsBuilder`** writes `name.part.bin` and
+  `name.inc.asm`. Build manifests build every asset first (`assets`, or all the `.gfx.json` in the folder).
+
 ## The command line (`Thing64`)
 
 `thing64` is built with Spectre.Console and packaged as a .NET global tool (`tools/Install-Tool.ps1`).
 
-- **`asm`, `basic`, `build`** run in the command line itself: `ProgramBuilder` turns a `.asm` or `.bas` into a
+- **`asm`, `basic`, `build`** run in the command line itself, with `Thing64.Build`: `ProgramBuilder` turns a `.asm` or `.bas` into a
   `.prg`; `BuildManifest` reads a JSON manifest that lists the outputs (programs, and cartridges made of assembled
   banks) with paths relative to it. `samples/samples.json` is the manifest of the samples, and the tests check that
   the files in `samples/` are the ones it builds.

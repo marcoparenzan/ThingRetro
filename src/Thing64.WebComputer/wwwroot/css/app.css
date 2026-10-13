@@ -1,18 +1,19 @@
+/* The colors of the logo: night blue #05083a and periwinkle #7c8af7 */
 :root {
-    --background: #f4f4f6;
-    --text: #1d1d22;
-    --muted: #6b6b76;
-    --accent: #352879;      /* C64 blue */
-    --border: #d8d8de;
+    --background: #f5f6fe;
+    --text: #05083a;
+    --muted: #5a618f;
+    --accent: #7c8af7;
+    --border: #d5d9fb;
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --background: #17171b;
-        --text: #e8e8ee;
-        --muted: #9a9aa6;
-        --accent: #6c5eb5;  /* C64 light blue */
-        --border: #34343c;
+        --background: #05083a;
+        --text: #e8eaff;
+        --muted: #9aa2e0;
+        --accent: #7c8af7;
+        --border: #232a75;
     }
 }
 
@@ -57,7 +58,39 @@ h1 img {
     color: var(--muted);
 }
 
+/* In the web studio: always dark, on the studio's panel */
+body:has(main.embedded) {
+    --background: #03052a;
+    --text: #e8eaff;
+    --muted: #9aa2e0;
+    --border: #232a75;
+}
+
+main.embedded {
+    max-width: none;
+    padding: 0;
+}
+
+main.embedded nav {
+    justify-content: center;
+    margin: 8px 0 0;
+    gap: 8px;
+    font-size: 13px;
+}
+
+main.embedded .speed {
+    display: none;
+}
+
+/* As large as the frame allows, width and height (the controls below take about 96 pixels) */
+main.embedded canvas {
+    max-width: none;
+    width: min(100%, calc((100vh - 96px) * 403 / 284));
+    margin: 0 auto;
+}
+
 canvas {
+    box-sizing: border-box;     /* the border inside the width: no horizontal scroll bar */
     display: block;
     width: 100%;
     max-width: 806px;

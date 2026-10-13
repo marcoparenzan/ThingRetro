@@ -1,0 +1,173 @@
+@using Markdig
+@using RalfAI
+@using Thing64.WebStudio.Assistant
+@implements IDisposable
+@inject AssistantSettings Settings
+@inject IJSRuntime JS
+
+@* RalfAI, the assistant of the project: a chat whose tools are the studio's (files, build, run). While it works,
+   the tools it calls appear in the conversation *@
+<aside class="flex w-96 shrink-0 flex-col border-l border-night-800 bg-night-950 text-sm text-night-100">
+    <div class="flex items-center gap-2 border-b border-night-800 px-3 py-1.5">
+        <span class="text-xs font-semibold tracking-wider text-chip-400 uppercase">RalfAI</span>
+        <span class="truncate text-xs text-night-400">@session?.Engine.ModelId</span>
+        @if (cost > 0) { <span class="ml-auto shrink-0 text-xs text-night-400" title="Cost of this project's conversation">$@cost.ToString("0.000")</span> }
+    </div>
+
+    <div id="assistant-messages" class="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
+        @if (!Settings.Available)
+        {
+            <p class="text-night-300">
+                RalfAI is not configured: <code class="font-mono text-chip-300">Assistant:ConfigPath</code> in appsettings.json
+                must point to RalfAI's config.json (now <code class="font-mono text-chip-300">@Settings.ConfigPath</code>).
+            </p>
+        }
+        else if (session is null && startError is null)
+        {
+            <p class="text-night-400">Starting RalfAI...</p>
+        }
+        @if (startError is not null) { <p class="text-red-400">@startError</p> }
+        @if (session is not null && entries.Count == 0)
+        {
+            <p class="text-night-400">
+                Ask about the C64 or about this project: RalfAI can read and write its files, build it and run it.
+                For example: <em class="text-night-200">"add a raster bar under the text"</em>.
+            </p>
+        }
+        @foreach (var entry in entries)
+        {
+            @switch (entry.Kind)
+            {
+                case EntryKind.User:
+                    <div class="ml-8 rounded-lg bg-night-700 px-3 py-2 whitespace-pre-wrap text-white">@entry.Text</div>
+                    break;
+                case EntryKind.Assistant:
+                    <div class="assistant-text leading-relaxed">@((MarkupString)entry.Text)</div>
+                    break;
+                case EntryKind.Tool:
+                    <div class="truncate font-mono text-xs text-night-400" title="@entry.Text">⚙ @entry.Text</div>
+                    break;
+                case EntryKind.Error:
+                    <div class="text-red-400">@entry.Text</div>
+                    break;
+            }
+        }
+        @if (busy) { <div class="animate-pulse text-xs text-chip-300">@progress</div> }
+    </div>
+
+    <form class="border-t border-night-800 p-2" @onsubmit="Send">
+        <textarea id="assistant-input" @bind="input" @bind:event="oninput" rows="3" disabled="@(session is null)"
+                  placeholder="Ask RalfAI (Enter sends, Shift+Enter new line)"
+                  class="w-full resize-none rounded border border-night-600 bg-night-800 px-2 py-1.5 text-white placeholder:text-night-400 focus:border-chip-400 focus:outline-none"></textarea>
+        <div class="mt-1.5 flex justify-end gap-2">
+            @if (busy)
+            {
+                <button type="button" @onclick="Stop" class="rounded-md border border-night-600 px-3 py-1 text-xs hover:border-red-400">Stop</button>
+            }
+            <button id="assistant-send" type="submit" disabled="@(busy || session is null)"
+                    class="rounded-md bg-chip-400 px-3 py-1 text-xs font-semibold text-night-900 hover:bg-chip-300 disabled:opacity-40">Send</button>
+        </div>
+    </form>
+</aside>
+
+@code {
+    [Parameter, EditorRequired] public Project Project { get; set; } = default!;
+    [Parameter, EditorRequired] public IStudioHost Host { get; set; } = default!;
+
+    enum EntryKind { User, Assistant, Tool, Error }
+    sealed record Entry(EntryKind Kind, string Text);
+
+    static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().DisableHtml().Build();
+
+    AssistantSession? session;
+    readonly List<Entry> entries = [];
+    string input = "";
+    string? startError;
+    bool busy;
+    string progress = "";
+    decimal cost;
+    CancellationTokenSource? cancel;
+    bool scroll;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("thing64Studio.chatInput", "assistant-input", "assistant-send");
+            if (Settings.Available) await Start();
+        }
+        if (scroll)
+        {
+            scroll = false;
+            await JS.InvokeVoidAsync("thing64Studio.scrollToEnd", "assistant-messages");
+        }
+    }
+
+    async Task Start()
+    {
+        try
+        {
+            session = await AssistantSession.StartAsync(Settings, Project, Host, CancellationToken.None);
+            var engine = session.Engine;
+            foreach (var message in engine.Messages)
+                entries.Add(message.Role == "user" ? new Entry(EntryKind.User, message.Content) : new Entry(EntryKind.Assistant, ToHtml(message.Content)));
+            engine.ToolCallStarted += call => Update(() => entries.Add(new Entry(EntryKind.Tool, $"{call.Name} {call.ArgsPreview}")));
+            engine.Progress += step => Update(() => progress = step.Message);
+            engine.Notice += notice => Update(() => { if (notice.Level != NoticeLevel.Info) entries.Add(new Entry(EntryKind.Error, notice.Message)); });
+            cost = engine.GetCostSummary().TotalCostUsd;
+        }
+        catch (Exception e)
+        {
+            startError = "RalfAI could not start: " + e.Message;
+        }
+        scroll = true;
+        StateHasChanged();
+    }
+
+    // The engine's events come from other threads
+    void Update(Action change) => _ = InvokeAsync(() =>
+    {
+        change();
+        scroll = true;
+        StateHasChanged();
+    });
+
+    async Task Send()
+    {
+        if (session is null || busy || string.IsNullOrWhiteSpace(input)) return;
+        string text = input.Trim();
+        input = "";
+        entries.Add(new Entry(EntryKind.User, text));
+        busy = true;
+        progress = "Thinking...";
+        scroll = true;
+        cancel = new CancellationTokenSource();
+        try
+        {
+            var result = await session.Engine.SendAsync(text, cancel.Token);
+            entries.Add(result.Error is not null
+                ? new Entry(EntryKind.Error, result.Error)
+                : new Entry(EntryKind.Assistant, ToHtml(result.FinalText ?? "")));
+            cost = session.Engine.GetCostSummary().TotalCostUsd;
+        }
+        catch (OperationCanceledException)
+        {
+            entries.Add(new Entry(EntryKind.Error, "Stopped"));
+        }
+        finally
+        {
+            busy = false;
+            scroll = true;
+        }
+    }
+
+    void Stop() => cancel?.Cancel();
+
+    static string ToHtml(string markdown) => Markdown.ToHtml(markdown, Pipeline);
+
+    public void Dispose()
+    {
+        cancel?.Cancel();
+        cancel?.Dispose();
+    }
+}

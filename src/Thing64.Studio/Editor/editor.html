@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <title>Thing64 editor</title>
     <style>
-        html, body, #editor { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1e1e1e; }
+        html, body, #editor { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #05083a; }
         #message { display: none; color: #ccc; font: 14px "Segoe UI", sans-serif; padding: 24px; }
     </style>
 </head>
@@ -14,6 +14,7 @@
     <!-- Monaco (the editor of Visual Studio Code) from the CDN: the first start needs an internet connection,
          then WebView2 keeps it in its cache -->
     <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+    <script src="asm6502.js"></script>
     <script src="editor.js"></script>
 </body>
 </html>

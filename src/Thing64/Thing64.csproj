@@ -30,7 +30,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Thing64.Asm\Thing64.Asm.csproj" />
     <ProjectReference Include="..\Thing64.Basic\Thing64.Basic.csproj" />
-    <ProjectReference Include="..\Thing64.Crt\Thing64.Crt.csproj" />
+    <ProjectReference Include="..\Thing64.Build\Thing64.Build.csproj" />
   </ItemGroup>
 
   <!-- When the tool is packed: the desktop app is published and added to the package under "desktop" -->

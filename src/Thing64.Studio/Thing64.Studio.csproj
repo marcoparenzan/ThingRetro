@@ -20,9 +20,10 @@
     <ProjectReference Include="..\Thing64.Computer\Thing64.Computer.csproj" />
   </ItemGroup>
 
-  <!-- The editor page, served from Studio\Editor next to the executable -->
+  <!-- The editor page, served from Studio\Editor next to the executable, with the 6502 language of Thing64.Asm -->
   <ItemGroup>
     <Content Include="Editor\*" Link="Studio\Editor\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\Thing64.Asm\Editor\asm6502.js" Link="Studio\Editor\asm6502.js" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

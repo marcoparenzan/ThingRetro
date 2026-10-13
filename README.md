@@ -56,11 +56,14 @@ Not yet: the 1541 drive and disk/tape images (`.d64`, `.t64`). See [Known limits
 | `src/Thing64.Crt` | The `.crt` format and the cartridge types |
 | `src/Thing64.Asm` | 6502/6510 assembler, ACME-compatible: labels, macros, loops, includes, expressions, errors with their file and line |
 | `src/Thing64.Basic` | BASIC V2 tokenizer: a program in text becomes the `.prg` the C64 would have in memory |
+| `src/Thing64.Graphics` | Pictures for the C64: PNG, the palette, the conversion of an image to bitmaps, character sets, tiles and sprites |
+| `src/Thing64.Build` | From sources to C64 files: `.asm` and `.bas` to `.prg`, build manifests (`thing64.json`) with programs and cartridges |
 | `src/Thing64.WinForms` | `C64Monitor` (the screen, a UserControl), `PcKeyboard` (the keyboard cable), `PcSpeakers` (the speakers), joystick and paddle simulators |
 | `src/Thing64.Computer` | One C64 in a window (`ComputerForm`), loading of `.prg`/`.crt`, the ROMs, the settings |
 | `src/Thing64.Studio` | The desktop app: the studio (explorer, editors, C64 tabs) and the single C64 window |
 | `src/Thing64` | The `thing64` command line (Spectre.Console), a .NET global tool: `studio`, `run`, `asm`, `basic`, `build` |
 | `src/Thing64.WebComputer` | The C64 in the browser: the same board compiled to WebAssembly (Blazor, AOT), on a canvas |
+| `src/Thing64.WebStudio` | The studio in the browser (Blazor Server): projects in a local folder, Monaco, builds, the web computer |
 | `src/Thing64.Tests` | Tests (MSTest) |
 | `samples` | Sample programs ready to load, with the commented BASIC and assembly sources in `samples/src` |
 | `tools` | Helper scripts (download of the CPU test suites) |
@@ -172,6 +175,40 @@ with AOT, at 0.18 times without (Debug builds are interpreted, so they run slowl
 
 The C64 ROMs are copyrighted and are not part of the published site: the first time, the page asks for the three
 files (`kernal`, `basic`, `chargen`) and keeps them in the browser. Debug builds embed them, for development.
+
+### The web studio
+
+`src/Thing64.WebStudio` is the studio as a web app: a Blazor Server app (styled with Tailwind, in the colors of the
+logo) where projects, files, the assembler and the builds run on the server, the editor is Monaco and the C64 is the
+web computer, in WebAssembly, in a tab next to the files (or in a window of its own).
+
+- **Projects** are the folders of a projects folder (`Studio:ProjectsFolder` in `appsettings.json`, by default
+  `D:\Configurations\Thing64\Studio\Projects`), with everything inside: sources, the build manifest `thing64.json`
+  and the built programs. *Create project* makes a folder with a `main.asm` that starts with RUN and its manifest.
+- **Files**: a tree with new file, new folder, rename and delete; one editor tab per open file.
+- **F7** builds the manifest (or, without one, the open source); errors are marked on their line. **F5** builds,
+  runs the first output and shows the C64 tab; a double click on a `.prg` or `.crt` runs it. **Ctrl+S** saves.
+- **Graphics**: the image button imports a picture (any format) as a PNG and a `.gfx.json` asset, which opens in
+  the graphics editor: the picture and how the C64 will show it side by side, the mode (hires or multicolor bitmap,
+  characters, sprites), fit, dithering, palette, the shared colors, the limit of characters and the tiles. Every
+  build converts the assets again and writes their data files and an include (`name.inc.asm`, with a label on each
+  part and constants for the colors), so the assembly never falls behind the picture.
+- **RalfAI**, on the right, is an assistant that works on the project: it reads and writes its files, builds it
+  (and fixes the errors it gets) and runs it in the C64. The conversation is kept in the project (`.ralfai/`).
+- **The C64 tab** keeps running while a file is shown. *Own window* moves the C64 to a window of its own (a second
+  monitor); closing that window brings it back into the tab.
+
+```powershell
+dotnet publish src/Thing64.WebComputer -c Release -o artifacts/web   # the C64, once (and after changing it)
+dotnet run --project src/Thing64.WebStudio                           # http://localhost:5180
+```
+
+The studio serves the published web computer at `/computer/` (`Studio:ComputerFolder`): it must be the AOT build,
+the only one fast enough. The first time the C64 asks for its ROMs, then the browser keeps them.
+
+RalfAI comes from a local NuGet feed (`nuget.config`: `D:\Dev\NuGetLocalFeed`), and reads its providers, models and
+keys from its own configuration file (`Assistant:ConfigPath`, outside the repository); the model is the one of the
+`thing64` context (`Assistant:ContextKey`).
 
 ### Samples
 

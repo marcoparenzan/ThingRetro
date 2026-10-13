@@ -1,6 +1,10 @@
 // The browser side of the C64: the animation loop that drives the board, the canvas that shows its frames,
 // keyboard, gamepad, sound, drag and drop, and the ROMs kept in localStorage.
-// Talks to WebComputer.cs (JSExport/JSImport)
+// Talks to WebComputer.cs (JSExport/JSImport).
+// Opened by a page of the same site (the web studio: in an iframe, or in a window it opened), it runs the programs
+// that page sends:
+//   host -> computer: { type: 'load', name, bytes }, { type: 'focus' }
+//   computer -> host: { type: 'ready' }, { type: 'status', text }
 
 let computer = null;      // the [JSExport] methods of WebComputer
 let canvas = null;
@@ -14,6 +18,31 @@ let gamepadBits = 0;
 let audio = null;         // AudioContext, created at the first user gesture (browsers require one)
 let speaker = null;       // AudioWorkletNode (audio-worklet.js)
 let audioWanted = localStorage.getItem('thing64.sound') !== 'off';
+let pendingLoad = null;   // a program sent before the C64 was running (ROMs still to choose)
+
+const host = window.parent !== window ? window.parent : window.opener;   // the studio, if any
+
+window.addEventListener('message', e => {
+    if (e.origin !== location.origin) return;
+    // The studio sends these right after a user gesture (F5, a click): with allow="autoplay" on the iframe the
+    // sound can start then, without a click on the screen
+    if (e.data?.type === 'load') {
+        if (running) load(e.data.name, e.data.bytes); else pendingLoad = e.data;
+        startAudio();
+    } else if (e.data?.type === 'focus') {
+        canvas?.focus();
+        startAudio();
+    }
+});
+host?.postMessage({ type: 'ready' }, location.origin);
+
+function load(name, bytes) {
+    const status = computer.Load(name, bytes);
+    const element = document.querySelector('.status');
+    if (element) element.textContent = status;
+    host?.postMessage({ type: 'status', text: status }, location.origin);
+    canvas.focus();
+}
 
 async function exportsOf() {
     const runtime = await globalThis.getDotnetRuntime(0);
@@ -29,16 +58,14 @@ export async function start(canvasId) {
 
     canvas.addEventListener('keydown', e => { startAudio(); if (computer.KeyDown(e.code)) e.preventDefault(); });
     canvas.addEventListener('keyup', e => { if (computer.KeyUp(e.code)) e.preventDefault(); });
-    canvas.addEventListener('pointerdown', () => startAudio());
+    document.addEventListener('pointerdown', () => startAudio());
     canvas.addEventListener('blur', () => computer.ReleaseKeys());
     canvas.addEventListener('dragover', e => e.preventDefault());
     canvas.addEventListener('drop', async e => {
         e.preventDefault();
         const file = e.dataTransfer.files[0];
         if (!file) return;
-        const status = computer.Load(file.name, new Uint8Array(await file.arrayBuffer()));
-        document.querySelector('.status').textContent = status;
-        canvas.focus();
+        load(file.name, new Uint8Array(await file.arrayBuffer()));
     });
 
     const sound = document.getElementById('sound');
@@ -50,7 +77,11 @@ export async function start(canvasId) {
     running = true;
     last = performance.now();
     requestAnimationFrame(tick);
-    canvas.focus();
+    if (window.parent === window) canvas.focus();    // embedded, the page around keeps the keyboard until a click
+    if (pendingLoad) {
+        load(pendingLoad.name, pendingLoad.bytes);
+        pendingLoad = null;
+    }
 }
 
 export function stop() {
@@ -115,32 +146,43 @@ export function present(view) {
     context.putImageData(image, 0, 0);
 }
 
-// Sound: started by a user gesture on the screen, muted and unmuted with the Sound button
+// Sound: browsers let an AudioContext play only after a user gesture, and one created before (or at a key that
+// does not count as a gesture, like Esc) stays suspended. So every gesture tries again: the context is created once,
+// then resumed until it runs. Muted and unmuted with the Sound button
+let audioStarting = null;
+
 async function startAudio() {
-    if (audio || !audioWanted) return;
-    audio = new AudioContext();
-    await audio.audioWorklet.addModule(new URL('audio-worklet.js', import.meta.url));
-    speaker = new AudioWorkletNode(audio, 'thing64-speaker', { outputChannelCount: [2] });
-    speaker.connect(audio.destination);
-    computer.EnableAudio(audio.sampleRate);
+    if (!audioWanted || !computer) return;
+    if (!audio) {
+        audioStarting ??= (async () => {
+            const context = new AudioContext();
+            context.addEventListener('statechange', showSound);
+            await context.audioWorklet.addModule(new URL('audio-worklet.js', import.meta.url));
+            speaker = new AudioWorkletNode(context, 'thing64-speaker', { outputChannelCount: [2] });
+            speaker.connect(context.destination);
+            computer.EnableAudio(context.sampleRate);
+            audio = context;
+        })();
+        await audioStarting;
+    }
+    // Not awaited: without a gesture the promise waits until there is one; 'statechange' updates the button
+    if (audio.state === 'suspended') audio.resume().catch(() => { });
     showSound();
 }
 
 async function toggleSound() {
     audioWanted = !audioWanted;
     localStorage.setItem('thing64.sound', audioWanted ? 'on' : 'off');
-    if (audio) {
-        if (audioWanted) await audio.resume(); else await audio.suspend();
-    } else if (audioWanted) {
-        await startAudio();
-    }
+    if (audioWanted) await startAudio();
+    else await audio?.suspend();
     showSound();
     canvas.focus();
 }
 
 function showSound() {
     const sound = document.getElementById('sound');
-    if (sound) sound.textContent = audioWanted ? 'Sound: on' : 'Sound: off';
+    // "on" only when it really plays: until the browser allows it, the button says what to do
+    if (sound) sound.textContent = !audioWanted ? 'Sound: off' : audio?.state === 'running' ? 'Sound: on' : 'Sound: click to start';
 }
 
 // 10 ms of 16-bit samples from the SID to the AudioWorklet, as floats
