@@ -218,7 +218,9 @@ web computer, in WebAssembly, in a tab next to the files (or in a window of its 
   Sprites can be added, duplicated, renamed (in every source of the project) and deleted, slid in the four
   directions; animations created, renamed and deleted, frames added and removed, speeds changed.
   The third editor is the charmap: the tiles' tables (tile → screen code, tile → color) and the bitmaps of the
-  characters, all in one region; each tile's character and color, the character in big pixels, the whole set:
+  characters, all in one region; each tile's character and color, the character in big pixels, the whole set.
+  Characters can be added, duplicated, deleted and dragged to another place: the tiles table follows each
+  character to its new screen code, so every tile keeps its look:
   ```asm
   ;@ charmap  tiles=charmapChars colors=charmapColors charset=charmapCharacters first=$70 background=6
   ```

@@ -314,7 +314,9 @@ A Blazor Server app: the server owns the files and the builds, the browser shows
   with `Converter` into the sprite, with a uniform background made transparent. Changes to the structure (sprites
   added, duplicated, deleted, renamed, the animations) are `SpriteFile` operations on the text of the file; a
   rename replaces the label as a whole word in every source of the project. `Charmap` (`CharmapEditor.razor`)
-  finds its three tables by the labels the parameters name inside the region. After a file is shown in Monaco the
+  finds its three tables by the labels the parameters name inside the region; `CharmapFile` rewrites the characters
+  one per line (each keeping the comment of its line, with the new screen code) and the tiles table is remapped so
+  that each tile follows its character. After a file is shown in Monaco the
   CodeLenses are asked again (a file shown while the editor was hidden would get none).
 - **Viewers**: a tab is Monaco's for text files; any other file is binary: `ImageViewer.razor` for PNG (picture,
   chunks, bytes), `HexViewer.razor` for the rest (a `Virtualize` of 16-byte rows, PETSCII and screen code columns,

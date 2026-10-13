@@ -106,17 +106,22 @@
                 <div class="mt-5 mb-1 flex items-center gap-2">
                     <span class="text-[11px] font-semibold tracking-wider text-night-300 uppercase">Characters $@charmap.First.ToString("X2")-$@((charmap.First + charmap.Characters - 1).ToString("X2"))</span>
                     <button class="tool border border-night-700" @onclick="AddCharacter" title="A new empty character after the last one">＋ Character</button>
+                    <button class="tool border border-night-700 disabled:opacity-40" disabled="@(selectedChar < 0)" @onclick="DuplicateCharacter" title="A copy of the selected character, right after it">⧉ Duplicate</button>
+                    <button class="tool border border-night-700 disabled:opacity-40" disabled="@(selectedChar < 0)" @onclick="DeleteCharacter" title="Delete the selected character (not when a tile uses it)">🗑 Delete</button>
                     @if (selectedChar >= 0 && charmap.ScreenCode(values, selectedTile) != charmap.First + selectedChar)
                     {
                         <button class="tool border border-chip-400 text-chip-300" @onclick="UseForTile">Use $@((charmap.First + selectedChar).ToString("X2")) for @charmap.Names[selectedTile]</button>
                     }
+                    <span class="text-night-400">drag a character onto another to move it there</span>
                 </div>
                 <div class="flex max-w-3xl flex-wrap gap-1">
                     @for (int c = 0; c < charmap.Characters; c++)
                     {
                         int character = c;
-                        <button class="@(selectedChar == character ? "ring-2 ring-chip-400" : "hover:ring-1 hover:ring-night-300") flex flex-col items-center rounded p-0.5"
-                                @onclick="() => SelectCharacter(character)" title="$@((charmap.First + character).ToString("X2"))">
+                        <button class="@(selectedChar == character ? "ring-2 ring-chip-400" : "hover:ring-1 hover:ring-night-300") @(dropTarget == character ? "bg-chip-400/30" : null) flex flex-col items-center rounded p-0.5"
+                                draggable="true" @ondragstart="() => dragged = character" @ondragend="() => dropTarget = -1"
+                                @ondragenter="() => dropTarget = character" @ondragover:preventDefault @ondrop="() => MoveCharacter(dragged, character)"
+                                @onclick="() => SelectCharacter(character)" title="@CharacterTitle(character)">
                             <img src="@CharImage(character)" alt="" class="pixelated h-8 w-8 border border-night-700" />
                             <span class="font-mono text-[10px] text-night-400">@((charmap.First + character).ToString("X2"))</span>
                         </button>
@@ -138,6 +143,9 @@
     const int Zoom = 32;
 
     Charmap? charmap;
+    ProgramImage? image;
+    List<string> descriptions = [];
+    int dragged = -1, dropTarget = -1;
     int[] values = [];
     int selectedTile;
     int selectedChar = -1;
@@ -162,11 +170,12 @@
         {
             string[] lines = Lines();
             var region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"There is no region {Index + 1} in {File}");
-            ProgramImage? image = null;
+            image = null;
             try { image = ProgramImage.Assemble(Project); }
             catch (FormatException) { status = "The program does not assemble: no tile names"; }
             values = region.ReadBytes(lines, image).ToArray();
             charmap = new Charmap(region, lines, image, values.Length);
+            descriptions = CharmapFile.Read(lines, region, region.Parameters["charset"], image).Select(c => c.Description).ToList();
             selectedTile = Math.Min(selectedTile, charmap.Count - 1);
             undo.Clear();
             SetDirty(false);
@@ -359,22 +368,72 @@
         Redraw();
     }
 
-    // A new character at the end of the region: one more .byte line, with its screen code as a comment
-    async Task AddCharacter()
+    // Characters added, duplicated, deleted and moved. Each one is (where it was, what it is); the tiles table then
+    // follows every character to its new screen code
+    // "$70 platform": the screen code and the comment of its line
+    string CharacterTitle(int character) =>
+        $"${charmap!.First + character:X2} {descriptions.ElementAtOrDefault(character)}".TrimEnd();
+
+    Task AddCharacter() => Rearrange(list => list.Add((-1, new CharmapFile.Character(new int[8], ""))), list => list.Count - 1, "Character added");
+
+    Task DuplicateCharacter()
+    {
+        int at = selectedChar;
+        return Rearrange(list => list.Insert(at + 1, (-1, list[at].Character with { Bytes = [.. list[at].Character.Bytes] })), _ => at + 1, "Character duplicated");
+    }
+
+    async Task DeleteCharacter()
+    {
+        int at = selectedChar, code = charmap!.First + at;
+        var users = Enumerable.Range(0, charmap.Count).Where(t => charmap.ScreenCode(values, t) == code).Select(t => charmap.Names[t]).ToList();
+        if (users.Count > 0) { status = $"${code:X2} is used by {string.Join(", ", users)}: give them another character first"; return; }
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete the character ${code:X2}? The characters after it move down by one.")) return;
+        await Rearrange(list => list.RemoveAt(at), _ => Math.Max(0, at - 1), "Character deleted");
+    }
+
+    Task MoveCharacter(int from, int to)
+    {
+        dropTarget = -1;
+        if (from < 0 || from == to) return Task.CompletedTask;
+        return Rearrange(list =>
+        {
+            var moving = list[from];
+            list.RemoveAt(from);
+            list.Insert(to, moving);
+        }, _ => to, $"Character moved to ${charmap!.First + to:X2}");
+    }
+
+    async Task Rearrange(Action<List<(int Was, CharmapFile.Character Character)>> change, Func<List<(int Was, CharmapFile.Character Character)>, int> select, string done)
     {
         if (dirty && !await Save()) return;
         if (!await Host.CanWriteAsync(File)) return;
         string[] lines = Lines();
         var region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"The region {Index + 1} of {File} is gone");
-        var (indent, keyword) = region.ByteStyle(lines);
-        int code = charmap!.First + charmap.Characters;
-        string line = $"{indent}{keyword} {string.Join(",", Enumerable.Repeat("$00", 8))} ; ${code:X2}";
+        string label = region.Parameters["charset"];
+        var list = CharmapFile.Read(lines, region, label, image).Select((c, i) => (Was: i, Character: c)).ToList();
+        change(list);
+
+        // Where each old character went
+        var moved = new Dictionary<int, int>();
+        for (int i = 0; i < list.Count; i++) if (list[i].Was >= 0) moved[list[i].Was] = i;
+        var tables = values[..charmap!.CharsetAt];
+        for (int tile = 0; tile < charmap.Count; tile++)
+        {
+            int old = tables[charmap.TilesAt + tile] - charmap.First;
+            if (moved.TryGetValue(old, out int now)) tables[charmap.TilesAt + tile] = charmap.First + now;
+        }
+
+        // The characters written one per line, then all the values (tables and characters) in place
+        string[] written = CharmapFile.Write(lines, region, label, list.Select(c => c.Character).ToList(), charmap.First);
+        var rewritten = AsmRegion.Find(written).ElementAtOrDefault(Index)!;
+        int[] all = [.. tables, .. list.SelectMany(c => c.Character.Bytes)];
         string newline = Project.ReadText(File).Contains("\r\n") ? "\r\n" : "\n";
-        Project.WriteText(File, string.Join(newline, [.. lines[..region.EndLine], line, .. lines[region.EndLine..]]));
+        Project.WriteText(File, string.Join(newline, rewritten.WriteBytes(written, all, 8)));
         await Host.WrittenAsync(File);
+        int selection = select(list);
         Load();
-        SelectCharacter(charmap!.Characters - 1);
-        status = $"Character ${code:X2} added";
+        SelectCharacter(Math.Min(selection, charmap!.Characters - 1));
+        status = done + " · code that uses these screen codes directly (not through the charmap) must follow";
     }
 
     static string Url(RgbImage image) => "data:image/png;base64," + Convert.ToBase64String(Png.Write(image));

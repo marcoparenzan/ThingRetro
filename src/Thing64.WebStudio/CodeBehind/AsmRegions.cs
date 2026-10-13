@@ -209,6 +209,22 @@ public sealed partial class AsmRegion
         return result;
     }
 
+    // The values of one .byte line, or null when it is not one
+    public static List<int>? LineValues(string line, ProgramImage? image)
+    {
+        var data = ByteLine().Match(StripComment(line));
+        return data.Success
+            ? data.Groups[1].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Select(v => ProgramImage.Value(v, image) & 0xFF).ToList()
+            : null;
+    }
+
+    // The comment at the end of a line, without ';' (empty when there is none)
+    public static string CommentOf(string line)
+    {
+        string code = StripComment(line);
+        return code.Length < line.Length ? line[(code.Length + 1)..].Trim() : "";
+    }
+
     static bool TryValue(string text, out int value)
     {
         try
