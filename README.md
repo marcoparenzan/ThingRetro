@@ -11,7 +11,7 @@ chips in their sockets, the traces that connect them and the cables to the monit
 It comes with a small studio to write 6502 assembly and run it right away.
 
 ![Boot and a line of BASIC](images/thing64-ready.png)
-![Raster bars with a raster interrupt and an expanded sprite](images/thing64-rasterbars.png)
+![A raster interrupt draws a red bar in the border while BASIC keeps working](images/thing64-rasterbars.png)
 
 ## What works
 
