@@ -4,17 +4,21 @@ namespace Thing64.WebStudio.CodeBehind;
 
 // What a ;@ charset region means: the bitmaps of characters, 8 bytes each, from screen code "first", under the first
 // label of the region (the charset's name, which ;@ screen regions reference with charset=):
-//   ;@ charset first=$70
+//   ;@ charset first=$70 multicolor=1
 //   charset1__characters:   .byte $FF,$57,... ; $70 wall A
 //   charset1__charactersEnd:
 //   ;@ end
-// A character has no color: the screens that use it give it one per cell, and decide whether it is hires or
-// multicolor. So the editor shows each character as the screens use it, with their background and multicolors
+// The characters are a part of the 256 of the charset: the ones from screen code "first" on; the others are the ROM's.
+// A character has no color: the screens that use it give it one per cell. With multicolor=1 the whole charset is
+// multicolor (what the C64 decides with bit 3 of each cell's color): the editors draw every character in pairs of
+// pixels and set that bit by themselves when the screen editor paints one. Without it, the editor shows each
+// character as the screens use it, with their background and multicolors, hires or multicolor cell by cell
 public sealed class CharsetRegion
 {
     public string Label { get; }
     public int First { get; }
     public int Characters { get; }
+    public bool Multicolor { get; }
     public C64Palette Palette { get; } = C64Palette.Pepto;
 
     public CharsetRegion(AsmRegion region, string[] lines, ProgramImage? image, int values)
@@ -22,6 +26,25 @@ public sealed class CharsetRegion
         Label = region.Labels.FirstOrDefault() ?? throw new FormatException(";@ charset: the region needs a label, the charset's name");
         First = (region.Parameters.TryGetValue("first", out var first) ? ProgramImage.Value(first, image) : 0) & 0xFF;
         Characters = values / 8;
+        Multicolor = IsMulticolor(region, image);
+    }
+
+    // multicolor=1 (or any non-zero number or symbol) in the region's parameters
+    static bool IsMulticolor(AsmRegion region, ProgramImage? image) =>
+        region.Parameters.TryGetValue("multicolor", out var text) && ProgramImage.Value(text, image) != 0;
+
+    // Whether the charset named by a label is multicolor: its ;@ charset region is somewhere in the project
+    public static bool MulticolorOf(Project project, string label, ProgramImage? image)
+    {
+        if (label.Length == 0) return false;
+        foreach (string file in CharsetUsers.AsmFiles(project))
+        {
+            string[] lines = File.ReadAllText(file).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+            if (!lines.Any(l => l.Contains(";@"))) continue;
+            foreach (var region in AsmRegion.Find(lines))
+                if (region.Editor == "charset" && region.Labels.FirstOrDefault() == label) return IsMulticolor(region, image);
+        }
+        return false;
     }
 
     public int[] Decode(IReadOnlyList<int> values, int character, bool multicolor)
@@ -73,27 +96,34 @@ public static class CharsetUsers
 {
     public sealed record Screen(string File, AsmRegion Region, ScreenRegion Model, List<int> Values);
 
+    // The .asm files of the project, but the ones in the folders of the tools (the names that start with a dot)
+    public static IEnumerable<string> AsmFiles(Project project) =>
+        Directory.EnumerateFiles(project.Folder, "*.asm", SearchOption.AllDirectories)
+            .Where(f => !Path.GetRelativePath(project.Folder, f).Split(Path.DirectorySeparatorChar).Any(p => p.StartsWith('.')));
+
     public static List<Screen> Find(Project project, string charsetLabel, ProgramImage image)
     {
         var screens = new List<Screen>();
-        foreach (string file in Directory.EnumerateFiles(project.Folder, "*.asm", SearchOption.AllDirectories))
+        bool multicolor = CharsetRegion.MulticolorOf(project, charsetLabel, image);
+        foreach (string file in AsmFiles(project))
         {
-            if (Path.GetRelativePath(project.Folder, file).Split(Path.DirectorySeparatorChar).Any(p => p.StartsWith('.'))) continue;
             string[] lines = File.ReadAllText(file).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
             if (!lines.Any(l => l.Contains(";@"))) continue;
             foreach (var region in AsmRegion.Find(lines))
                 if (region.Editor == "screen" && region.Parameters.GetValueOrDefault("charset") == charsetLabel)
-                    screens.Add(new Screen(file, region, new ScreenRegion(region, lines, image), region.ReadBytes(lines, image)));
+                    screens.Add(new Screen(file, region, new ScreenRegion(region, lines, image, multicolor), region.ReadBytes(lines, image)));
         }
         return screens;
     }
 
-    // Each character's look: the color its cells have most often in the first screen that uses it
-    public static Look[] Looks(List<Screen> screens, int first, int characters)
+    // Each character's look: the color its cells have most often in the first screen that uses it. In a multicolor
+    // charset every character is multicolor (bit 3 of the color), whatever its cells say
+    public static Look[] Looks(List<Screen> screens, int first, int characters, bool multicolor = false)
     {
+        int multicolorBit = multicolor ? 8 : 0;
         var defaultLook = screens.FirstOrDefault()?.Model is { } m
-            ? new Look(m.Background, m.Multicolor1, m.Multicolor2, m.MulticolorMode, 1)
-            : new Look(6, 11, 15, false, 1);
+            ? new Look(m.Background, m.Multicolor1, m.Multicolor2, m.MulticolorMode || multicolor, 1 | multicolorBit)
+            : new Look(6, 11, 15, multicolor, 1 | multicolorBit);
         var looks = Enumerable.Repeat(defaultLook, characters).ToArray();
         var counts = new Dictionary<(int Character, int Color), int>();
         foreach (var screen in screens)
@@ -105,7 +135,7 @@ public static class CharsetUsers
                 counts[key] = counts.GetValueOrDefault(key) + 1;
             }
         foreach (var group in counts.GroupBy(c => c.Key.Character))
-            looks[group.Key] = defaultLook with { Color = group.MaxBy(c => c.Value).Key.Color };
+            looks[group.Key] = defaultLook with { Color = multicolor ? group.MaxBy(c => c.Value).Key.Color & 7 | 8 : group.MaxBy(c => c.Value).Key.Color };
         return looks;
     }
 

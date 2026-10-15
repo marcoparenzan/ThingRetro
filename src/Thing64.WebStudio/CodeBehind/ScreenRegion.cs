@@ -10,7 +10,9 @@ namespace Thing64.WebStudio.CodeBehind;
 //   ;@ end
 // charset names the bitmaps of the custom characters (anywhere in the program), from screen code "first"; the other
 // screen codes are the ROM's. With multicolor=1 a color with bit 3 set shows its character in multicolor: pairs of
-// bits, 00 background, 01 multicolor1, 10 multicolor2, 11 the color 0-7; the other cells are hires with colors 0-7
+// bits, 00 background, 01 multicolor1, 10 multicolor2, 11 the color 0-7; the other cells are hires with colors 0-7.
+// When the charset is multicolor (its ;@ charset region says multicolor=1) the editor sets that bit by itself: the
+// charset's own characters get it, the ROM's do not
 public sealed class ScreenRegion
 {
     public int Width { get; }
@@ -24,11 +26,12 @@ public sealed class ScreenRegion
     public int Multicolor1 { get; }
     public int Multicolor2 { get; }
     public string CharsetLabel { get; }
+    public bool CharsetMulticolor { get; }
     public C64Palette Palette { get; } = C64Palette.Pepto;
 
     readonly byte[] charset;
 
-    public ScreenRegion(AsmRegion region, string[] lines, ProgramImage image)
+    public ScreenRegion(AsmRegion region, string[] lines, ProgramImage image, bool charsetMulticolor = false)
     {
         int Number(string name, int? otherwise = null) =>
             region.Parameters.TryGetValue(name, out var text) ? ProgramImage.Value(text, image)
@@ -48,6 +51,7 @@ public sealed class ScreenRegion
         Multicolor1 = Number("multicolor1", 11) & 15;
         Multicolor2 = Number("multicolor2", 15) & 15;
         CharsetLabel = region.Parameters.GetValueOrDefault("charset", "");
+        CharsetMulticolor = charsetMulticolor;
         if (CharsetLabel.Length > 0)
         {
             int address = Number("charset");
@@ -63,6 +67,14 @@ public sealed class ScreenRegion
 
     public int Cells => Width * Height;
     public bool IsMulticolor(int color) => MulticolorMode && (color & 8) != 0;
+
+    // True when the charset decides the bit 3 of the cells' colors, so the pen does not
+    public bool ChoosesMulticolor => CharsetMulticolor && MulticolorMode;
+
+    // The color a cell gets when a character is painted in it: with a multicolor charset, bit 3 follows the
+    // character (set for the charset's own, clear for the ROM's); otherwise the color as it is
+    public int CellColor(int code, int color) =>
+        !ChoosesMulticolor ? color : (color & 7) | (IsCustom(code) ? 8 : 0);
     public bool IsCustom(int code) => code >= First && code < First + Characters;
 
     // A cell's 8x8 pixels: its character in its color, hires or multicolor. ROM characters, which the studio does
@@ -117,7 +129,7 @@ public sealed class ScreenRegion
     public RgbImage RenderCell(int code, int color)
     {
         var image = new RgbImage(8, 8);
-        CellPixels(code, color).CopyTo(image.Pixels, 0);
+        CellPixels(code, CellColor(code, color)).CopyTo(image.Pixels, 0);
         return image;
     }
 }

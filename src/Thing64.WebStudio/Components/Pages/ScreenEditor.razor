@@ -45,7 +45,7 @@
                     <img src="@penImage" alt="" class="pixelated h-12 w-12 border border-night-700" />
                     <div>
                         <div>character <span class="font-mono text-white">$@penCode.ToString("X2")</span></div>
-                        <div>color <span class="font-mono text-white">$@penColor.ToString("X2")</span> @(screen.IsMulticolor(penColor) ? "multicolor" : "hires")</div>
+                        <div>color <span class="font-mono text-white">$@screen.CellColor(penCode, penColor).ToString("X2")</span> @(screen.IsMulticolor(screen.CellColor(penCode, penColor)) ? "multicolor" : "hires")</div>
                     </div>
                 </div>
 
@@ -60,7 +60,11 @@
                                 @onclick="() => SetPenColor(color)"></button>
                     }
                 </div>
-                @if (screen.MulticolorMode)
+                @if (screen.ChoosesMulticolor)
+                {
+                    <p class="mb-3 text-night-400" title="The ;@@ charset region says multicolor=1: its characters are multicolor, the ROM's are hires">multicolor: set by the charset</p>
+                }
+                else if (screen.MulticolorMode)
                 {
                     <label class="mb-3 flex items-center gap-1" title="Bit 3 of the color: the cell shows its character in multicolor">
                         <input type="checkbox" checked="@screen.IsMulticolor(penColor)" @onchange="ToggleMulticolor" /> multicolor character
@@ -140,7 +144,7 @@
             string[] lines = Lines();
             region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"There is no region {Index + 1} in {File}");
             var image = ProgramImage.Assemble(Project);
-            screen = new ScreenRegion(region, lines, image);
+            screen = new ScreenRegion(region, lines, image, CharsetRegion.MulticolorOf(Project, region.Parameters.GetValueOrDefault("charset", ""), image));
             values = region.ReadBytes(lines, image).ToArray();
             int needed = Math.Max(screen.ScreenAt, screen.ColorsAt) + screen.Cells;
             if (values.Length < needed) throw new FormatException($"The region has {values.Length} values: the screen and the colors need {needed}");
@@ -149,6 +153,8 @@
             undo.Clear();
             SetDirty(false);
             error = null;
+            status = "";
+            AlignWithCharset();
             Redraw();
         }
         catch (Exception e) when (e is FormatException or IOException or InvalidDataException or NotSupportedException or OverflowException)
@@ -159,6 +165,25 @@
     }
 
     string[] Lines() => Project.ReadText(File).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+
+    // A multicolor charset decides bit 3 of the colors: the cells that disagree (hires cells with one of its
+    // characters, multicolor cells with a ROM one) take the charset's way, and the screen is marked as changed so
+    // that Save writes it into the file
+    void AlignWithCharset()
+    {
+        if (screen is null || !screen.ChoosesMulticolor) return;
+        int cells = 0;
+        for (int cell = 0; cell < screen.Cells; cell++)
+        {
+            int color = screen.CellColor(values[screen.ScreenAt + cell], values[screen.ColorsAt + cell]);
+            if (values[screen.ColorsAt + cell] == color) continue;
+            values[screen.ColorsAt + cell] = color;
+            cells++;
+        }
+        if (cells == 0) return;
+        SetDirty(true);
+        status = $"The charset is multicolor: {cells} cells changed their color's bit 3 to match it. Save writes them";
+    }
 
     public async Task<bool> Save()
     {
@@ -266,12 +291,15 @@
         dragStart = null;
     }
 
-    // One cell takes the pen: its character, its color, or both
+    // One cell takes the pen: its character, its color, or both. With a multicolor charset the color's bit 3 follows
+    // the cell's character, also when only the character is painted
     bool Set(int[] target, int cell)
     {
         bool changed = false;
         if (paint != "color" && target[screen!.ScreenAt + cell] != penCode) { target[screen.ScreenAt + cell] = penCode; changed = true; }
-        if (paint != "character" && target[screen!.ColorsAt + cell] != penColor) { target[screen.ColorsAt + cell] = penColor; changed = true; }
+        int code = target[screen!.ScreenAt + cell];
+        int color = screen.CellColor(code, paint == "character" ? target[screen.ColorsAt + cell] : penColor);
+        if (target[screen.ColorsAt + cell] != color) { target[screen.ColorsAt + cell] = color; changed = true; }
         return changed;
     }
 

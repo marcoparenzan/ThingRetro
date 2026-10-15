@@ -54,7 +54,11 @@
                             title="@color: @C64Palette.Names[color]" style="background: #@charset.Palette.Rgb[color].ToString("X6")"
                             @onclick="() => SetLook(color, Multicolor)"></button>
                 }
-                @if (Look.MulticolorMode)
+                @if (charset.Multicolor)
+                {
+                    <span class="ml-2 text-night-400" title="multicolor=1 in the ;@@ charset region: every character of the set is multicolor">multicolor charset</span>
+                }
+                else if (Look.MulticolorMode)
                 {
                     <label class="ml-2 flex items-center gap-1"><input type="checkbox" checked="@Multicolor" @onchange="() => SetLook(Look.Color & 7, !Multicolor)" /> multicolor</label>
                 }
@@ -162,7 +166,7 @@
             charset = new CharsetRegion(region, lines, image, values.Length);
             descriptions = CharmapFile.Read(lines, region, charset.Label, image).Select(c => c.Description).ToList();
             screens = image is null ? [] : CharsetUsers.Find(Project, charset.Label, image);
-            looks = CharsetUsers.Looks(screens, charset.First, charset.Characters);
+            looks = CharsetUsers.Looks(screens, charset.First, charset.Characters, charset.Multicolor);
             selected = Math.Clamp(selected, 0, Math.Max(0, charset.Characters - 1));
             undo.Clear();
             SetDirty(false);

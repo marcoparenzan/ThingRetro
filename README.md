@@ -180,9 +180,12 @@ web computer, in WebAssembly, in a tab next to the files (or in a window of its 
   ```
   The charset editor edits the characters of a charset (a file of its own, shared by the screens that name it),
   each shown as the screens use it (its cells' color, hires or multicolor); adding, duplicating, deleting or dragging
-  characters renumbers the screen codes of those screens:
+  characters renumbers the screen codes of those screens. The characters are a part of the 256 of the charset: the
+  ones from screen code `first` on, the others are the ROM's. `multicolor=1` says that the whole set is multicolor:
+  every character is drawn in pairs of pixels, and the screen editor sets bit 3 of a cell's color (what makes the C64
+  show it in multicolor) by itself when it paints one of these characters, and clears it for the ROM's:
   ```asm
-  ;@ charset first=$70
+  ;@ charset first=$70 multicolor=1
   charset1__characters:    .byte $FF,$57,$57,$57,$57,$57,$57,$FF ; $70 wall A
   charset1__charactersEnd:
   ;@ end

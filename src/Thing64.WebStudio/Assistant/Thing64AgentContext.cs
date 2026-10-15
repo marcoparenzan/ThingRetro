@@ -58,9 +58,11 @@ public sealed class Thing64AgentContext(Project project, IStudioHost host, IChat
           two labels with .byte rows: the screen codes (what goes to $0400) and the colors (what goes to $D800; with
           multicolor=1, bit 3 makes a cell's character multicolor and the color is 0-7). A screen is what the C64
           shows: no tile tables.
-        - ";@ charset first=<screen code>" around the bitmaps of characters (8 .byte values each, one character per
-          line with its "; $70 name" comment) under the charset's label, ending with an end label. Charsets are
-          files of their own, shared by the screens that name them.
+        - ";@ charset first=<screen code> multicolor=1" around the bitmaps of characters (8 .byte values each, one
+          character per line with its "; $70 name" comment) under the charset's label, ending with an end label.
+          Charsets are files of their own, shared by the screens that name them; they are the characters from
+          "first" on, the others are the ROM's. With multicolor=1 the whole set is multicolor: the editors set bit 3
+          of the cells' colors by themselves for its characters.
         - ";@ sprites" around 64-byte sprites, one per label, with ";@ animation name frames=a,b speed=n" lines.
         - Keep the .byte rows inside the regions; the editors rewrite them.
 

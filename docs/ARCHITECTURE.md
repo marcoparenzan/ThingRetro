@@ -307,7 +307,9 @@ A Blazor Server app: the server owns the files and the builds, the browser shows
   `.prg` addresses, `.crt` CHIP packets). Viewers read the file again after every build.
 - **Screens and charsets**: `ScreenRegion` (`ScreenEditor.razor`) finds its screen codes and colors by the labels
   the parameters name inside the region, and draws them through the charset the screen names (read from the
-  assembled program). `CharsetRegion` (`CharsetEditor.razor`) edits the characters of a `;@ charset` region;
+  assembled program). `CharsetRegion` (`CharsetEditor.razor`) edits the characters of a `;@ charset` region (with `multicolor=1` the whole
+  set is multicolor: `CharsetRegion.MulticolorOf` finds the flag from the screen's `charset=` label, and
+  `ScreenRegion.CellColor` makes bit 3 follow the character painted);
   `CharsetUsers` finds the `;@ screen` regions that name the charset, to show each character as they use it and to
   renumber their screen codes when characters are added, deleted or moved.
 - **RalfAI** (`Assistant/`, `AssistantPanel.razor`): the `AgentEngine` of the RalfAI packages with a
