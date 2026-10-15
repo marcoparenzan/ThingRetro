@@ -129,6 +129,7 @@ window.thing64Studio = (() => {
     function languageOf(path) {
         const extension = path.slice(path.lastIndexOf('.')).toLowerCase();
         return ['.asm', '.a', '.s', '.inc'].includes(extension) ? 'asm6502'
+            : ['.c', '.h'].includes(extension) ? 'c'
             : extension === '.json' ? 'json'
             : extension === '.md' ? 'markdown'
             : 'plaintext';

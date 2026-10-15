@@ -10,6 +10,8 @@ namespace Thing64.WebStudio.CodeBehind;
 //   charset, first   the bitmaps of the custom characters, starting at screen code "first" (default 0)
 //   chars            how many characters (default: up to the next label)
 //   background       the background color                   names    the prefix of the tiles' constants (TILE_)
+//   multicolor=1, multicolor1, multicolor2   multicolor characters: a tile whose color has bit 3 set shows its
+//                    character in multicolor (pairs of bits: background, multicolor 1 and 2, the color 0-7)
 // Screen codes outside the custom characters come from the ROM, which the studio does not have: the space ($20)
 // is drawn empty, the others as a dotted square in their color
 public sealed class Tilemap
@@ -18,6 +20,9 @@ public sealed class Tilemap
     public int Height { get; }
     public int Count { get; }
     public int Background { get; }
+    public bool MulticolorMode { get; }
+    public int Multicolor1 { get; }
+    public int Multicolor2 { get; }
     public IReadOnlyList<string> Names { get; }
 
     readonly byte[] screenCodes;
@@ -41,6 +46,9 @@ public sealed class Tilemap
         screenCodes = image.Read(tiles, Count);
         colors = region.Parameters.ContainsKey("colors") ? image.Read(Number("colors"), Count) : Enumerable.Repeat((byte)1, Count).ToArray();
         Background = Number("background", 0) & 15;
+        MulticolorMode = Number("multicolor", 0) != 0;
+        Multicolor1 = Number("multicolor1", 11) & 15;
+        Multicolor2 = Number("multicolor2", 15) & 15;
 
         if (region.Parameters.ContainsKey("charset"))
         {
@@ -54,7 +62,7 @@ public sealed class Tilemap
             charset = [];
         }
 
-        string prefix = region.Parameters.GetValueOrDefault("names", "TILE_");
+        string prefix = region.NamesPrefix;
         var names = new string[Count];
         foreach (var (name, value) in image.Symbols)
             if (name.StartsWith(prefix, StringComparison.Ordinal) && value >= 0 && value < Count && names[value] is null && !name.EndsWith("_COUNT"))
@@ -72,9 +80,19 @@ public sealed class Tilemap
         uint back = palette.Argb(Background);
         Array.Fill(pixels, back);
         if (tile < 0 || tile >= Count) return pixels;
-        uint ink = palette.Argb(Color(tile));
+        int color = colors[tile] & 15;
+        bool multicolor = MulticolorMode && (color & 8) != 0;
+        uint ink = palette.Argb(MulticolorMode ? color & 7 : color);   // in multicolor mode cells have colors 0-7
         int code = ScreenCode(tile), index = code - first;
-        if (index >= 0 && (index + 1) * 8 <= charset.Length)
+        if (index >= 0 && (index + 1) * 8 <= charset.Length && multicolor)
+        {
+            // Pairs of bits, each a double-wide pixel: 00 background, 01 multicolor 1, 10 multicolor 2, 11 the color
+            uint[] inks = [back, palette.Argb(Multicolor1), palette.Argb(Multicolor2), ink];
+            for (int y = 0; y < 8; y++)
+                for (int x = 0; x < 8; x++)
+                    pixels[y * 8 + x] = inks[charset[index * 8 + y] >> (6 - x / 2 * 2) & 3];
+        }
+        else if (index >= 0 && (index + 1) * 8 <= charset.Length)
         {
             for (int y = 0; y < 8; y++)
                 for (int x = 0; x < 8; x++)

@@ -30,6 +30,8 @@ flowchart LR
     Build[Thing64.Build<br/>builds, manifests]
     Build --> Asm
     Build --> Basic
+    CLang[Thing64.C<br/>C to assembly]
+    Build --> CLang
     Build --> Crt
     Cli --> Build
     Cli -. starts .-> Studio
@@ -321,6 +323,11 @@ A Blazor Server app: the server owns the files and the builds, the browser shows
 - **Viewers**: a tab is Monaco's for text files; any other file is binary: `ImageViewer.razor` for PNG (picture,
   chunks, bytes), `HexViewer.razor` for the rest (a `Virtualize` of 16-byte rows, PETSCII and screen code columns,
   `.prg` addresses, `.crt` CHIP packets). Viewers read the file again after every build.
+- **Screens and charsets**: `ScreenRegion` (`ScreenEditor.razor`) finds its screen codes and colors by the labels
+  the parameters name inside the region, and draws them through the charset the screen names (read from the
+  assembled program). `CharsetRegion` (`CharsetEditor.razor`) edits the characters of a `;@ charset` region;
+  `CharsetUsers` finds the `;@ screen` regions that name the charset, to show each character as they use it and to
+  renumber their screen codes when characters are added, deleted or moved.
 - **RalfAI** (`Assistant/`, `AssistantPanel.razor`): the `AgentEngine` of the RalfAI packages with a
   `Thing64AgentContext`, an `IAgentContext` whose system prompt describes the C64, the assembler and the project,
   and whose tools are the studio's: `Files_List/Read/Write/Delete` (through `Project`, so inside the folder),
@@ -356,6 +363,27 @@ From a picture to the data the VIC-II reads, with no external libraries.
   Tiles are blocks of characters with their colors, kept once, and a map.
 - **`GraphicsAsset`** (`.gfx.json`) holds the settings; **`GraphicsBuilder`** writes `name.part.bin` and
   `name.inc.asm`. Build manifests build every asset first (`assets`, or all the `.gfx.json` in the folder).
+
+## C (`Thing64.C`)
+
+A C subset translated into assembly text in ACME syntax, which the assembler then assembles with the rest of the
+program: no object files and no linker, and the output can be read.
+
+- **`Lexer`**: tokens with line and column; the preprocessor handles `#define` without parameters (bodies expand the
+  macros already defined) and `#undef`, and ignores `#include` and `#pragma`. Characters and strings become PETSCII.
+- **`Parser`**: recursive descent into the records of `Syntax.cs` (types, expressions, statements, functions);
+  `Constants.Evaluate` folds constant expressions.
+- **`Generator`**: one pass over the functions. There is no stack frame: parameters and locals are labels
+  (`function__param`), globals keep their names, static ones become `module__name`; so recursion is refused
+  (`CheckRecursion` on the call graph). A call stores its arguments into the callee's parameters and `JSR`s; when a
+  later argument calls a function itself, the earlier ones go through temporaries first. Expressions leave 8-bit
+  values in A and 16-bit ones in A/X; simple operands (constants, variables, constant addresses) are used directly
+  by the instructions (`ADC score`, `STA $D020`). Conditions become branches, not booleans; branches out of range
+  become the opposite branch over a `JMP`. Indexing a label or a constant address with a `char` uses `,Y`;
+  other pointers go through the zero page pointer at `$FB`. Signed comparisons use the overflow flag.
+- **`Runtime`**: multiplication and unsigned and signed division on 16 bits, appended to the module when used.
+- `Thing64.Build` (`CSources`) translates every `.c` of a project into `name.c.asm` before the build, turning a
+  `CException` into the assembler's error with file and line.
 
 ## The command line (`Thing64`)
 

@@ -160,6 +160,18 @@ sealed class BuildCommand : Command<BuildCommand.Settings>
 
         var table = new Table().Border(TableBorder.Simple)
             .AddColumn("File").AddColumn(new TableColumn("Bytes").RightAligned()).AddColumn("Sources").AddColumn("Description");
+        foreach (string source in CSources.Find(manifest.Folder))
+        {
+            try
+            {
+                table.AddRow(Markup.Escape(CSources.Translate(manifest.PathOf(source))), "", Markup.Escape(Path.GetFileName(source)), "C translated to assembly");
+            }
+            catch (AssemblerException e)
+            {
+                Commands.ReportError(e);
+                return 1;
+            }
+        }
         foreach (string asset in manifest.AssetFiles())
         {
             try

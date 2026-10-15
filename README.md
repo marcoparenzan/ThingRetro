@@ -43,6 +43,8 @@ It comes with a small studio to write 6502 assembly and run it right away.
   keyboard or by a USB joystick/gamepad, the paddles by the PC mouse.
 - **Studio**: file explorer, assembly editor (Monaco) with 6502 syntax highlighting, built-in assembler,
   F5 to assemble and run in a C64 tab.
+- **C**: a subset of C translated into assembly (`player.c` becomes `player.c.asm`), mixed freely with assembly
+  modules. See [C](#c).
 
 Not yet: the 1541 drive and disk/tape images (`.d64`, `.t64`). See [Known limits](#known-limits).
 
@@ -57,6 +59,7 @@ Not yet: the 1541 drive and disk/tape images (`.d64`, `.t64`). See [Known limits
 | `src/Thing64.Asm` | 6502/6510 assembler, ACME-compatible: labels, macros, loops, includes, expressions, errors with their file and line |
 | `src/Thing64.Basic` | BASIC V2 tokenizer: a program in text becomes the `.prg` the C64 would have in memory |
 | `src/Thing64.Graphics` | Pictures for the C64: PNG, the palette, the conversion of an image to bitmaps, character sets, tiles and sprites |
+| `src/Thing64.C` | A C subset translated into ACME assembly: lexer with `#define`, parser, code generator, multiplication and division routines |
 | `src/Thing64.Build` | From sources to C64 files: `.asm` and `.bas` to `.prg`, build manifests (`thing64.json`) with programs and cartridges |
 | `src/Thing64.WinForms` | `C64Monitor` (the screen, a UserControl), `PcKeyboard` (the keyboard cable), `PcSpeakers` (the speakers), joystick and paddle simulators |
 | `src/Thing64.Computer` | One C64 in a window (`ComputerForm`), loading of `.prg`/`.crt`, the ROMs, the settings |
@@ -195,12 +198,22 @@ web computer, in WebAssembly, in a tab next to the files (or in a window of its 
   part and constants for the colors), so the assembly never falls behind the picture.
 - **Editor regions** ("code behind"): data in a source can be marked for a visual editor with comment lines,
   which the assembler ignores. Above the first one Monaco shows "✎ Edit"; saving the editor rewrites only the
-  `.byte` lines of the region. The first editor is the tilemap, drawn through the program's own tables:
+  `.byte` lines of the region. The screen editor edits what the C64 shows: screen codes and colors, painted with
+  a pen that is a character and a color (bit 3 of the color: a multicolor character), through a charset of its own:
   ```asm
-  ;@ tilemap  width=40 height=25 count=TILE_COUNT background=6
-  ;@          tiles=charmapChars colors=charmapColors
-  ;@          charset=charmapCharacters first=$70
-  levelMap:   .byte $00,$00,...
+  ;@ screen  width=40 height=25 screen=room1__screen colors=room1__colors
+  ;@         charset=charset1__characters first=$70 background=5 multicolor=1 multicolor1=$0E multicolor2=$01
+  room1__screen:   .byte $70,$20,...      ; 1000 screen codes, for $0400
+  room1__colors:   .byte $0E,$0D,...      ; 1000 colors, for $D800
+  ;@ end
+  ```
+  The charset editor edits the characters of a charset (a file of its own, shared by the screens that name it),
+  each shown as the screens use it (its cells' color, hires or multicolor); adding, duplicating, deleting or dragging
+  characters renumbers the screen codes of those screens:
+  ```asm
+  ;@ charset first=$70
+  charset1__characters:    .byte $FF,$57,$57,$57,$57,$57,$57,$FF ; $70 wall A
+  charset1__charactersEnd:
   ;@ end
   ```
   The parameters are numbers or symbols, resolved by assembling the project: the editor sees the bytes the C64 sees.
@@ -217,13 +230,8 @@ web computer, in WebAssembly, in a tab next to the files (or in a window of its 
   ```
   Sprites can be added, duplicated, renamed (in every source of the project) and deleted, slid in the four
   directions; animations created, renamed and deleted, frames added and removed, speeds changed.
-  The third editor is the charmap: the tiles' tables (tile → screen code, tile → color) and the bitmaps of the
-  characters, all in one region; each tile's character and color, the character in big pixels, the whole set.
-  Characters can be added, duplicated, deleted and dragged to another place: the tiles table follows each
-  character to its new screen code, so every tile keeps its look:
-  ```asm
-  ;@ charmap  tiles=charmapChars colors=charmapColors charset=charmapCharacters first=$70 background=6
-  ```
+  Two older editors remain for projects that use tile tables: `;@ tilemap` (a map of logical tiles drawn through
+  a tile → screen code and a tile → color table) and `;@ charmap` (those tables and their characters).
 - **Binary files** open in a hex viewer: 16 bytes per row in hex and as characters (ASCII, PETSCII or screen
   codes), C64 addresses for a `.prg`, header and chips (bank, address) for a `.crt`, every base of the selected byte
   and the word starting there. **PNG pictures** open as a picture (zoom, the pixel under a click and its nearest C64
@@ -248,6 +256,43 @@ the only one fast enough. The first time the C64 asks for its ROMs, then the bro
 RalfAI comes from a local NuGet feed (`nuget.config`: `D:\Dev\NuGetLocalFeed`), and reads its providers, models and
 keys from its own configuration file (`Assistant:ConfigPath`, outside the repository); the model is the one of the
 `thing64` context (`Assistant:ContextKey`).
+
+### C
+
+Builds (`thing64 build`, the web studio) translate every `.c` file of a project into a `.c.asm` next to it, before
+assembling: an assembly module includes it with `.source "player.c.asm"`. Functions and global variables keep their
+names, so assembly and C call each other and share variables (`JSR readControls`, `LDA grounded`).
+
+```c
+#define BORDER (*(char*)0xD020)
+
+char grounded = 1;
+int score;
+
+void addPoints(char points) {
+    score += points;
+    if (score > 999) BORDER = 2;
+}
+```
+
+It is a real C subset, thought for the 6502:
+
+- `char` (8 bits, unsigned) and `signed char`, `int` (16 bits, signed) and `unsigned int`, pointers and
+  one-dimensional arrays, strings (in PETSCII); constants take the type of the other operand, so `char` arithmetic
+  stays 8 bits.
+- `if`/`else`, `while`, `do`, `for`, `break`, `continue`, `return`, `?:`, `&&`, `||`, all the arithmetic, bitwise,
+  shift and compound assignment operators, `++`/`--`, casts, `sizeof`; `#define` without parameters.
+- **No recursion**: parameters and locals live at fixed addresses (`function__name`), so a call costs a few stores
+  and a `JSR`; a recursive call is an error. Values come back in A (8 bits) or A/X (16 bits).
+- Hardware registers are pointers to constants: `*(char*)0xD020 = 2` is `STA $D020`; `__asm("SEI")` inserts
+  assembly.
+- `*`, `/` and `%` by powers of two are shifts and masks; otherwise they call 16-bit routines, added only when used.
+- Not supported: `long`, `float`, `struct`, `switch`, `goto`, function pointers, arrays of arrays, macros with
+  parameters; `__zp` (variables in zero page) is reserved.
+
+Errors carry the file and the line of the C source, like the assembler's. The FanCMission test (the player module
+of a platform game rewritten in C) behaves exactly like its assembly original: 325 bytes instead of 214, and about
+25% more cycles.
 
 ### Samples
 
@@ -359,5 +404,7 @@ SingleStepTests.
 - **CIA**: the CNT, SP and FLAG pins are not modelled; the TOD is counted internally instead of from the 50 Hz
   mains.
 - **EasyFlash**: read-only (games that save to flash do not save).
+- **C**: no recursion, no `long`, `float`, `struct` or `switch`; the code is about 50% larger and 25% slower
+  than hand-written assembly (no peephole optimizer yet).
 - **Studio editor**: Monaco is loaded from the jsDelivr CDN, so the first start needs an internet connection.
 - **Browser C64**: no paddles or mouse, no studio; Debug builds are too slow (interpreted).

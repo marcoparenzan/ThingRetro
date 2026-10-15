@@ -53,9 +53,16 @@ public sealed class Thing64AgentContext(Project project, IStudioHost host, IChat
         - Data the studio edits visually is marked by comment lines: ";@ <editor> name=value ..." (more ";@" lines
           add parameters), the data, then ";@ end". For the assembler they are comments. Parameter values are
           numbers or symbols of the program.
-        - ";@ tilemap width=40 height=25 tiles=<tile->screen code table> colors=<tile->color table> count=<tiles>
-          charset=<character bitmaps> first=<screen code of the first one> background=<color>" around a map of
-          logical tile numbers in .byte rows. Keep the .byte rows inside the region; the editor rewrites them.
+        - ";@ screen width=40 height=25 screen=<label> colors=<label> charset=<charset label> first=<screen code
+          of its first character> background=<color> multicolor=1 multicolor1=<color> multicolor2=<color>" around
+          two labels with .byte rows: the screen codes (what goes to $0400) and the colors (what goes to $D800; with
+          multicolor=1, bit 3 makes a cell's character multicolor and the color is 0-7). A screen is what the C64
+          shows: no tile tables.
+        - ";@ charset first=<screen code>" around the bitmaps of characters (8 .byte values each, one character per
+          line with its "; $70 name" comment) under the charset's label, ending with an end label. Charsets are
+          files of their own, shared by the screens that name them.
+        - ";@ sprites" around 64-byte sprites, one per label, with ";@ animation name frames=a,b speed=n" lines.
+        - Keep the .byte rows inside the regions; the editors rewrite them.
 
         ## Attachments
         - Files the user attaches are saved in .ralfai/attachments/ and listed at the end of the message: text files

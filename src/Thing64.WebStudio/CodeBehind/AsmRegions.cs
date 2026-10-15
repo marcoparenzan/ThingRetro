@@ -175,6 +175,13 @@ public sealed partial class AsmRegion
 
     public static bool IsIdentifier(string name) => Regex.IsMatch(name, @"^[A-Za-z_]\w*$");
 
+    // The prefix of the tiles' constants: names=, or the count symbol without COUNT (count=room1__TILE_COUNT gives
+    // room1__TILE_), or TILE_
+    public string NamesPrefix =>
+        Parameters.TryGetValue("names", out var names) ? names
+        : Parameters.TryGetValue("count", out var count) && count.EndsWith("COUNT") && IsIdentifier(count) ? count[..^"COUNT".Length]
+        : "TILE_";
+
     // name=value pairs of a ;@ line
     public static Dictionary<string, string> ParametersOf(string text) =>
         Parameter().Matches(text).ToDictionary(m => m.Groups[1].Value, m => m.Groups[2].Value, StringComparer.OrdinalIgnoreCase);

@@ -92,8 +92,9 @@ static class Templates
         | --- | --- | --- | --- |
 
         A region is marked by `;@ <editor> parameters` lines and closed by `;@ end`; the studio shows "✎ Edit" above it.
-        `;@ tilemap width= height= tiles= colors= count= charset= first= background=` edits a map of logical tiles drawn
-        through the program's own tables (parameters are numbers or symbols).
+        `;@ screen width= height= screen= colors= charset= first= background= multicolor= multicolor1= multicolor2=`
+        edits a screen (screen codes and colors); `;@ charset first=` edits the characters of a charset;
+        `;@ sprites` edits sprites and their animations (parameters are numbers or symbols).
 
         """;
 

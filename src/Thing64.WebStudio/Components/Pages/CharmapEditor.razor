@@ -69,11 +69,13 @@
                     <label class="flex items-center gap-1">character
                         <input class="field w-16 font-mono" value="@($"${charmap.ScreenCode(values, selectedTile):X2}")" @onchange="SetScreenCode" />
                     </label>
-                    <span class="flex items-center gap-1">color
+                    <span class="flex items-center gap-1" title="The color RAM of the tile's cells: in a hires character every lit pixel has this color (one per character)">
+                        tile color (color RAM)
                         @for (int c = 0; c < 16; c++)
                         {
                             int color = c;
-                            <button class="@((charmap.Color(values, selectedTile) & 15) == color ? "ring-2 ring-chip-400" : "") h-5 w-5 rounded-sm border border-night-700"
+                            <button disabled="@(charmap.MulticolorMode && color >= 8)"
+                                    class="@((charmap.Color(values, selectedTile) & (charmap.MulticolorMode ? 7 : 15)) == color ? "ring-2 ring-chip-400" : "") h-5 w-5 rounded-sm border border-night-700 disabled:opacity-20"
                                     title="@color: @C64Palette.Names[color]" style="background: #@charmap.Palette.Rgb[color].ToString("X6")"
                                     @onclick="() => SetColor(color)"></button>
                         }
@@ -98,20 +100,25 @@
                 }
                 else
                 {
-                    <div class="mb-1 text-night-300">Character $@((charmap.First + selectedChar).ToString("X2"))@(Multicolor ? " (multicolor 4x8)" : " (hires 8x8)") · left button paints, right erases</div>
-                    @if (Multicolor)
-                    {
-                        <div class="mb-2 flex gap-2">
-                            @for (int c = 1; c < 4; c++)
-                            {
-                                int code = c;
-                                <button class="@(paintCode == code ? "ring-2 ring-chip-400" : "") flex items-center gap-1 rounded border border-night-600 px-2 py-1" @onclick="() => paintCode = code">
-                                    <span class="h-4 w-4 rounded-sm border border-night-700" style="background: #@charmap.Palette.Rgb[charmap.ColorOfCode(code, CurrentColor, true)].ToString("X6")"></span>
-                                    @(code switch { 1 => "multicolor 1", 2 => "multicolor 2", _ => "tile color" })
-                                </button>
-                            }
-                        </div>
-                    }
+                    <div class="mb-1 text-night-300">Character $@((charmap.First + selectedChar).ToString("X2"))@(Multicolor ? " (multicolor 4x8)" : " (hires 8x8)") · left button: the pencil color, right button: background</div>
+                    @* The colors the pencil can give a pixel: what a pixel's bits can mean in this character *@
+                    <div class="mb-2 flex flex-wrap items-center gap-2">
+                        <span class="text-night-300">pencil:</span>
+                        @for (int c = 0; c < (Multicolor ? 4 : 2); c++)
+                        {
+                            int code = c;
+                            <button class="@(paintCode == code ? "ring-2 ring-chip-400" : "") flex items-center gap-1 rounded border border-night-600 px-2 py-1" @onclick="() => paintCode = code">
+                                <span class="h-4 w-4 rounded-sm border border-night-700" style="background: #@charmap.Palette.Rgb[charmap.ColorOfCode(code, CurrentColor, Multicolor)].ToString("X6")"></span>
+                                @(Multicolor
+                                    ? code switch { 0 => "background ($D021)", 1 => "multicolor 1 ($D022)", 2 => "multicolor 2 ($D023)", _ => "tile color (0-7)" }
+                                    : code == 0 ? "off: background ($D021)" : "on: tile color")
+                            </button>
+                        }
+                        @if (!Multicolor)
+                        {
+                            <span class="text-night-400">hires: one color per character, the tile's; more colors need multicolor characters</span>
+                        }
+                    </div>
                     <div class="relative inline-block select-none" style="width: @(8 * Zoom)px; height: @(8 * Zoom)px"
                          @onmousedown="Down" @onmousemove="Move" @onmouseup="Up" @onmouseleave="Up" @oncontextmenu:preventDefault>
                         <img src="@charImage" alt="" draggable="false" class="pixelated pointer-events-none absolute inset-0 h-full w-full" />
@@ -406,7 +413,7 @@
     ElementReference nameInput;
     bool focusName;
 
-    string Prefix => region?.Parameters.GetValueOrDefault("names", "TILE_") ?? "TILE_";
+    string Prefix => region?.NamesPrefix ?? "TILE_";
     string TilesLabel => region!.Parameters["tiles"];
     AsmRegion? region;
 

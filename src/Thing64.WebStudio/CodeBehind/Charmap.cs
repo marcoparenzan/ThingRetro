@@ -47,7 +47,7 @@ public sealed class Charmap
         Multicolor1 = Number("multicolor1", 11) & 15;
         Multicolor2 = Number("multicolor2", 15) & 15;
 
-        string prefix = region.Parameters.GetValueOrDefault("names", "TILE_");
+        string prefix = region.NamesPrefix;
         var names = new string?[Count];
         if (image is not null)
             foreach (var (name, value) in image.Symbols)
@@ -96,7 +96,7 @@ public sealed class Charmap
     // The colors of the codes: hires background / color; multicolor background, multicolor 1 and 2, color 0-7
     public int ColorOfCode(int code, int color, bool multicolor) => multicolor
         ? code switch { 0 => Background, 1 => Multicolor1, 2 => Multicolor2, _ => color & 7 }
-        : code == 0 ? Background : color & 15;
+        : code == 0 ? Background : MulticolorMode ? color & 7 : color & 15;   // in multicolor mode cells have 0-7
 
     // A character drawn with a color (a ROM character, which the studio does not have, as a dotted square)
     public RgbImage Render(IReadOnlyList<int> v, int screenCode, int color, int scale)

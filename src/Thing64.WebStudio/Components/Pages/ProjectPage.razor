@@ -106,7 +106,17 @@ else
             }
             @foreach (var tab in tabs.Where(IsRegion))
             {
-                @if (regionKinds.GetValueOrDefault(tab) == "charmap")
+                @if (regionKinds.GetValueOrDefault(tab) == "screen")
+                {
+                    <ScreenEditor @key="tab" @ref="regionEditors[tab]" Project="project!" File="@RegionFile(tab)" Index="@RegionIndex(tab)" Host="this"
+                                  Visible="@(tab == active && !showComputer)" OnDirty="changed => Changed(tab, changed)" />
+                }
+                else if (regionKinds.GetValueOrDefault(tab) == "charset")
+                {
+                    <CharsetEditor @key="tab" @ref="regionEditors[tab]" Project="project!" File="@RegionFile(tab)" Index="@RegionIndex(tab)" Host="this"
+                                   Visible="@(tab == active && !showComputer)" OnDirty="changed => Changed(tab, changed)" />
+                }
+                else if (regionKinds.GetValueOrDefault(tab) == "charmap")
                 {
                     <CharmapEditor @key="tab" @ref="regionEditors[tab]" Project="project!" File="@RegionFile(tab)" Index="@RegionIndex(tab)" Host="this"
                                    Visible="@(tab == active && !showComputer)" OnDirty="changed => Changed(tab, changed)" />
@@ -225,7 +235,7 @@ else
     string editName = "";
     ElementReference editInput;
 
-    static readonly string[] TextFiles = [".asm", ".a", ".s", ".inc", ".bas", ".json", ".txt", ".md", ".cfg", ".h"];
+    static readonly string[] TextFiles = [".asm", ".a", ".s", ".inc", ".bas", ".c", ".h", ".json", ".txt", ".md", ".cfg"];
 
     protected override void OnParametersSet()
     {
@@ -373,7 +383,7 @@ else
     readonly Dictionary<string, Thing64.WebStudio.CodeBehind.IRegionEditor> regionEditors = [];
     readonly Dictionary<string, string> regionNames = [];
     readonly Dictionary<string, string> regionKinds = [];
-    static readonly string[] RegionEditors = ["tilemap", "sprites", "charmap"];
+    static readonly string[] RegionEditors = ["screen", "charset", "sprites", "tilemap", "charmap"];
 
     string TabName(string tab) => IsRegion(tab) ? "▦ " + regionNames.GetValueOrDefault(tab, FileName(RegionFile(tab))) : FileName(tab);
 
@@ -394,7 +404,7 @@ else
                 return;
             }
             string tab = $"{file}#{region.Index}";
-            regionNames[tab] = region.Editor is "sprites" or "charmap" ? $"{region.Editor} ({FileName(file)})" : region.Label ?? region.Editor;
+            regionNames[tab] = region.Editor is "sprites" or "charmap" or "charset" ? $"{region.Editor} ({FileName(file)})" : region.Label ?? region.Editor;
             regionKinds[tab] = region.Editor;
             await Open(tab);
         }
