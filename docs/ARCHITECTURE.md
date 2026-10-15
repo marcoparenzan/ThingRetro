@@ -240,6 +240,8 @@ the machine with `Board.Enqueue`, which runs the action between two cycles. `Boa
 
 ## The C64 in the browser (`Thing64.WebComputer`)
 
+Build, publishing, serving and troubleshooting: [WEBASSEMBLY.md](WEBASSEMBLY.md).
+
 A Blazor WebAssembly app with the same `Board`, chips, `.prg` and `.crt` code as the desktop.
 
 - **No emulation thread**: the browser runs everything on one thread, so the board is created without its clock
@@ -265,7 +267,9 @@ A Blazor WebAssembly app with the same `Board`, chips, `.prg` and `.crt` code as
 
 - **Embedded**: with `?embedded` the page shows only the screen and its controls, and runs the programs a page of
   the same origin sends with `postMessage` (`{ type: 'load', name, bytes }`); it answers `ready` when it can
-  receive them and `status` after each load. The base is relative (`<base href="./">`), so the site works in any
+  receive them and `status` after each load. `{ type: 'capture' }` is answered with `{ type: 'capture', bytes }`: the
+  video memory (`Board.CaptureVideo`: the 16 KB of the VIC-II's bank with the character ROM where the chip reads it,
+  the Color RAM, the registers). The base is relative (`<base href="./">`), so the site works in any
   folder.
 
 ## The studio in the browser (`Thing64.WebStudio`)
@@ -327,6 +331,14 @@ A Blazor Server app: the server owns the files and the builds, the browser shows
   or opened in a window of its own (then the iframe is removed): the page sends the built program with
   `postMessage` to whichever is open, once it has said `ready`. Same origin also means the same `localStorage`, so the
   ROMs are chosen once.
+- **Captures** (`CapturePanel.razor`, `Thing64.Graphics/VideoCapture.cs` and `CapturedCharset.cs`): the capture button
+  asks the C64 for its video memory; `VideoCapture` reads where the screen and the characters are (`$D018`, the
+  multicolor and bitmap bits of `$D016`/`$D011`) and renders the picture. `CapturedCharset` is the charset the captures
+  share: `Add` gives each distinct character (by its 8 bytes; at the code it had when the charset has the same one
+  there, so a charset the program was built from keeps its codes) one code from `First` on, refuses more than 256
+  and remembers how each screen uses the characters to decide `multicolor=1`; `CharsetText` and `ScreenText` write
+  the files, which stay in the panel's memory. The files are plain assembler with the `;@` regions the editors read:
+  tests assemble them.
 - **Styles**: Tailwind (the browser build, from the CDN), with a theme made of the two colors of the logo: night
   (`#05083a`) and chip (`#7c8af7`). Files from the rest of the repository (logo, icons, `asm6502.js`) are embedded
   in the assembly and served by `Program.cs`.

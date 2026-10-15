@@ -210,6 +210,10 @@ public static partial class WebComputer
 
     #endregion
 
+    // What the VIC-II shows, for the studio's capture of a screen: Board.CaptureVideo(), or nothing if the C64 is off
+    [JSExport]
+    public static byte[] CaptureVideo() => board?.CaptureVideo() ?? [];
+
     [JSExport]
     public static void Reset()
     {

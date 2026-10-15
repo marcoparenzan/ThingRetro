@@ -3,8 +3,8 @@
 // Talks to WebComputer.cs (JSExport/JSImport).
 // Opened by a page of the same site (the web studio: in an iframe, or in a window it opened), it runs the programs
 // that page sends:
-//   host -> computer: { type: 'load', name, bytes }, { type: 'focus' }
-//   computer -> host: { type: 'ready' }, { type: 'status', text }
+//   host -> computer: { type: 'load', name, bytes }, { type: 'focus' }, { type: 'capture' }
+//   computer -> host: { type: 'ready' }, { type: 'status', text }, { type: 'capture', bytes } (the video memory)
 
 let computer = null;      // the [JSExport] methods of WebComputer
 let canvas = null;
@@ -32,6 +32,8 @@ window.addEventListener('message', e => {
     } else if (e.data?.type === 'focus') {
         canvas?.focus();
         startAudio();
+    } else if (e.data?.type === 'capture') {
+        e.source.postMessage({ type: 'capture', bytes: running ? computer.CaptureVideo() : new Uint8Array(0) }, location.origin);
     }
 });
 host?.postMessage({ type: 'ready' }, location.origin);

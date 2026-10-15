@@ -145,6 +145,8 @@ else
                 </div>
             }
             <div class="absolute inset-0 flex flex-col p-3 @(showComputer ? null : "invisible")">
+                <div class="flex min-h-0 flex-1 gap-3">
+                <div class="flex min-h-0 min-w-0 flex-1 flex-col">
                 @if (!Computer.Available)
                 {
                     <div class="max-w-2xl rounded-lg border border-night-700 p-4 text-sm text-night-200">
@@ -174,9 +176,19 @@ else
                 {
                     <iframe id="computer" src="computer/?embedded" title="C64" allow="autoplay; gamepad" class="min-h-0 w-full flex-1"></iframe>
                 }
+                </div>
+                <CapturePanel @ref="capturePanel" Project="project!" Visible="@showCaptures" OnCapture="CaptureScreen" />
+                </div>
                 <div class="mt-2 flex shrink-0 items-center gap-4 text-xs">
                     <span class="text-night-300">@computerStatus</span>
                     <span class="ml-auto text-night-400">Click the screen to type · Esc is RUN/STOP · joystick: numeric keypad or gamepad</span>
+                    @if (Computer.Available && computerOn)
+                    {
+                        <button class="rounded border border-night-600 px-2 py-1 text-night-200 hover:border-chip-400" title="Take the screen the C64 shows: its characters, screen codes and colors, as Thing64 files kept here"
+                                @onclick="CaptureScreen">📷 Capture</button>
+                        <button class="rounded border border-night-600 px-2 py-1 text-night-200 hover:border-chip-400" title="The captures and the files that come out of them"
+                                @onclick="() => showCaptures = !showCaptures">@(showCaptures ? "Hide captures" : "Captures")</button>
+                    }
                     @if (Computer.Available && computerOn && !computerWindow)
                     {
                         <button class="rounded border border-night-600 px-2 py-1 text-night-200 hover:border-chip-400" title="Move the C64 to a window of its own"
@@ -228,6 +240,8 @@ else
     bool showComputer;
     bool computerOn;                                // off until the first F5 or click: no WebAssembly until needed                              // the C64 tab is the active one
     bool computerWindow;                            // the C64 is in a window of its own, not in the tab
+    bool showCaptures;                              // the panel of the screens taken from the C64
+    CapturePanel? capturePanel;
     DotNetObjectReference<ProjectPage>? self;
     bool editorReady;
 
@@ -544,6 +558,22 @@ else
     public void ComputerStatus(string text)
     {
         computerStatus = text;
+        StateHasChanged();
+    }
+
+    // The screen the C64 shows now goes into the captures: asked here, answered by ComputerCaptured
+    async Task CaptureScreen()
+    {
+        showCaptures = true;
+        if (!await JS.InvokeAsync<bool>("thing64Studio.captureComputer")) computerStatus = "The C64 is not running yet: there is no screen to capture";
+    }
+
+    [JSInvokable]
+    public void ComputerCaptured(byte[] bytes)
+    {
+        showCaptures = true;
+        if (bytes.Length == 0) computerStatus = "The C64 has nothing to capture yet";
+        else capturePanel?.Add(bytes);
         StateHasChanged();
     }
 

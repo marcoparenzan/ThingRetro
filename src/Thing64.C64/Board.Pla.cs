@@ -175,6 +175,21 @@ public partial class Board
         return ram64.Address((ushort)(vicBank << 14 | addr));
     }
 
+    // For tools: what the VIC-II is showing, as it sees it. The 16 KB of its bank (the character ROM already where the
+    // chip reads it), then the 1024 nibbles of Color RAM, then its registers $D000-$D03F (the collision registers,
+    // which clear when read, are 0)
+    public byte[] CaptureVideo()
+    {
+        const int Bank = 16384, Colors = 1024, Registers = 64;
+        var data = new byte[Bank + Colors + Registers];
+        for (int i = 0; i < Bank; i++) data[i] = VicRead(i);
+        for (int i = 0; i < Colors; i++) data[Bank + i] = colorRam.Address((ushort)i);
+        if (vic is not null)
+            for (int register = 0; register <= 0x2E; register++)
+                if (register is not (0x1E or 0x1F)) data[Bank + Colors + register] = vic.Read(register);
+        return data;
+    }
+
     sealed class VicBus(Board board) : IVicMemory
     {
         public byte Read(int address) => board.VicRead(address);

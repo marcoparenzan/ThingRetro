@@ -68,7 +68,8 @@ Not yet: the 1541 drive and disk/tape images (`.d64`, `.t64`). See [Known limits
 | `samples` | Sample programs ready to load, with the commented BASIC and assembly sources in `samples/src` |
 | `tools` | Helper scripts (download of the CPU test suites) |
 
-The architecture is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The architecture is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); how the C64 in WebAssembly is built, published
+and served, and what to do when a change does not reach the browser, in [docs/WEBASSEMBLY.md](docs/WEBASSEMBLY.md).
 
 ### The physical model in code
 
@@ -218,6 +219,19 @@ web computer, in WebAssembly, in a tab next to the files (or in a window of its 
   `.ralfai/attachments/`; text goes into the message, pictures are looked at with the `Image_Look` tool.
 - **The C64 tab** keeps running while a file is shown. *Own window* moves the C64 to a window of its own (a second
   monitor); closing that window brings it back into the tab.
+- **Capture** (📷 under the C64): takes the text screen the C64 shows, as the VIC-II sees it, and turns it into the
+  files of a Thing64 project: a `;@ charset` file and, for each capture, a `;@ screen` file (screen codes and colors,
+  with the background and the multicolors the program had set). The captures share one charset: a character is its
+  8 bytes, so what a later screen has in common with the earlier ones is not added again, and every screen gets the
+  charset's codes (from a first code you choose). The charset can start from one the project already has: its
+  characters keep their codes (the screen of the program itself comes out with the program's own codes), and the new
+  ones follow; the empty characters at the end of that charset are free places that the new ones fill, so a charset
+  of 256 characters with the last ones empty keeps its size. The charset is `multicolor=1` when every character is used only in multicolor cells (a blank or a
+  solid character looks the same both ways, so it does not count). The files stay in memory, in the *Captures*
+  panel: view them, copy them (one by one or all together) or download them, and put them in the project by hand.
+  The values are constants with a name (`charset1__FIRST`, `room1__BACKGROUND`, `room1__BORDER`,
+  `room1__MULTICOLOR_1`, `room1__MULTICOLOR_2`) that the regions' parameters use, not numbers written in them.
+  Bitmap and extended color screens cannot be captured.
 
 ```powershell
 dotnet publish src/Thing64.WebComputer -c Release -o artifacts/web   # the C64, once (and after changing it)

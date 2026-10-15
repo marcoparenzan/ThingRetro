@@ -23,7 +23,15 @@ if (computer.Available)
 {
     var files = new PhysicalFileProvider(computer.Folder);
     app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = files, RequestPath = "/computer" });
-    app.UseStaticFiles(new StaticFileOptions { FileProvider = files, RequestPath = "/computer", ContentTypeProvider = types });
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = files,
+        RequestPath = "/computer",
+        ContentTypeProvider = types,
+        // computer.js and the boot manifest have no hash in their names: without this a browser keeps the C64 it
+        // had, and a newly published one (a new message, a new capture) never reaches it. no-cache still allows a 304
+        OnPrepareResponse = context => context.Context.Response.Headers.CacheControl = "no-cache",
+    });
 }
 else
 {

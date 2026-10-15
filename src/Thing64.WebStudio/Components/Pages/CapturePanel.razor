@@ -1,0 +1,288 @@
+@using Thing64.Graphics
+@using Thing64.WebStudio.CodeBehind
+@inject IJSRuntime JS
+
+@* The screens taken from the C64: each Capture adds one, with its characters merged into a charset that all the
+   captures share, and the files of a Thing64 project that come out of it (a ;@ charset file, a ;@ screen file for each
+   screen). The files stay here, as text, in memory: copy them where they belong *@
+<aside class="@(Visible ? "flex" : "hidden") w-[27rem] shrink-0 flex-col overflow-hidden rounded-lg border border-night-700 bg-night-950 text-xs text-night-200">
+    <div class="flex shrink-0 items-center gap-2 border-b border-night-800 px-3 py-2">
+        <span class="text-sm font-semibold text-white">Captures</span>
+        <span class="text-night-400">@charset.Screens.Count screens · @charset.Characters.Count characters</span>
+        <button class="tool ml-auto border border-night-700" @onclick="OnCapture" title="Take the screen the C64 shows now">📷 Capture</button>
+        <button class="tool border border-night-700 disabled:opacity-40" disabled="@(charset.Screens.Count == 0)" @onclick="Clear" title="Forget the captures and start again">Clear</button>
+    </div>
+
+    <div class="min-h-0 flex-1 overflow-y-auto p-3">
+        @if (message is not null)
+        {
+            <p class="@(isError ? "border-red-800 bg-red-950/40 text-red-300" : "border-night-700 text-night-300") mb-3 rounded border px-2 py-1">@message</p>
+        }
+
+        <div class="mb-1 text-[11px] font-semibold tracking-wider text-night-300 uppercase">Charset</div>
+        <div class="mb-3 grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1">
+            <span class="text-night-400">start from</span>
+            <select class="field py-0.5" value="@seedChoice" @onchange="SeedChanged" disabled="@Started"
+                    title="A charset the project already has: its characters keep their codes and the new ones follow">
+                <option value="">a new charset</option>
+                @foreach (var existing in existingCharsets)
+                {
+                    <option value="@existing.Key">@existing.Label · @existing.File (@existing.Characters.Count)</option>
+                }
+            </select>
+            <span class="text-night-400">name</span>
+            <input class="field py-0.5 font-mono" value="@name" @onchange="NameChanged" disabled="@(Started || seedChoice != "")"
+                   title="The labels: name__characters, name__charactersEnd; the file name.asm" />
+            <span class="text-night-400">first code</span>
+            <input class="field w-20 py-0.5 font-mono" value="@($"${first:X2}")" @onchange="FirstChanged" disabled="@(Started || seedChoice != "")"
+                   title="The screen code of its first character: the codes the captured screens get start here" />
+        </div>
+        @if (charset.Characters.Count > 0)
+        {
+            <p class="mb-3 text-night-400">
+                $@charset.First.ToString("X2")-$@((charset.First + charset.Characters.Count - 1).ToString("X2")) ·
+                @(charset.Multicolor ? "multicolor (multicolor=1)" : "hires, or hires and multicolor mixed: each cell says it")
+            </p>
+        }
+
+        <div class="mb-1 flex items-center gap-2">
+            <span class="text-[11px] font-semibold tracking-wider text-night-300 uppercase">Screens</span>
+            <button class="tool border border-night-700" @onclick="Refresh" title="Look for the charsets of the project again">⟳</button>
+        </div>
+        @if (charset.Screens.Count == 0)
+        {
+            <p class="mb-3 text-night-400">Nothing yet. Run the program, get to a screen and press Capture; do it again on the next ones to merge them into the same charset.</p>
+        }
+        @foreach (var screen in charset.Screens.ToList())
+        {
+            <div class="mb-2 flex gap-2 rounded border border-night-800 p-1.5">
+                <img src="@images.GetValueOrDefault(screen.Name)" alt="" class="pixelated h-[75px] w-[120px] shrink-0 border border-night-700" />
+                <div class="flex min-w-0 flex-1 flex-col gap-1">
+                    <input class="field py-0.5 font-mono" value="@screen.Name" @onchange="e => Rename(screen.Name, e)" title="The name of the screen: the file and its labels" />
+                    <span class="text-night-400">@added.GetValueOrDefault(screen.Name) new characters</span>
+                    <button class="tool self-start border border-night-700" @onclick="() => Remove(screen.Name)" title="Forget this screen (its characters stay in the charset)">✕ Remove</button>
+                </div>
+            </div>
+        }
+
+        @if (charset.Screens.Count > 0)
+        {
+            <div class="mb-1 mt-3 flex items-center gap-2">
+                <span class="text-[11px] font-semibold tracking-wider text-night-300 uppercase">Files (in memory)</span>
+                <button class="tool ml-auto border border-night-700" @onclick="CopyAll" title="All the files one after the other, each with its name in a comment">Copy all</button>
+            </div>
+            @foreach (var file in Files())
+            {
+                <div class="mb-2 rounded border border-night-800">
+                    <div class="flex items-center gap-2 px-2 py-1">
+                        <button class="font-mono text-chip-300 hover:underline" @onclick="() => Toggle(file.Name)">@(open.Contains(file.Name) ? "▾" : "▸") @file.Name</button>
+                        <span class="text-night-400">@file.Lines lines</span>
+                        <button class="tool ml-auto border border-night-700" @onclick="() => Copy(file)">Copy</button>
+                        <button class="tool border border-night-700" @onclick="() => Download(file)">⭳</button>
+                    </div>
+                    @if (open.Contains(file.Name))
+                    {
+                        <pre class="max-h-72 overflow-auto border-t border-night-800 bg-night-900 p-2 font-mono text-[10px] leading-snug text-night-200">@file.Text</pre>
+                    }
+                </div>
+            }
+        }
+    </div>
+</aside>
+
+@code {
+    [Parameter, EditorRequired] public Project Project { get; set; } = default!;
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback OnCapture { get; set; }
+
+    sealed record ExistingCharset(string Key, string File, string Label, int First, bool Multicolor,
+                                  List<byte[]> Characters, List<string> Descriptions)
+    {
+        // name__characters is the label the captured files use
+        public string Name => Label.EndsWith("__characters") ? Label[..^"__characters".Length] : Label;
+    }
+
+    sealed record VirtualFile(string Name, string Text)
+    {
+        public int Lines => Text.Count(c => c == '\n');
+    }
+
+    CapturedCharset charset = new("charset1");
+    List<ExistingCharset> existingCharsets = [];
+    string name = "charset1";
+    int first;
+    string seedChoice = "";
+    readonly Dictionary<string, string> images = [];
+    readonly Dictionary<string, int> added = [];
+    readonly HashSet<string> open = [];
+    string? message;
+    bool isError;
+
+    bool Started => charset.Screens.Count > 0;
+
+    protected override void OnInitialized() => Refresh();
+
+    // The charsets the project has: the ;@ charset regions of its sources
+    void Refresh()
+    {
+        existingCharsets = [];
+        try
+        {
+            ProgramImage? image = null;
+            try { image = ProgramImage.Assemble(Project); }
+            catch (FormatException) { }
+            foreach (string file in CharsetUsers.AsmFiles(Project))
+            {
+                string[] lines = File.ReadAllText(file).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+                if (!lines.Any(l => l.Contains(";@"))) continue;
+                foreach (var region in AsmRegion.Find(lines).Where(r => r.Editor == "charset"))
+                {
+                    var values = region.ReadBytes(lines, image).ToArray();
+                    var model = new CharsetRegion(region, lines, image, values.Length);
+                    var characters = Enumerable.Range(0, model.Characters).Select(c => values[(c * 8)..(c * 8 + 8)].Select(v => (byte)v).ToArray()).ToList();
+                    var descriptions = CharmapFile.Read(lines, region, model.Label, image).Select(c => c.Description).ToList();
+                    existingCharsets.Add(new ExistingCharset($"{Project.RelativePath(file)}|{model.Label}", Project.RelativePath(file), model.Label,
+                                                              model.First, model.Multicolor, characters, descriptions));
+                }
+            }
+        }
+        catch (Exception e) when (e is FormatException or IOException or KeyNotFoundException or OverflowException)
+        {
+            Report($"The charsets of the project could not be read: {e.Message}", true);
+        }
+    }
+
+    void SeedChanged(ChangeEventArgs e)
+    {
+        seedChoice = e.Value?.ToString() ?? "";
+        if (existingCharsets.FirstOrDefault(c => c.Key == seedChoice) is { } existing)
+        {
+            name = existing.Name;
+            first = existing.First;
+        }
+        Restart();
+    }
+
+    void NameChanged(ChangeEventArgs e)
+    {
+        name = e.Value?.ToString() ?? "";
+        Restart();
+    }
+
+    void FirstChanged(ChangeEventArgs e)
+    {
+        string text = e.Value?.ToString()?.Trim() ?? "";
+        bool ok = text.StartsWith('$') ? int.TryParse(text[1..], System.Globalization.NumberStyles.HexNumber, null, out int value) : int.TryParse(text, out value);
+        if (!ok || value is < 0 or > 255) { Report($"{text} is not a screen code", true); return; }
+        first = value;
+        Restart();
+    }
+
+    // The charset the captures will share, from the fields (before the first capture)
+    void Restart()
+    {
+        try
+        {
+            charset = new CapturedCharset(name, first);
+            if (existingCharsets.FirstOrDefault(c => c.Key == seedChoice) is { } existing)
+                charset.Seed(existing.Characters.Select((bytes, i) => (bytes, existing.Descriptions.ElementAtOrDefault(i) ?? "")), existing.Multicolor);
+            images.Clear();
+            added.Clear();
+            open.Clear();
+            Report(seedChoice == "" ? null : $"{charset.Characters.Count} characters from {name}: the new ones follow them", false);
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException)
+        {
+            Report(e.Message, true);
+            charset = new CapturedCharset("charset1", first);
+        }
+    }
+
+    void Clear() => Restart();
+
+    // A screen from the C64 (what Board.CaptureVideo handed over)
+    public void Add(byte[] bytes)
+    {
+        try
+        {
+            var capture = new VideoCapture(bytes);
+            int number = charset.Screens.Count + 1;
+            while (charset.Screens.Any(s => s.Name == $"room{number}")) number++;
+            string screenName = $"room{number}";
+            int before = charset.Characters.Count;
+            charset.Add(screenName, capture);
+            images[screenName] = Url(capture.Render(C64Palette.Pepto));
+            added[screenName] = charset.Characters.Count - before;
+            open.Clear();
+            Report($"{screenName}: {added[screenName]} new characters, {charset.Characters.Count} in the charset", false);
+        }
+        catch (Exception e) when (e is FormatException or NotSupportedException or InvalidOperationException or ArgumentException)
+        {
+            Report(e.Message, true);
+        }
+        StateHasChanged();
+    }
+
+    void Rename(string oldName, ChangeEventArgs e) => Rename(oldName, e.Value?.ToString() ?? "");
+
+    void Rename(string oldName, string newName)
+    {
+        try
+        {
+            string clean = CapturedCharset.Identifier(newName);
+            charset.Rename(oldName, newName);
+            images[clean] = images.GetValueOrDefault(oldName) ?? "";
+            added[clean] = added.GetValueOrDefault(oldName);
+            if (clean != oldName) { images.Remove(oldName); added.Remove(oldName); }
+            open.Clear();
+            Report(null, false);
+        }
+        catch (ArgumentException e)
+        {
+            Report(e.Message, true);
+        }
+    }
+
+    void Remove(string screenName)
+    {
+        charset.Remove(screenName);
+        images.Remove(screenName);
+        added.Remove(screenName);
+        open.Clear();
+    }
+
+    List<VirtualFile> Files()
+    {
+        var files = new List<VirtualFile> { new(charset.CharsetFileName, charset.CharsetText()) };
+        files.AddRange(charset.Screens.Select(s => new VirtualFile(charset.ScreenFileName(s), charset.ScreenText(s))));
+        return files;
+    }
+
+    void Toggle(string file)
+    {
+        if (!open.Remove(file)) open.Add(file);
+    }
+
+    async Task Copy(VirtualFile file)
+    {
+        await JS.InvokeVoidAsync("thing64Studio.copyText", file.Text);
+        Report($"{file.Name} copied", false);
+    }
+
+    async Task CopyAll()
+    {
+        string all = string.Join("\n", Files().Select(f => $"; ===== {f.Name} =====\n{f.Text}"));
+        await JS.InvokeVoidAsync("thing64Studio.copyText", all);
+        Report("All the files copied", false);
+    }
+
+    async Task Download(VirtualFile file) => await JS.InvokeVoidAsync("thing64Studio.downloadText", file.Name, file.Text);
+
+    void Report(string? text, bool error)
+    {
+        message = text;
+        isError = error;
+    }
+
+    static string Url(RgbImage image) => "data:image/png;base64," + Convert.ToBase64String(Png.Write(image));
+}
