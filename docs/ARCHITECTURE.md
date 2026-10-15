@@ -27,8 +27,6 @@ flowchart LR
     Build[Thing64.Build<br/>builds, manifests]
     Build --> Asm
     Build --> Basic
-    CLang[Thing64.C<br/>C to assembly]
-    Build --> CLang
     Build --> Crt
     Cli --> Build
     Cli -. starts .-> Computer
@@ -347,32 +345,6 @@ From a picture to the data the VIC-II reads, with no external libraries.
   Tiles are blocks of characters with their colors, kept once, and a map.
 - **`GraphicsAsset`** (`.gfx.json`) holds the settings; **`GraphicsBuilder`** writes `name.part.bin` and
   `name.inc.asm`. Build manifests build every asset first (`assets`, or all the `.gfx.json` in the folder).
-
-## C (`Thing64.C`)
-
-A C subset translated into assembly text in ACME syntax, which the assembler then assembles with the rest of the
-program: no object files and no linker, and the output can be read.
-
-- **`Lexer`**: tokens with line and column; the preprocessor handles `#define` without parameters (bodies expand the
-  macros already defined) and `#undef`, and ignores `#include` and `#pragma`. Characters and strings become PETSCII.
-- **`Parser`**: recursive descent into the records of `Syntax.cs` (types, expressions, statements, functions);
-  `Constants.Evaluate` folds constant expressions.
-- **`Generator`**: one pass over the functions. There is no stack frame: parameters and locals are labels
-  (`function__param`), globals keep their names, static ones become `module__name`; so recursion is refused
-  (`CheckRecursion` on the call graph). A call stores its arguments into the callee's parameters and `JSR`s; when a
-  later argument calls a function itself, the earlier ones go through temporaries first. Expressions leave 8-bit
-  values in A and 16-bit ones in A/X; simple operands (constants, variables, constant addresses) are used directly
-  by the instructions (`ADC score`, `STA $D020`). Conditions become branches, not booleans; branches out of range
-  become the opposite branch over a `JMP`. Indexing a label or a constant address with a `char` uses `,Y`;
-  other pointers go through the zero page pointer at `$FB`. Signed comparisons use the overflow flag.
-- **`__equ`**: a global declared `__equ char NAME;` is a constant defined by the assembly: its `Symbol` is flagged
-  `IsEquate` and the generator uses its label as an immediate (`LDA #NAME`, `Simple` returns `#NAME`), and an `__equ`
-  pointer as a fixed address (`FixedPointer`, like `*(char*)0xD020`). Nothing is reserved for it, and it cannot be
-  assigned, incremented or have its address taken.
-- **`Runtime`**: multiplication and unsigned and signed division on 16 bits, appended to the module when used.
-- `Thing64.Build` (`CSources`) translates every `.c` of a project into `name.c.asm` before the build, turning a
-  `CException` into the assembler's error with file and line. The file is written only when the `.c` (or the
-  translator's assembly) is newer than it, and only when its text changes.
 
 ## The command line (`Thing64`)
 

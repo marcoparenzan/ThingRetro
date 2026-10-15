@@ -146,21 +146,6 @@ public sealed class Project(string name, string folder)
             foreach (string asset in assets)
                 if (!BuildAsset(asset, messages)) return new BuildReport(false, messages, null);
 
-            // Then the C sources, translated to the assembly that includes them
-            foreach (string source in CSources.Find(Folder))
-            {
-                try
-                {
-                    messages.Add(new BuildMessage($"{source} -> {CSources.Translate(FullPath(source))}"));
-                }
-                catch (AssemblerException e)
-                {
-                    string file = RelativePath(e.FilePath!);
-                    messages.Add(new BuildMessage($"{file}({e.Line}): {e.Reason}", true, file, e.Line));
-                    return new BuildReport(false, messages, null);
-                }
-            }
-
             if (File.Exists(manifestPath))
             {
                 var manifest = BuildManifest.Load(manifestPath);

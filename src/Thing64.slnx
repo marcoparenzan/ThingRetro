@@ -14,7 +14,6 @@
     <Project Path="Thing64.Asm/Thing64.Asm.csproj" />
     <Project Path="Thing64.Basic/Thing64.Basic.csproj" />
     <Project Path="Thing64.Build/Thing64.Build.csproj" />
-    <Project Path="Thing64.C/Thing64.C.csproj" />
     <Project Path="Thing64.C64/Thing64.C64.csproj" />
     <Project Path="Thing64.Crt/Thing64.Crt.csproj" />
     <Project Path="Thing64.Graphics/Thing64.Graphics.csproj" />

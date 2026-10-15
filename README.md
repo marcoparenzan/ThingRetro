@@ -44,8 +44,6 @@ It comes with a studio in the browser to write 6502 assembly (and C) and run it 
 - **Studio** (in the browser): projects, assembly editor (Monaco) with 6502 syntax highlighting, built-in
   assembler, editors for screens, charsets and sprites, F5 to build and run in the C64 tab. See
   [The web studio](#the-web-studio).
-- **C**: a subset of C translated into assembly (`player.c` becomes `player.c.asm`), mixed freely with assembly
-  modules. See [C](#c).
 
 Not yet: the 1541 drive and disk/tape images (`.d64`, `.t64`). See [Known limits](#known-limits).
 
@@ -60,7 +58,6 @@ Not yet: the 1541 drive and disk/tape images (`.d64`, `.t64`). See [Known limits
 | `src/Thing64.Asm` | 6502/6510 assembler, ACME-compatible: labels, macros, loops, includes, expressions, errors with their file and line |
 | `src/Thing64.Basic` | BASIC V2 tokenizer: a program in text becomes the `.prg` the C64 would have in memory |
 | `src/Thing64.Graphics` | Pictures for the C64: PNG, the palette, the conversion of an image to bitmaps, character sets, tiles and sprites |
-| `src/Thing64.C` | A C subset translated into ACME assembly: lexer with `#define`, parser, code generator, multiplication and division routines |
 | `src/Thing64.Build` | From sources to C64 files: `.asm` and `.bas` to `.prg`, build manifests (`thing64.json`) with programs and cartridges |
 | `src/Thing64.WinForms` | `C64Monitor` (the screen, a UserControl), `PcKeyboard` (the keyboard cable), `PcSpeakers` (the speakers), joystick and paddle simulators |
 | `src/Thing64.Computer` | The desktop app: one C64 in a window (`ComputerForm`), loading of `.prg`/`.crt`, the ROMs, the settings |
@@ -231,58 +228,6 @@ RalfAI comes from a local NuGet feed (`nuget.config`: `D:\Dev\NuGetLocalFeed`), 
 keys from its own configuration file (`Assistant:ConfigPath`, outside the repository); the model is the one of the
 `thing64` context (`Assistant:ContextKey`).
 
-### C
-
-A project is not "assembly" or "C": the two mix file by file. The entry point stays an assembly file (the one in the
-manifest, with the BASIC stub and the origin), and every `.c` file is a module that an assembly file includes.
-Builds (`thing64 build`, the web studio) translate every `.c` file of the project into a `.c.asm` next to it, before
-assembling: an assembly module includes it with `.source "player.c.asm"`. The `.c.asm` is written again only when
-the `.c` is newer than it (or the translator is), and never by hand. Functions and global variables keep their
-names, so assembly and C call each other and share variables (`JSR readControls`, `LDA grounded`).
-
-The constants of the assembly are seen by the C with `__equ`, so that a value is written once:
-
-```c
-__equ char PLAYER_COLOR;      // PLAYER_COLOR = 1 in the assembly
-__equ char* SCREEN;           // SCREEN = $0400
-...
-SCREEN[0] = PLAYER_COLOR;     // LDA #PLAYER_COLOR / STA SCREEN
-```
-
-An `__equ` is a value, not a variable: it becomes an immediate operand (`LDA #PLAYER_COLOR`), it cannot be changed
-or have its address taken, and a pointer one is followed like a hardware register (`SCREEN[i]`, `*SCREEN`).
-
-```c
-#define BORDER (*(char*)0xD020)
-
-char grounded = 1;
-int score;
-
-void addPoints(char points) {
-    score += points;
-    if (score > 999) BORDER = 2;
-}
-```
-
-It is a real C subset, thought for the 6502:
-
-- `char` (8 bits, unsigned) and `signed char`, `int` (16 bits, signed) and `unsigned int`, pointers and
-  one-dimensional arrays, strings (in PETSCII); constants take the type of the other operand, so `char` arithmetic
-  stays 8 bits.
-- `if`/`else`, `while`, `do`, `for`, `break`, `continue`, `return`, `?:`, `&&`, `||`, all the arithmetic, bitwise,
-  shift and compound assignment operators, `++`/`--`, casts, `sizeof`; `#define` without parameters.
-- **No recursion**: parameters and locals live at fixed addresses (`function__name`), so a call costs a few stores
-  and a `JSR`; a recursive call is an error. Values come back in A (8 bits) or A/X (16 bits).
-- Hardware registers are pointers to constants: `*(char*)0xD020 = 2` is `STA $D020`; `__asm("SEI")` inserts
-  assembly; `__equ` declares a constant defined in the assembly.
-- `*`, `/` and `%` by powers of two are shifts and masks; otherwise they call 16-bit routines, added only when used.
-- Not supported: `long`, `float`, `struct`, `switch`, `goto`, function pointers, arrays of arrays, macros with
-  parameters; `__zp` (variables in zero page) is reserved.
-
-Errors carry the file and the line of the C source, like the assembler's. The FanCMission test (the player module
-of a platform game rewritten in C) behaves exactly like its assembly original: 325 bytes instead of 214, and about
-25% more cycles.
-
 ### Samples
 
 The [samples](samples/README.md) folder holds about twenty programs, each on a C64 topic: BASIC, interrupts
@@ -393,7 +338,5 @@ SingleStepTests.
 - **CIA**: the CNT, SP and FLAG pins are not modelled; the TOD is counted internally instead of from the 50 Hz
   mains.
 - **EasyFlash**: read-only (games that save to flash do not save).
-- **C**: no recursion, no `long`, `float`, `struct` or `switch`; the code is about 50% larger and 25% slower
-  than hand-written assembly (no peephole optimizer yet).
 - **Studio editor**: Monaco is loaded from the jsDelivr CDN, so the first start needs an internet connection.
 - **Browser C64**: no paddles or mouse, no studio; Debug builds are too slow (interpreted).

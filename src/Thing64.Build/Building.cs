@@ -2,7 +2,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Thing64.Asm;
 using Thing64.Basic;
-using Thing64.C;
 using Thing64.Crt;
 using Thing64.Graphics;
 
@@ -25,47 +24,6 @@ public static class ProgramBuilder
     public static Assembler.Result Assemble(string sourcePath, string? text = null) =>
         Assembler.Assemble(text ?? File.ReadAllText(sourcePath), Path.GetFileName(sourcePath),
             Path.GetDirectoryName(Path.GetFullPath(sourcePath)));
-}
-
-// C sources: every .c becomes name.c.asm next to it, which the assembly includes with !source. Errors in the C come
-// out as assembler errors, with the .c file and line
-public static class CSources
-{
-    public static IReadOnlyList<string> Find(string folder) =>
-        Directory.EnumerateFiles(folder, "*.c", SearchOption.AllDirectories)
-            .Where(f => !Path.GetRelativePath(folder, f).Split(Path.DirectorySeparatorChar).Any(part => part.StartsWith('.')))
-            .Select(f => Path.GetRelativePath(folder, f).Replace('\\', '/'))
-            .Order(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-    static readonly DateTime TranslatorWritten = File.GetLastWriteTimeUtc(typeof(Generator).Assembly.Location);
-
-    // Returns the file of the translation (name.c.asm). It is written only when the source is newer than it, or the
-    // translator itself is: a build that changed no C does not touch the file, nor the programs that include it
-    public static string Translate(string path)
-    {
-        string output = path + ".asm";
-        if (File.Exists(output))
-        {
-            var written = File.GetLastWriteTimeUtc(output);
-            if (written > File.GetLastWriteTimeUtc(path) && written > TranslatorWritten) return Path.GetFileName(output);
-        }
-        string text = File.ReadAllText(path);
-        string assembly;
-        try
-        {
-            assembly = Generator.Translate(text, Path.GetFileNameWithoutExtension(path));
-        }
-        catch (CException e)
-        {
-            string[] lines = text.Replace("\r\n", "\n").Split('\n');
-            string line = e.Line >= 1 && e.Line <= lines.Length ? lines[e.Line - 1] : "";
-            throw new AssemblerException(Path.GetFileName(path), e.Line, line, e.Message, Path.GetFullPath(path));
-        }
-        if (!File.Exists(output) || File.ReadAllText(output) != assembly) File.WriteAllText(output, assembly);
-        else File.SetLastWriteTimeUtc(output, DateTime.UtcNow);
-        return Path.GetFileName(output);
-    }
 }
 
 // A build manifest (JSON) lists the files to produce from sources, with paths relative to the manifest's folder:
