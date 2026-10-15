@@ -25,7 +25,7 @@ public static class Lexer
     static readonly HashSet<string> Keywords =
     [
         "void", "char", "int", "short", "long", "signed", "unsigned", "const", "volatile", "static", "extern",
-        "if", "else", "while", "do", "for", "return", "break", "continue", "sizeof", "__asm", "__zp",
+        "if", "else", "while", "do", "for", "return", "break", "continue", "sizeof", "__asm", "__zp", "__equ",
     ];
 
     // Longest first: ">>=" before ">>" before ">"

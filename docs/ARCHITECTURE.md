@@ -365,9 +365,14 @@ program: no object files and no linker, and the output can be read.
   by the instructions (`ADC score`, `STA $D020`). Conditions become branches, not booleans; branches out of range
   become the opposite branch over a `JMP`. Indexing a label or a constant address with a `char` uses `,Y`;
   other pointers go through the zero page pointer at `$FB`. Signed comparisons use the overflow flag.
+- **`__equ`**: a global declared `__equ char NAME;` is a constant defined by the assembly: its `Symbol` is flagged
+  `IsEquate` and the generator uses its label as an immediate (`LDA #NAME`, `Simple` returns `#NAME`), and an `__equ`
+  pointer as a fixed address (`FixedPointer`, like `*(char*)0xD020`). Nothing is reserved for it, and it cannot be
+  assigned, incremented or have its address taken.
 - **`Runtime`**: multiplication and unsigned and signed division on 16 bits, appended to the module when used.
 - `Thing64.Build` (`CSources`) translates every `.c` of a project into `name.c.asm` before the build, turning a
-  `CException` into the assembler's error with file and line.
+  `CException` into the assembler's error with file and line. The file is written only when the `.c` (or the
+  translator's assembly) is newer than it, and only when its text changes.
 
 ## The command line (`Thing64`)
 

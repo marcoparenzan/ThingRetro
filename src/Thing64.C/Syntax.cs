@@ -69,9 +69,10 @@ public sealed record ContinueStatement(int Line, int Column) : Statement(Line, C
 public sealed record AsmStatement(string Text, int Line, int Column) : Statement(Line, Column);
 public sealed record EmptyStatement(int Line, int Column) : Statement(Line, Column);
 
-// A variable: global, local or parameter. Initializer: one expression, or a list for an array
+// A variable: global, local or parameter. Initializer: one expression, or a list for an array. Equate: not a variable
+// but a constant of the assembly (__equ char PLAYER_COLOR;), used as an immediate value: LDA #PLAYER_COLOR
 public sealed record Variable(string Name, CType Type, bool Static, bool Extern, bool ZeroPage, Expression? Initializer,
-                              IReadOnlyList<Expression>? Initializers, int Line, int Column);
+                              IReadOnlyList<Expression>? Initializers, int Line, int Column, bool Equate = false);
 
 public sealed record Function(string Name, CType Return, IReadOnlyList<Variable> Parameters, BlockStatement? Body, bool Static,
                               int Line, int Column);

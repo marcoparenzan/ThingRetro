@@ -16,7 +16,8 @@ namespace Thing64.C;
 // The output is meant to be read: each C statement appears as a comment above its instructions
 public sealed partial class Generator
 {
-    sealed record Symbol(string Name, CType Type, string Label, bool IsFunction = false);
+    // IsEquate: a constant of the assembly (__equ), whose value is its label: #NAME, not the byte at NAME
+    sealed record Symbol(string Name, CType Type, string Label, bool IsFunction = false, bool IsEquate = false);
 
     sealed class FunctionContext(Function function, string label)
     {
@@ -75,7 +76,8 @@ public sealed partial class Generator
         {
             if (globals.ContainsKey(variable.Name) && !variable.Extern) throw new CException($"{variable.Name} is defined twice", variable.Line, variable.Column);
             if (variable.ZeroPage) throw new CException("__zp variables are not supported yet", variable.Line, variable.Column);
-            globals[variable.Name] = new Symbol(variable.Name, variable.Type, variable.Static ? $"{module}__{variable.Name}" : variable.Name);
+            globals[variable.Name] = new Symbol(variable.Name, variable.Type, variable.Static ? $"{module}__{variable.Name}" : variable.Name,
+                                                IsEquate: variable.Equate);
         }
 
         foreach (var function in unit.Functions.Where(f => f.Body is not null)) GenerateFunction(function);
@@ -197,6 +199,7 @@ public sealed partial class Generator
             {
                 var variable = d.Variable;
                 if (variable.Extern) throw new CException("extern belongs outside the functions", d.Line, d.Column);
+                if (variable.Equate) throw new CException("__equ belongs outside the functions", d.Line, d.Column);
                 var symbol = Declare(variable);
                 if (variable.Static) break;
                 if (variable.Initializer is { } value)
@@ -327,7 +330,7 @@ public sealed partial class Generator
 
     void GenerateGlobals()
     {
-        foreach (var variable in unit.Globals.Where(v => !v.Extern))
+        foreach (var variable in unit.Globals.Where(v => !v.Extern && !v.Equate))
         {
             string label = globals[variable.Name].Label;
             data.AppendLine($"{label}:".PadRight(28) + Storage(variable.Type, variable));
@@ -364,6 +367,7 @@ public sealed partial class Generator
         if (expression is StringExpression text) return StringLabel(text.Text);
         if (expression is UnaryExpression { Operator: "&", Operand: NameExpression name } && globals.TryGetValue(name.Name, out var symbol)) return symbol.Label;
         if (expression is NameExpression array && globals.TryGetValue(array.Name, out var arraySymbol) && arraySymbol.Type.Kind == CTypeKind.Array) return arraySymbol.Label;
+        if (expression is NameExpression equate && globals.TryGetValue(equate.Name, out var equateSymbol) && equateSymbol.IsEquate) return equateSymbol.Label;
         throw new CException("The initial value of a global must be known before the program runs", expression.Line, expression.Column);
     }
 

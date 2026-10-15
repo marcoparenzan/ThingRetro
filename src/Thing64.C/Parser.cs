@@ -30,7 +30,7 @@ public sealed class Parser
     CException Error(string message, Token? at = null) => new(message, (at ?? Current).Line, (at ?? Current).Column);
 
     static readonly HashSet<string> TypeWords = ["void", "char", "int", "short", "long", "signed", "unsigned"];
-    static readonly HashSet<string> Qualifiers = ["const", "volatile", "static", "extern", "__zp"];
+    static readonly HashSet<string> Qualifiers = ["const", "volatile", "static", "extern", "__zp", "__equ"];
 
     bool StartsDeclaration(Token token) => token.Kind == TokenKind.Keyword && (TypeWords.Contains(token.Text) || Qualifiers.Contains(token.Text));
 
@@ -43,7 +43,7 @@ public sealed class Parser
             if (Accept(";")) continue;
             if (!StartsDeclaration(Current)) throw Error($"Expected a declaration instead of {Current}");
             var start = Current;
-            var (baseType, isStatic, isExtern, zeroPage) = Specifiers();
+            var (baseType, isStatic, isExtern, zeroPage, equate) = Specifiers();
             var (name, type, nameToken) = Declarator(baseType);
             if (Current.Is("("))
             {
@@ -52,7 +52,7 @@ public sealed class Parser
             }
             while (true)
             {
-                globals.Add(VariableRest(name, type, isStatic, isExtern, zeroPage, nameToken));
+                globals.Add(VariableRest(name, type, isStatic, isExtern, zeroPage, nameToken, equate));
                 if (!Accept(",")) break;
                 (name, type, nameToken) = Declarator(baseType);
             }
@@ -61,10 +61,10 @@ public sealed class Parser
         return new TranslationUnit(globals, functions);
     }
 
-    // static, extern, const, volatile and __zp, then the type words: "unsigned char", "int", "signed char", ...
-    (CType Type, bool Static, bool Extern, bool ZeroPage) Specifiers()
+    // static, extern, const, volatile, __zp and __equ, then the type words: "unsigned char", "int", "signed char", ...
+    (CType Type, bool Static, bool Extern, bool ZeroPage, bool Equate) Specifiers()
     {
-        bool isStatic = false, isExtern = false, zeroPage = false;
+        bool isStatic = false, isExtern = false, zeroPage = false, equate = false;
         var words = new List<string>();
         var start = Current;
         while (Current.Kind == TokenKind.Keyword && (TypeWords.Contains(Current.Text) || Qualifiers.Contains(Current.Text)))
@@ -75,11 +75,12 @@ public sealed class Parser
                 case "static": isStatic = true; break;
                 case "extern": isExtern = true; break;
                 case "__zp": zeroPage = true; break;
+                case "__equ": equate = true; break;
                 case "const" or "volatile": break;
                 default: words.Add(word); break;
             }
         }
-        return (TypeOf(words, start), isStatic, isExtern, zeroPage);
+        return (TypeOf(words, start), isStatic, isExtern, zeroPage, equate);
     }
 
     CType TypeOf(List<string> words, Token at)
@@ -117,7 +118,7 @@ public sealed class Parser
         return Constants.Evaluate(expression) ?? throw Error("Expected a constant", Current);
     }
 
-    Variable VariableRest(string name, CType type, bool isStatic, bool isExtern, bool zeroPage, Token at)
+    Variable VariableRest(string name, CType type, bool isStatic, bool isExtern, bool zeroPage, Token at, bool equate = false)
     {
         Expression? initializer = null;
         List<Expression>? initializers = null;
@@ -145,7 +146,9 @@ public sealed class Parser
             type = type with { Count = count };
         }
         if (type.Kind == CTypeKind.Void) throw Error($"{name} cannot be void", at);
-        return new Variable(name, type, isStatic, isExtern, zeroPage, initializer, initializers, at.Line, at.Column);
+        if (equate && (initializer is not null || initializers is not null)) throw Error($"{name} is a constant of the assembly: its value is there (NAME = value)", at);
+        if (equate && type.Kind == CTypeKind.Array) throw Error($"{name}: an __equ is a number or a pointer, not an array", at);
+        return new Variable(name, type, isStatic, isExtern, zeroPage, initializer, initializers, at.Line, at.Column, equate);
     }
 
     Function FunctionRest(string name, CType returnType, bool isStatic, Token at)
@@ -155,7 +158,7 @@ public sealed class Parser
         if (Current.Is("void") && Next().Is(")")) Take();
         while (!Current.Is(")"))
         {
-            var (type, _, _, zeroPage) = Specifiers();
+            var (type, _, _, zeroPage, _) = Specifiers();
             var (parameter, parameterType, token) = Declarator(type);
             if (parameterType.Kind == CTypeKind.Array) parameterType = CType.PointerTo(parameterType.Target!);
             parameters.Add(new Variable(parameter, parameterType, false, false, zeroPage, null, null, token.Line, token.Column));
@@ -182,12 +185,12 @@ public sealed class Parser
     IEnumerable<Statement> StatementOrDeclarations()
     {
         if (!StartsDeclaration(Current)) return [Statement()];
-        var (baseType, isStatic, isExtern, zeroPage) = Specifiers();
+        var (baseType, isStatic, isExtern, zeroPage, equate) = Specifiers();
         var declarations = new List<Statement>();
         while (true)
         {
             var (name, type, token) = Declarator(baseType);
-            declarations.Add(new DeclarationStatement(VariableRest(name, type, isStatic, isExtern, zeroPage, token), token.Line, token.Column));
+            declarations.Add(new DeclarationStatement(VariableRest(name, type, isStatic, isExtern, zeroPage, token, equate), token.Line, token.Column));
             if (!Accept(",")) break;
         }
         Expect(";");
@@ -344,7 +347,7 @@ public sealed class Parser
     // A type without a name: (unsigned char*), sizeof(int)
     CType TypeName()
     {
-        var (type, _, _, _) = Specifiers();
+        var (type, _, _, _, _) = Specifiers();
         while (Accept("*"))
         {
             while (Current.Is("const") || Current.Is("volatile")) Take();

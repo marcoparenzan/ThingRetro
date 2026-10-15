@@ -24,10 +24,11 @@ public sealed class CTests
         public int SignedWord(string name) => (short)Word(name);
     }
 
-    static Run Execute(string c)
+    // assemblyBefore: what the assembly side defines (the constants the C declares with __equ)
+    static Run Execute(string c, string assemblyBefore = "")
     {
         string assembly = Generator.Translate(c, "test");
-        var program = Assembler.Assemble("* = $1000\nstart:  JSR main\ndone:   JMP done\n" + assembly, "test.asm");
+        var program = Assembler.Assemble(assemblyBefore + "* = $1000\nstart:  JSR main\ndone:   JMP done\n" + assembly, "test.asm");
         var bus = new FlatBus();
         program.Bytes.CopyTo(bus.Memory, program.Origin);
         var cpu = new MOS6502 { Bus = bus };
@@ -245,6 +246,74 @@ public sealed class CTests
         Assert.AreEqual(2, run.Memory[0xD020]);
         Assert.AreEqual(6, run.Memory[0xD021]);
         StringAssert.Contains(run.Assembly, "STA $D020");
+    }
+
+    [TestMethod]
+    public void Equates_ShouldBeTheAssemblyConstants()
+    {
+        var run = Execute("""
+            __equ char PLAYER_COLOR;
+            __equ int LIMIT;
+            __equ char* SCREEN;
+            char color; int limit; char first; char third; char hit;
+            void main(void) {
+                char i;
+                color = PLAYER_COLOR;
+                limit = LIMIT + 1;
+                SCREEN[0] = 7;
+                SCREEN[2] = PLAYER_COLOR + 1;
+                for (i = 0; i < 3; i++) SCREEN[i] += 1;
+                first = SCREEN[0];
+                third = *(SCREEN + 2);
+                if (color == PLAYER_COLOR) hit = 1;
+            }
+            """, "PLAYER_COLOR = 5\nLIMIT = 1000\nSCREEN = $0400\n");
+        Assert.AreEqual(5, run.Byte("color"));
+        Assert.AreEqual(1001, run.Word("limit"));
+        Assert.AreEqual(8, run.Byte("first"));
+        Assert.AreEqual(7, run.Byte("third"));
+        Assert.AreEqual(1, run.Byte("hit"));
+        Assert.AreEqual(8, run.Memory[0x0400]);
+        StringAssert.Contains(run.Assembly, "LDA #PLAYER_COLOR");
+        StringAssert.Contains(run.Assembly, "STA SCREEN");
+    }
+
+    [TestMethod]
+    public void Equates_CannotChange()
+    {
+        var error = Assert.ThrowsExactly<CException>(() => Generator.Translate("""
+            __equ char COLOR;
+            void main(void) { COLOR = 2; }
+            """, "test"));
+        StringAssert.Contains(error.Message, "cannot change");
+    }
+
+    [TestMethod]
+    public void Translation_ShouldBeWrittenOnlyWhenTheSourceChanged()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "thing64-c-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            string source = Path.Combine(folder, "game.c");
+            string output = source + ".asm";
+            File.WriteAllText(source, "char x;\nvoid main(void) { x = 1; }\n");
+            Thing64.Build.CSources.Translate(source);
+            var first = File.GetLastWriteTimeUtc(output);
+
+            Thread.Sleep(50);
+            Thing64.Build.CSources.Translate(source);                   // nothing changed: the file is not touched
+            Assert.AreEqual(first, File.GetLastWriteTimeUtc(output));
+
+            Thread.Sleep(50);
+            File.WriteAllText(source, "char x;\nvoid main(void) { x = 2; }\n");
+            Thing64.Build.CSources.Translate(source);                   // the source is newer: written again
+            StringAssert.Contains(File.ReadAllText(output), "LDA #$02");
+        }
+        finally
+        {
+            Directory.Delete(folder, true);
+        }
     }
 
     [TestMethod]

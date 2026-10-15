@@ -106,17 +106,23 @@ public sealed partial class Generator
             {
                 var symbol = Find(n.Name, n);
                 if (symbol.IsFunction) return null;
+                if (symbol.IsEquate)
+                {
+                    if (symbol.Type.Size == 2) return new Operand($"#<{symbol.Label}", $"#>{symbol.Label}");
+                    if (type.Size == 2 && symbol.Type.Signed) return null;
+                    return new Operand($"#{symbol.Label}", "#$00");
+                }
                 if (symbol.Type.Kind == CTypeKind.Array) return new Operand($"#<{symbol.Label}", $"#>{symbol.Label}");
                 if (symbol.Type.Size == 2) return new Operand(symbol.Label, symbol.Label + "+1");
                 if (type.Size == 2 && symbol.Type.Signed) return null;   // needs its sign extended
                 return new Operand(symbol.Label, "#$00");
             }
-            case UnaryExpression { Operator: "*" } u when Address(u.Operand) is int address:
+            case UnaryExpression { Operator: "*" } u when FixedPointer(u.Operand) is { } address:
             {
                 var pointee = Pointee(TypeOf(u.Operand), u);
-                if (pointee.Size == 2) return new Operand(Hex(address), Hex(address + 1));
+                if (pointee.Size == 2) return address;
                 if (type.Size == 2 && pointee.Signed) return null;
-                return new Operand(Hex(address), "#$00");
+                return address with { High = "#$00" };
             }
             case CastExpression c when c.Type.IsScalar:
             {
@@ -129,6 +135,23 @@ public sealed partial class Generator
 
     // A pointer known before the program runs: (char*)0xD020
     int? Address(Expression pointer) => Constants.Evaluate(pointer) is int value ? value & 0xFFFF : null;
+
+    // The same, as the operands of the two bytes it points to: (char*)0xD020 is $D020 and $D021, an __equ pointer
+    // SCREEN is SCREEN and SCREEN+1
+    Operand? FixedPointer(Expression pointer)
+    {
+        if (Address(pointer) is int address) return new Operand(Hex(address), Hex(address + 1));
+        if (pointer is NameExpression n && Lookup(n.Name) is { IsEquate: true, Type.Kind: CTypeKind.Pointer } symbol)
+            return new Operand(symbol.Label, symbol.Label + "+1");
+        return null;
+    }
+
+    // An __equ cannot change, nor has an address
+    void NotEquate(Expression target)
+    {
+        if (target is NameExpression n && Lookup(n.Name) is { IsEquate: true })
+            throw new CException($"{n.Name} is a constant of the assembly: it cannot change", n.Line, n.Column);
+    }
 
     // ------------------------------------------------------------------------------------------------- values
 
@@ -173,6 +196,12 @@ public sealed partial class Generator
             {
                 var symbol = Find(n.Name, n);
                 if (symbol.IsFunction) throw new CException($"{n.Name} is a function: call it with ()", n.Line, n.Column);
+                if (symbol.IsEquate)
+                {
+                    Emit(symbol.Type.Wide ? $"LDA #<{symbol.Label}" : $"LDA #{symbol.Label}");
+                    if (symbol.Type.Wide) Emit($"LDX #>{symbol.Label}");
+                    return symbol.Type;
+                }
                 if (symbol.Type.Kind == CTypeKind.Array)
                 {
                     Emit($"LDA #<{symbol.Label}");
@@ -303,10 +332,10 @@ public sealed partial class Generator
         var (pointer, at) = PointerOf(e);
         var type = Pointee(TypeOf(pointer), at);
         if (type.Kind == CTypeKind.Array) throw new CException("Arrays of arrays are not supported yet", at.Line, at.Column);
-        if (Address(pointer) is int address)
+        if (FixedPointer(pointer) is { } address)
         {
-            Emit($"LDA {Hex(address)}");
-            if (type.Wide) Emit($"LDX {Hex(address + 1)}");
+            Emit($"LDA {address.Low}");
+            if (type.Wide) Emit($"LDX {address.High}");
             return type;
         }
         if (Indexed(e) is { } indexed)
@@ -380,9 +409,9 @@ public sealed partial class Generator
             element = symbol.Type.Target!;
             count = symbol.Type.Count;
         }
-        else if (Address(index.Array) is int address && TypeOf(index.Array) is { Kind: CTypeKind.Pointer } pointer)
+        else if (FixedPointer(index.Array) is { } address && TypeOf(index.Array) is { Kind: CTypeKind.Pointer } pointer)
         {
-            label = Hex(address);
+            label = address.Low;
             element = pointer.Target!;
             count = 128;
         }
@@ -406,6 +435,7 @@ public sealed partial class Generator
         {
             case NameExpression n:
             {
+                NotEquate(n);
                 var symbol = Find(n.Name, n);
                 Emit($"LDA #<{symbol.Label}");
                 Emit($"LDX #>{symbol.Label}");
@@ -432,6 +462,7 @@ public sealed partial class Generator
     // target = value; keep: the value stays in A (and X) afterwards
     CType Store(Expression target, Expression value, bool keep = false)
     {
+        NotEquate(target);
         var type = TypeOf(target);
         if (type.Kind == CTypeKind.Array) throw new CException("An array cannot be assigned: assign its elements", target.Line, target.Column);
         bool reload = false;
@@ -449,11 +480,11 @@ public sealed partial class Generator
             case UnaryExpression { Operator: "*" } or IndexExpression:
             {
                 var (pointer, _) = PointerOf(target);
-                if (Address(pointer) is int address)
+                if (FixedPointer(pointer) is { } address)
                 {
                     GenerateAs(value, type);
-                    Emit($"STA {Hex(address)}");
-                    if (type.Wide) Emit($"STX {Hex(address + 1)}");
+                    Emit($"STA {address.Low}");
+                    if (type.Wide) Emit($"STX {address.High}");
                     break;
                 }
                 if (Indexed(target) is { } indexed && (indexed.Fixed || Simple(indexed.Index, CType.Char) is not null))
@@ -517,6 +548,7 @@ public sealed partial class Generator
     // ++x, x++, --x, x--: INC and DEC on variables, x = x + 1 otherwise (a pointer moves by its element's size)
     CType Increment(Expression target, int delta, bool prefix, bool keep)
     {
+        NotEquate(target);
         var type = TypeOf(target);
         if (!type.IsScalar) throw new CException("Only numbers and pointers are incremented", target.Line, target.Column);
         int step = type.Kind == CTypeKind.Pointer ? type.Target!.Size : 1;

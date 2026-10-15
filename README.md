@@ -233,9 +233,24 @@ keys from its own configuration file (`Assistant:ConfigPath`, outside the reposi
 
 ### C
 
-Builds (`thing64 build`, the web studio) translate every `.c` file of a project into a `.c.asm` next to it, before
-assembling: an assembly module includes it with `.source "player.c.asm"`. Functions and global variables keep their
+A project is not "assembly" or "C": the two mix file by file. The entry point stays an assembly file (the one in the
+manifest, with the BASIC stub and the origin), and every `.c` file is a module that an assembly file includes.
+Builds (`thing64 build`, the web studio) translate every `.c` file of the project into a `.c.asm` next to it, before
+assembling: an assembly module includes it with `.source "player.c.asm"`. The `.c.asm` is written again only when
+the `.c` is newer than it (or the translator is), and never by hand. Functions and global variables keep their
 names, so assembly and C call each other and share variables (`JSR readControls`, `LDA grounded`).
+
+The constants of the assembly are seen by the C with `__equ`, so that a value is written once:
+
+```c
+__equ char PLAYER_COLOR;      // PLAYER_COLOR = 1 in the assembly
+__equ char* SCREEN;           // SCREEN = $0400
+...
+SCREEN[0] = PLAYER_COLOR;     // LDA #PLAYER_COLOR / STA SCREEN
+```
+
+An `__equ` is a value, not a variable: it becomes an immediate operand (`LDA #PLAYER_COLOR`), it cannot be changed
+or have its address taken, and a pointer one is followed like a hardware register (`SCREEN[i]`, `*SCREEN`).
 
 ```c
 #define BORDER (*(char*)0xD020)
@@ -259,7 +274,7 @@ It is a real C subset, thought for the 6502:
 - **No recursion**: parameters and locals live at fixed addresses (`function__name`), so a call costs a few stores
   and a `JSR`; a recursive call is an error. Values come back in A (8 bits) or A/X (16 bits).
 - Hardware registers are pointers to constants: `*(char*)0xD020 = 2` is `STA $D020`; `__asm("SEI")` inserts
-  assembly.
+  assembly; `__equ` declares a constant defined in the assembly.
 - `*`, `/` and `%` by powers of two are shifts and masks; otherwise they call 16-bit routines, added only when used.
 - Not supported: `long`, `float`, `struct`, `switch`, `goto`, function pointers, arrays of arrays, macros with
   parameters; `__zp` (variables in zero page) is reserved.

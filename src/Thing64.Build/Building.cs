@@ -38,9 +38,18 @@ public static class CSources
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-    // Returns the file written (name.c.asm)
+    static readonly DateTime TranslatorWritten = File.GetLastWriteTimeUtc(typeof(Generator).Assembly.Location);
+
+    // Returns the file of the translation (name.c.asm). It is written only when the source is newer than it, or the
+    // translator itself is: a build that changed no C does not touch the file, nor the programs that include it
     public static string Translate(string path)
     {
+        string output = path + ".asm";
+        if (File.Exists(output))
+        {
+            var written = File.GetLastWriteTimeUtc(output);
+            if (written > File.GetLastWriteTimeUtc(path) && written > TranslatorWritten) return Path.GetFileName(output);
+        }
         string text = File.ReadAllText(path);
         string assembly;
         try
@@ -53,8 +62,9 @@ public static class CSources
             string line = e.Line >= 1 && e.Line <= lines.Length ? lines[e.Line - 1] : "";
             throw new AssemblerException(Path.GetFileName(path), e.Line, line, e.Message, Path.GetFullPath(path));
         }
-        File.WriteAllText(path + ".asm", assembly);
-        return Path.GetFileName(path) + ".asm";
+        if (!File.Exists(output) || File.ReadAllText(output) != assembly) File.WriteAllText(output, assembly);
+        else File.SetLastWriteTimeUtc(output, DateTime.UtcNow);
+        return Path.GetFileName(output);
     }
 }
 
