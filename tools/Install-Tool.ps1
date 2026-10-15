@@ -3,7 +3,7 @@
     Packs the thing64 command line and installs it (or updates it) as a .NET global tool.
 
 .DESCRIPTION
-    The package goes into artifacts/ (excluded from git) and contains the desktop app (studio and C64 windows)
+    The package goes into artifacts/ (excluded from git) and contains the desktop app (a C64 in a window)
     in its "desktop" folder, together with the C64 ROMs. The ROMs are copyrighted: keep the package for yourself,
     do not publish it on nuget.org.
     After the installation the command is available everywhere: thing64 --help

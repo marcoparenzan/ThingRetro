@@ -13,14 +13,6 @@ public sealed class AppSettings
     public ControlPortChoice Port2 { get; set; } = new(ControlPortSource.KeypadJoystick);
     public bool Audio { get; set; } = true;
 
-    // Studio window: last folder shown by the file explorer, window position, explorer width
-    public string? LastFolder { get; set; }
-    public WindowPlacement? StudioWindow { get; set; }
-    public int ExplorerWidth { get; set; } = 280;
-
-    // Main file of each project folder (lower-case folder -> file), see Studio.MainFiles
-    public Dictionary<string, string> MainFiles { get; set; } = [];
-
     public static AppSettings Current { get; } = Load();
 
     static readonly string FilePath = Path.Combine(
@@ -58,5 +50,3 @@ public sealed class AppSettings
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { } // never stop the emulator for this
     }
 }
-
-public sealed record WindowPlacement(int X, int Y, int Width, int Height, bool Maximized);

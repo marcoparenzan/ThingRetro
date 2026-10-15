@@ -8,20 +8,6 @@ using Spectre.Console.Cli;
 
 namespace Thing64.Cli;
 
-// thing64 studio [PATH]: the studio, with a source, a program or a folder open
-sealed class StudioCommand : Command<StudioCommand.Settings>
-{
-    public sealed class Settings : CommandSettings
-    {
-        [CommandArgument(0, "[PATH]")]
-        [Description("A source (.asm), a program (.prg, .crt) or a folder to open")]
-        public string? Path { get; init; }
-    }
-
-    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) =>
-        settings.Path is null ? Desktop.Start() : Desktop.Start(System.IO.Path.GetFullPath(settings.Path));
-}
-
 // thing64 run FILE: one C64 in a window, running a program or a cartridge; sources are built first
 sealed class RunCommand : Command<RunCommand.Settings>
 {
@@ -43,7 +29,7 @@ sealed class RunCommand : Command<RunCommand.Settings>
             file = Path.Combine(Path.GetTempPath(), Path.GetFileNameWithoutExtension(file) + ".prg");
             File.WriteAllBytes(file, program);
         }
-        return file is null ? Desktop.Start("--computer") : Desktop.Start("--computer", file);
+        return file is null ? Desktop.Start() : Desktop.Start(file);
     }
 }
 

@@ -8,7 +8,7 @@
 
 A Commodore 64 (PAL) emulator in C#, written to be read: the code mirrors the real motherboard, with the MOS
 chips in their sockets, the traces that connect them and the cables to the monitor, the speakers and the keyboard.
-It comes with a small studio to write 6502 assembly and run it right away.
+It comes with a studio in the browser to write 6502 assembly (and C) and run it right away.
 
 ![Boot and a line of BASIC](images/thing64-ready.png)
 ![A raster interrupt draws a red bar in the border while BASIC keeps working](images/thing64-rasterbars.png)
@@ -41,8 +41,9 @@ It comes with a small studio to write 6502 assembly and run it right away.
 - **Control ports** (DE-9 sockets) with joystick, paddles and 1351 mouse: the digital contacts reach CIA 1, the
   POT lines reach the SID through the analog switch driven by CIA 1. In the app the joystick is driven by the PC
   keyboard or by a USB joystick/gamepad, the paddles by the PC mouse.
-- **Studio**: file explorer, assembly editor (Monaco) with 6502 syntax highlighting, built-in assembler,
-  F5 to assemble and run in a C64 tab.
+- **Studio** (in the browser): projects, assembly editor (Monaco) with 6502 syntax highlighting, built-in
+  assembler, editors for screens, charsets and sprites, F5 to build and run in the C64 tab. See
+  [The web studio](#the-web-studio).
 - **C**: a subset of C translated into assembly (`player.c` becomes `player.c.asm`), mixed freely with assembly
   modules. See [C](#c).
 
@@ -62,9 +63,8 @@ Not yet: the 1541 drive and disk/tape images (`.d64`, `.t64`). See [Known limits
 | `src/Thing64.C` | A C subset translated into ACME assembly: lexer with `#define`, parser, code generator, multiplication and division routines |
 | `src/Thing64.Build` | From sources to C64 files: `.asm` and `.bas` to `.prg`, build manifests (`thing64.json`) with programs and cartridges |
 | `src/Thing64.WinForms` | `C64Monitor` (the screen, a UserControl), `PcKeyboard` (the keyboard cable), `PcSpeakers` (the speakers), joystick and paddle simulators |
-| `src/Thing64.Computer` | One C64 in a window (`ComputerForm`), loading of `.prg`/`.crt`, the ROMs, the settings |
-| `src/Thing64.Studio` | The desktop app: the studio (explorer, editors, C64 tabs) and the single C64 window |
-| `src/Thing64` | The `thing64` command line (Spectre.Console), a .NET global tool: `studio`, `run`, `asm`, `basic`, `build` |
+| `src/Thing64.Computer` | The desktop app: one C64 in a window (`ComputerForm`), loading of `.prg`/`.crt`, the ROMs, the settings |
+| `src/Thing64` | The `thing64` command line (Spectre.Console), a .NET global tool: `run`, `asm`, `basic`, `build` |
 | `src/Thing64.WebComputer` | The C64 in the browser: the same board compiled to WebAssembly (Blazor, AOT), on a canvas |
 | `src/Thing64.WebStudio` | The studio in the browser (Blazor Server): projects in a local folder, Monaco, builds, the web computer |
 | `src/Thing64.Tests` | Tests (MSTest) |
@@ -106,8 +106,8 @@ board.ControlPort1.Plug(new Paddles { PositionA = 128 });   // Le Mans, REVS...
 
 ## Building and running
 
-You need the [.NET 10 SDK](https://dotnet.microsoft.com/) and Windows for the app (the chip, board, format and
-assembler libraries are `net10.0`). The editor uses WebView2, which is part of Windows 11.
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/) and Windows for the C64 window (the chip, board, format
+and assembler libraries are `net10.0`).
 
 ```powershell
 dotnet build src/Thing64.slnx
@@ -117,8 +117,6 @@ dotnet build src/Thing64.slnx
 Then, from any folder:
 
 ```powershell
-thing64 studio                      # the studio
-thing64 studio main.asm             # the studio with a source open (or a .prg/.crt, or a folder)
 thing64 run game.prg                # one C64 window running a program (or a .crt, or a source built first)
 thing64 asm main.asm --labels main.labels   # assembles to main.prg; labels in VICE format
 thing64 basic hello.bas             # tokenizes to hello.prg
@@ -130,33 +128,9 @@ Without installing the tool, the same commands work with `dotnet run --project s
 of the solution, so that the desktop app is there).
 
 A .NET tool cannot use Windows Forms, so the command line is `net10.0` and starts the desktop app
-(`Thing64.Studio.exe`), which travels inside the tool package in its `desktop` folder. The ROMs are in
+(`Thing64.Computer.exe`, a C64 in a window), which travels inside the tool package in its `desktop` folder. The ROMs are in
 `src/Thing64.Computer/roms` (`kernal`, `basic`, `chargen`) and are copied next to the desktop app. They are the
 original C64 ROMs, protected by copyright: the tool package contains them, so keep it for yourself.
-
-### The studio
-
-The main window holds tabs (at the bottom) with assembly editors and C64s, and a file explorer on the left.
-
-- **Explorer**: double click opens a folder or a file; ".." and Backspace go up. New folder, new `.asm` file
-  (with a minimal program, opened once its name is confirmed), rename (F2), delete to the recycle bin (Del),
-  move with cut and paste (Ctrl+X, Ctrl+V) or by dragging onto a folder; files dragged in from Windows Explorer
-  are copied. The last folder is remembered; the first time it is `samples/src`.
-- **Editor**: [Monaco](https://microsoft.github.io/monaco-editor/) in WebView2, with the 6502 language built from
-  the assembler itself: colors, the description of each instruction on hover, go to definition (F12) of labels
-  and constants, completion. Assembly errors are marked on their line. Monaco comes from a CDN: the first start
-  needs an internet connection, then WebView2 keeps it in its cache.
-- **Keys**: Ctrl+S saves, **F7** assembles and writes the `.prg` next to the source, **F5** assembles and runs it
-  in the editor's own C64 tab: the machine restarts, the KERNAL boots at full speed, then the program starts with
-  `RUN` (BASIC, or machine code with the `.basic` stub) or `SYS` to its first byte. **Shift+F5** assembles and runs it in a
-  separate C64 window (a new process, like `thing64 run`). Ctrl+W closes a tab;
-  a middle click on a tab closes it too.
-- **Main file**: a project is usually a main file that includes the others with `!source`. F5, F7 and Shift+F5
-  assemble the main file of the folder, set with **Set as main file** (right click in the explorer, or the Build
-  menu; it is shown in bold). Without one the studio follows the `!source` lines up to the file that nobody
-  includes. Errors are marked in the file they are in.
-- **C64 tabs**: while a C64 tab is active the PC keyboard is the C64 keyboard: F5, Ctrl+S and the other
-  shortcuts go to the C64, not to the menu. Closing the tab stops the machine.
 
 ### The C64 in the browser
 
@@ -299,7 +273,7 @@ of a platform game rewritten in C) behaves exactly like its assembly original: 3
 The [samples](samples/README.md) folder holds about twenty programs, each on a C64 topic: BASIC, interrupts
 (raster, CIA, NMI), decimal mode, all the VIC-II graphics modes, sprites, fine scrolling, VIC-II banks, open
 borders, SID sound, joystick and paddles, cartridges (autostart, Ultimax, banks). The sources in `samples/src` are
-BASIC and 6502 assembly commented line by line: they are meant for learning, and they open in the studio.
+BASIC and 6502 assembly commented line by line: they are meant for learning.
 
 ```powershell
 thing64 run samples/rasterbars.prg

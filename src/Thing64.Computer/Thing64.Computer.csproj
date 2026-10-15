@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- One C64 in a window: board, monitor, keyboard, speakers and control ports wired together, plus loading
-       .prg/.crt files, the ROM folder and the settings shared with the studio -->
+  <!-- The desktop app: one C64 in a window, with board, monitor, keyboard, speakers and control ports wired
+       together, plus loading .prg/.crt files, the ROM folder and the settings -->
   <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <ApplicationIcon>..\..\images\thing64.ico</ApplicationIcon>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>

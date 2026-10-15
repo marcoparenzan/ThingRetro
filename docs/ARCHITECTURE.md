@@ -16,7 +16,6 @@ flowchart LR
     Basic[Thing64.Basic<br/>BASIC tokenizer]
     WinForms[Thing64.WinForms<br/>monitor, keyboard, speakers]
     Computer[Thing64.Computer<br/>C64 window]
-    Studio[Thing64.Studio<br/>desktop app]
     Cli[Thing64<br/>command line]
     C64 --> Mos
     Prg --> C64
@@ -25,8 +24,6 @@ flowchart LR
     Computer --> Prg
     Computer --> Crt
     Computer --> WinForms
-    Studio --> Computer
-    Studio --> Asm
     Build[Thing64.Build<br/>builds, manifests]
     Build --> Asm
     Build --> Basic
@@ -34,7 +31,7 @@ flowchart LR
     Build --> CLang
     Build --> Crt
     Cli --> Build
-    Cli -. starts .-> Studio
+    Cli -. starts .-> Computer
     Web[Thing64.WebComputer<br/>C64 in the browser]
     Web --> Prg
     Web --> Crt
@@ -235,26 +232,13 @@ the machine with `Board.Enqueue`, which runs the action between two cycles. `Boa
   creates device and simulator, provides the menu items and the keys to keep away from the C64 keyboard
   (`PcKeyboard.Excluded`).
 
-## The desktop app (`Thing64.Computer`, `Thing64.Studio`)
+## The desktop app (`Thing64.Computer`)
 
-- **`StudioForm`**: the main window, an MDI container. Its children (editors and C64s) are shown maximized, with
-  a `TabControl` at the bottom used as the tab strip and kept in sync with the active child. Menu shortcuts are
-  disabled while a C64 tab is active, so that keys like F5 reach the C64.
-- **`FileExplorer`**: one folder at a time in a `ListView`, with shell icons, a `FileSystemWatcher`, label edit for
-  renaming, the recycle bin for deleting and drag and drop for moving. The last folder goes into the settings.
-- **`AsmEditorForm`**: a WebView2 that serves `Studio/Editor` (editor page and script) from a virtual host and loads
-  Monaco from the CDN. The page and the form talk with web messages: the page sends the text at every change and
-  the editor commands (save, assemble, run); the form sends the initial text, the language lists and the error
-  markers. Assembling writes the `.prg` next to the source; running asks the studio for the editor's C64.
-- **`MainFiles`**: the file F5/F7 assemble: the main file set for the folder, or the file found by following the
-  `!source` lines up to the one nobody includes.
-- **`ComputerForm`** (`Thing64.Computer`): one C64 (board, monitor, keyboard, speakers, control ports), as a tab or
-  as a window of its own. It runs programs with `MediaLoader.Run`: reset, KERNAL boot with `FastForward`, load,
-  then `RUN` or `SYS`. Closing it stops the board.
-- **`AppSettings`** (`Thing64.Computer`): one shared instance saved in `%AppData%\Thing64\settings.json` (control
-  ports, audio, last folder, window placement, main files).
-- **`Program`** (`Thing64.Studio`): `Thing64.Studio.exe [path]` opens the studio, `--computer [file]` a single C64
-  window; Shift+F5 in the studio starts the same executable with `--computer`.
+- **`ComputerForm`**: one C64 (board, monitor, keyboard, speakers, control ports) in a window. It runs programs with
+  `MediaLoader.Run`: reset, KERNAL boot with `FastForward`, load, then `RUN` or `SYS`. Closing it stops the board.
+- **`AppSettings`**: one shared instance saved in `%AppData%\Thing64\settings.json` (control ports, audio).
+- **`Program`**: `Thing64.Computer.exe [file]` opens a C64 window, running the program or cartridge if given;
+  `thing64 run` starts it.
 
 ## The C64 in the browser (`Thing64.WebComputer`)
 
@@ -338,7 +322,7 @@ A Blazor Server app: the server owns the files and the builds, the browser shows
   changed (a file with unsaved changes is left alone, with a warning). The engine keeps the conversation and the
   costs in the project's `.ralfai/` folder; the voice tools are switched off, since the studio is a server.
 - **The 6502 language** (`Thing64.Asm/Editor/asm6502.js`: colors, hover help, completion, go to definition) is
-  shared with the desktop studio and fed with the assembler's own lists of instructions and directives.
+  fed with the assembler's own lists of instructions and directives.
 - **The C64** is the published web computer, served at `/computer/` from the same origin and shown in an iframe,
   or opened in a window of its own (then the iframe is removed): the page sends the built program with
   `postMessage` to whichever is open, once it has said `ready`. Same origin also means the same `localStorage`, so the
@@ -393,7 +377,7 @@ program: no object files and no linker, and the output can be read.
   `.prg`; `BuildManifest` reads a JSON manifest that lists the outputs (programs, and cartridges made of assembled
   banks) with paths relative to it. `samples/samples.json` is the manifest of the samples, and the tests check that
   the files in `samples/` are the ones it builds.
-- **`studio`, `run`** start the desktop app as a separate process (`Desktop`), so that the terminal is free again.
+- **`run`** starts the desktop app as a separate process (`Desktop`), so that the terminal is free again.
   A .NET tool cannot use Windows Forms, so the command line is `net10.0` and the tool package carries the desktop
   app, published into its `desktop` folder when the tool is packed. While developing, the command line finds it in
-  the build output of `src/Thing64.Studio`.
+  the build output of `src/Thing64.Computer`.
