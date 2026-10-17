@@ -103,6 +103,17 @@ public interface I6569Pinout
     void Tick();                         // one φ0 cycle
 }
 
+// CSG 4567 VIC-III: the C65's video chip, a VIC-II (same pinout) with more registers: $D02F-$D07F, a palette, and the
+// bits of control register A that make it decode the system ROMs. In "VIC-II mode" (after reset, and C64 mode) it
+// behaves as a 6569; the registers beyond $2E appear after writing $A5 and $96 to the KEY register ($D02F)
+public interface I4567Pinout : I6569Pinout
+{
+    bool NewMode { get; }                // VIC-III mode: the new registers, and the new I/O map ($D080-$D7FF), are visible
+    byte ControlA { get; }               // $D030: ROM@E000, CROM@9000, ROM@C000, ROM@A000, ROM@8000, PAL, EXT SYNC, CRAM@DC00
+    byte ControlB { get; }               // $D031: H640, FAST, ATTR, BPM, V400, H1280, MONO, INT
+    void WritePalette(int component, int index, byte value); // component 0 = red, 1 = green, 2 = blue ($D100-$D3FF)
+}
+
 // MOS 6581 SID, DIP-28: three voices, envelopes, filter
 public interface I6581Pinout
 {
