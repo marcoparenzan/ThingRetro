@@ -1,76 +1,262 @@
 namespace Thing65.Mos;
 
-// CSG 4567 VIC-III: the C65's video chip. For now it is a MOS 6569 (VIC-II) in a larger package: it adds the register
-// file $D02F-$D07F (KEY, control registers A and B, bitplane and DAT registers, kept but not yet acted on) and the
-// palette RAM, and decodes the access to its registers. The new video modes (80 columns, bitplanes, 256 colors)
-// are not implemented yet.
+// CSG 4567 VIC-III: the C65's video chip. After reset it is a VIC-II (same registers, same timing: the C64 mode of
+// the C65); writing $A5 then $96 to the KEY register ($D02F) puts it in "NewVic" mode, where the registers
+// $D02F-$D07F, the 256-color palette and the new video modes appear:
+//   - 80 columns / 640 pixels per line (H640), 400 lines (V400 with INT), bitplane mode (BPM) with up to 8 planes,
+//   - character attributes (blink, reverse, highlight, underline), the ROM-decoding bits of control register A,
+//   - the DAT (display address translator) and the FAST bit.
+// The picture is made of "dots" of half a VIC-II pixel horizontally, and every raster line gives two lines of the
+// frame (a top and a bottom one: they differ only in 400-line bitplane mode): see CSG4567.Graphics.cs.
+// Not implemented: HPOS/VPOS display offsets, 1280 pixel multiplexing, external sync, the cycles that the fetch of 80
+// columns takes from the CPU (the bus timing is that of the VIC-II).
 // Reference: "C65 Specifications", chapter 2.4
-public class CSG4567 : I4567Pinout
+public partial class CSG4567 : I4567Pinout
 {
-    const int KEY = 0x2F;
-    const int CONTROL_A = 0x30;
-    const int CONTROL_B = 0x31;
-    const int REGISTERS = 0x80;
+    // Video bus and video output, wired by the board
+    public IVic3Memory? Memory { get; set; }
+    IVicMemory? I6569Pinout.Memory { get => Memory; set => Memory = value as IVic3Memory; }
+    public Action? FrameCompleted { get; set; }
 
-    readonly MOS6569 vic = new();
-    readonly byte[] registers = new byte[REGISTERS]; // $D02F-$D07F (the VIC-II part is in the MOS6569)
-    readonly byte[][] palette = [new byte[256], new byte[256], new byte[256]];
-    bool keyAfterFirst;                              // $A5 written: waiting for $96
+    // The VIC-II generates its own timing: raster line and cycle within the line
+    int rasterLine;
+    int currentCycle;
+    int rasterCompare;            // Raster interrupt line (written through $D012 and bit 7 of $D011)
+    bool badLinesEnabled;         // DEN ($D011 bit 4) set during line $30 of the current frame
+    long frames;                  // for the blink of the attributes
+
+    // $D000-$D07F; the VIC-II uses $00-$2E
+    readonly byte[] registers = new byte[0x80];
+    readonly byte[][] paletteRam = [new byte[256], new byte[256], new byte[256]]; // red (bit 4 = FG/BG), green, blue
+
+    // Register numbers
+    const int REG_SPRITE0_X = 0x00, REG_SPRITE0_Y = 0x01, REG_SPRITE_X_MSB = 0x10, REG_CONTROL_1 = 0x11, REG_RASTER = 0x12,
+        REG_SPRITE_ENABLE = 0x15, REG_CONTROL_2 = 0x16, REG_SPRITE_Y_EXPAND = 0x17, REG_MEMORY_POINTERS = 0x18,
+        REG_INTERRUPT_STATUS = 0x19, REG_INTERRUPT_ENABLE = 0x1A, REG_SPRITE_PRIORITY = 0x1B, REG_SPRITE_MULTICOLOR = 0x1C,
+        REG_SPRITE_X_EXPAND = 0x1D, REG_SPRITE_SPRITE_COLL = 0x1E, REG_SPRITE_DATA_COLL = 0x1F, REG_BORDER_COLOR = 0x20,
+        REG_BACKGROUND_COLOR = 0x21, REG_BACKGROUND_COLOR_1 = 0x22, REG_BACKGROUND_COLOR_2 = 0x23,
+        REG_BACKGROUND_COLOR_3 = 0x24, REG_SPRITE_MULTICOLOR_0 = 0x25, REG_SPRITE_MULTICOLOR_1 = 0x26,
+        REG_SPRITE0_COLOR = 0x27, REG_LAST_VIC2 = 0x2E;
+
+    // VIC-III registers
+    const int REG_KEY = 0x2F, REG_CONTROL_A = 0x30, REG_CONTROL_B = 0x31, REG_BITPLANE_ENABLE = 0x32, REG_BITPLANE_ADDRESS = 0x33,
+        REG_BITPLANE_COMPLEMENT = 0x3B, REG_BITPLANE_X = 0x3C, REG_BITPLANE_Y = 0x3D, REG_DAT = 0x40;
+
+    // Control register B
+    const int B_H640 = 0x80, B_FAST = 0x40, B_ATTR = 0x20, B_BPM = 0x10, B_V400 = 0x08, B_H1280 = 0x04, B_MONO = 0x02, B_INT = 0x01;
+    // Control register A
+    const int A_PAL = 0x04;
+
+    const int TOTAL_RASTER_LINES = 312;    // PAL
+    const int CYCLES_PER_LINE = 63;
+
+    bool keyAfterFirst;                    // $A5 written: waiting for $96
 
     public bool NewMode { get; private set; }
-    public byte ControlA => registers[CONTROL_A];
-    public byte ControlB => registers[CONTROL_B];
+    public byte ControlA => registers[REG_CONTROL_A];
+    public byte ControlB => registers[REG_CONTROL_B];
+    public bool Fast => NewMode && (registers[REG_CONTROL_B] & B_FAST) != 0;
 
-    // Palette entry as written: 4 bits per component (bit 4 of red is FG/BG)
-    public byte Palette(int component, int index) => palette[component][index];
-
-    // ---- Pinout of the VIC-II ---------------------------------------------------------------------------
-    public IVicMemory? Memory { get => vic.Memory; set => vic.Memory = value; }
-    public Action? FrameCompleted { get => vic.FrameCompleted; set => vic.FrameCompleted = value; }
-    public bool Irq => vic.Irq;
-    public bool BusAvailable => vic.BusAvailable;
-    public bool AddressEnable => vic.AddressEnable;
-    public unsafe void Render(byte* pixels) => vic.Render(pixels);
-    public void Tick() => vic.Tick();
+    public CSG4567()
+    {
+        Reset();
+    }
 
     public void Reset()
     {
-        vic.Reset();
         Array.Clear(registers);
+        registers[REG_BORDER_COLOR] = 14;     // light blue border
+        registers[REG_BACKGROUND_COLOR] = 6;  // blue background
         NewMode = false;
         keyAfterFirst = false;
+        for (int component = 0; component < 3; component++)
+            for (int i = 0; i < 256; i++)
+                paletteRam[component][i] = (byte)RomPalette[i & 15][component];
+
+        rasterLine = 0;
+        renderedTo = 0;
+        currentCycle = 0;
+        rasterCompare = 0;
+        badLinesEnabled = false;
+        mainBorder = verticalBorder = true;
+        ResetSprites();
     }
 
-    // The registers: $00-$2E are the VIC-II's (mirrored every 64 bytes in VIC-II mode), $2F-$7F exist only in
-    // VIC-III mode
+    // End of a cycle: at the end of the last cycle of the line the next line starts.
+    // BusAvailable must be read before, because it concerns the current cycle
+    public void Tick()
+    {
+        if (currentCycle == CYCLES_PER_LINE - 1)
+        {
+            currentCycle = 0;
+            EndLine();
+        }
+        else
+        {
+            currentCycle++;
+        }
+        SpriteCycle();
+    }
+
+    // Bad line: lines $30-$F7 whose 3 low raster bits match YSCROLL, if the display was enabled (DEN) during line $30
+    internal bool IsBadLine =>
+        badLinesEnabled &&
+        rasterLine >= 0x30 && rasterLine <= 0xF7 &&
+        (rasterLine & 0x07) == (registers[REG_CONTROL_1] & 0x07);
+
+    // On bad lines the chip reads the character codes and keeps the bus: see MOS6569 (the timing is the same here)
+    public bool BusAvailable => !(IsBadLine && currentCycle >= 11 && currentCycle <= 53) && SpriteDmaCycles(SpriteBaWindow) == 0;
+    public bool AddressEnable => !(IsBadLine && currentCycle >= 14 && currentCycle <= 53) && SpriteDmaCycles(SpriteAecWindow) == 0;
+
+    void EndLine()
+    {
+        RenderLine(rasterLine);
+        LatchSprites();
+
+        rasterLine = (rasterLine + 1) % TOTAL_RASTER_LINES;
+        registers[REG_RASTER] = (byte)(rasterLine & 0xFF);
+        if ((rasterLine & 0x100) != 0)
+            registers[REG_CONTROL_1] |= 0x80;
+        else
+            registers[REG_CONTROL_1] &= 0x7F;
+
+        if (rasterLine == 0)
+            badLinesEnabled = false;
+        if (rasterLine == 0x30 && (registers[REG_CONTROL_1] & 0x10) != 0)
+            badLinesEnabled = true;
+
+        CheckRasterCompare();
+
+        if (rasterLine == 0)
+        {
+            frames++;
+            FrameCompleted?.Invoke();
+        }
+    }
+
+    void CheckRasterCompare()
+    {
+        if (rasterLine == rasterCompare)
+        {
+            registers[REG_INTERRUPT_STATUS] |= 0x01;
+            CheckInterrupts();
+        }
+    }
+
+    void CheckInterrupts()
+    {
+        if ((registers[REG_INTERRUPT_STATUS] & registers[REG_INTERRUPT_ENABLE] & 0x0F) != 0)
+            registers[REG_INTERRUPT_STATUS] |= 0x80;
+        else
+            registers[REG_INTERRUPT_STATUS] &= 0x7F;
+    }
+
+    public bool Irq => (registers[REG_INTERRUPT_STATUS] & 0x80) != 0;
+
+    // ---- Registers --------------------------------------------------------------------------------------
+    // In VIC-II mode the 64 registers repeat in $D000-$D3FF and only $00-$2E exist (and the KEY register); in
+    // VIC-III mode the registers go up to $7F
     public byte Read(int register)
     {
         if (!NewMode) register &= 0x3F;
-        if (register <= 0x2E) return vic.Read(register);
-        if (!NewMode || register >= REGISTERS) return 0xFF;
+        register &= 0x7F;
+        if (register == REG_INTERRUPT_STATUS)
+            return (byte)(registers[register] | 0x70);
+        if (register == REG_SPRITE_SPRITE_COLL || register == REG_SPRITE_DATA_COLL)
+        {
+            byte collisions = registers[register];
+            registers[register] = 0;
+            return collisions;
+        }
+        if (register <= REG_LAST_VIC2) return registers[register];
+        if (!NewMode) return 0xFF;
+        if (register >= REG_DAT && register < REG_DAT + 8) return ReadDat(register - REG_DAT);
         return registers[register];
     }
 
     public void Write(int register, byte value)
     {
         if (!NewMode) register &= 0x3F;
-        if (register <= 0x2E)
+        register &= 0x7F;
+
+        if (register == REG_KEY)
         {
-            vic.Write(register, value);
-            return;
-        }
-        // The KEY register works in both modes: $A5 then $96 switches to VIC-III mode, anything else back
-        if (register == KEY)
-        {
+            // $A5 then $96 switches to VIC-III mode, anything else back
             bool enter = keyAfterFirst && value == 0x96;
             keyAfterFirst = value == 0xA5;
             NewMode = enter;
-            registers[KEY] = value;
+            registers[REG_KEY] = value;
             return;
         }
-        if (NewMode && register < REGISTERS) registers[register] = value;
+        if (register > REG_LAST_VIC2 && !NewMode) return;
+
+        // The pixels already output on this line keep the old values
+        if (register != REG_INTERRUPT_STATUS && register != REG_INTERRUPT_ENABLE)
+            CatchUp();
+
+        switch (register)
+        {
+            case REG_RASTER:
+                rasterCompare = (rasterCompare & 0x100) | value;
+                CheckRasterCompare();
+                break;
+            case REG_CONTROL_1:
+                rasterCompare = (rasterCompare & 0xFF) | ((value & 0x80) << 1);
+                registers[register] = (byte)((value & 0x7F) | (registers[register] & 0x80));
+                if (rasterLine == 0x30 && (value & 0x10) != 0)
+                    badLinesEnabled = true;
+                CheckRasterCompare();
+                break;
+            case REG_INTERRUPT_STATUS:
+                registers[register] &= (byte)~(value & 0x0F);
+                CheckInterrupts();
+                break;
+            case REG_INTERRUPT_ENABLE:
+                registers[register] = (byte)(value & 0x0F);
+                CheckInterrupts();
+                break;
+            case REG_SPRITE_SPRITE_COLL:
+            case REG_SPRITE_DATA_COLL:
+                break; // read-only
+            default:
+                if (register >= REG_DAT && register < REG_DAT + 8) WriteDat(register - REG_DAT, value);
+                else registers[register] = value;
+                break;
+        }
     }
 
+    // $D100-$D3FF: the palette RAM; red, green or blue of an entry (4 bits; bit 4 of red is FG/BG, unused here)
     public void WritePalette(int component, int index, byte value) =>
-        palette[component][index & 0xFF] = (byte)(value & 0x1F);
+        paletteRam[component][index & 0xFF] = (byte)(value & 0x1F);
+
+    public byte Palette(int component, int index) => paletteRam[component][index & 0xFF];
+
+    // ---- DAT: Display Address Translator ----------------------------------------------------------------
+    // The CPU gives the (X, Y) of a byte of bitplane memory in BPX/BPY and reads or writes it through one of the
+    // eight DAT ports, without computing the address of the 8x8 cell layout. X is in bytes (0-79), Y in lines
+    // (0-399 in 400-line mode), the plane's address comes from its bitplane address register
+    int DatAddress(int plane)
+    {
+        bool wide = (registers[REG_CONTROL_B] & B_H640) != 0;
+        int columns = wide ? 80 : 40;
+        int x = registers[REG_BITPLANE_X] & 0x7F;
+        int y = registers[REG_BITPLANE_Y] | (registers[REG_BITPLANE_X] & 0x80) << 1;
+        bool interlaced400 = (registers[REG_CONTROL_B] & (B_V400 | B_INT)) == (B_V400 | B_INT);
+        int field = interlaced400 ? y & 1 : 0;
+        if (interlaced400) y >>= 1;
+        return PlaneBase(plane, field, wide) + (y >> 3) * columns * 8 + x * 8 + (y & 7);
+    }
+
+    byte ReadDat(int plane) => Memory?.ReadRam(DatAddress(plane)) ?? 0xFF;
+    void WriteDat(int plane, byte value) => Memory?.WriteRam(DatAddress(plane), value);
+
+    // Start of the bitplane in memory: even planes in the first 64 KB, odd planes in the second; the 8 KB block
+    // (16 KB in 640 mode) comes from the plane's address register, even or odd scan bits
+    int PlaneBase(int plane, int field, bool wide)
+    {
+        byte register = registers[REG_BITPLANE_ADDRESS + plane];
+        int block = field == 0 ? (register & 0x0E) << 12 : (register & 0xE0) << 8;
+        if (wide) block &= ~0x2000;
+        return ((plane & 1) << 16) | block;
+    }
 }

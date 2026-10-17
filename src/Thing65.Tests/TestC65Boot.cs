@@ -55,4 +55,19 @@ public sealed class C65BootTests
 
         Assert.IsTrue(cpu.InstructionCount - before > 100_000, "BASIC waits for a key in its input loop");
     }
+
+    [TestMethod]
+    [Timeout(120_000)]
+    public unsafe void Snapshot_ToFile()
+    {
+        var board = NewBoard();
+        board.RunCycles(9_000_000);
+        var vic = board.VicSocket.Chip!;
+        var bitmap = new System.Drawing.Bitmap(CSG4567.SCREEN_WIDTH, CSG4567.SCREEN_HEIGHT, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        var data = bitmap.LockBits(new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height), System.Drawing.Imaging.ImageLockMode.WriteOnly, bitmap.PixelFormat);
+        vic.Render((byte*)data.Scan0);
+        bitmap.UnlockBits(data);
+        bitmap.Save(Environment.GetEnvironmentVariable("C65_SNAPSHOT") ?? Path.GetTempFileName() + ".png", System.Drawing.Imaging.ImageFormat.Png);
+        Console.WriteLine($"D011={vic.Read(0x11):X2} D016={vic.Read(0x16):X2} D018={vic.Read(0x18):X2} D030={vic.ControlA:X2} D031={vic.ControlB:X2} newmode={vic.NewMode}");
+    }
 }

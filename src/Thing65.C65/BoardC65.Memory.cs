@@ -217,8 +217,12 @@ public partial class BoardC65
 
     internal int VicBank => vicBank;
 
-    sealed class VicBus(BoardC65 board) : IVicMemory
+    sealed class VicBus(BoardC65 board) : IVic3Memory
     {
+        public int Bank => board.vicBank;
+        public byte ReadRam(int address) => board.ram[address & 0x1FFFF];
+        public void WriteRam(int address, byte value) => board.ram[address & 0x1FFFF] = value;
+
         public byte Read(int address)
         {
             address &= 0x3FFF;

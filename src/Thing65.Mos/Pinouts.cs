@@ -124,12 +124,22 @@ public interface I6569Pinout
     void Tick();                         // one φ0 cycle
 }
 
+// Memory as seen by the VIC-III: the VIC-II's 16 KB bank, and the first 128 KB of RAM for the bitplanes and the DAT
+public interface IVic3Memory : IVicMemory
+{
+    int Bank { get; }                    // the 16 KB VIC-II bank (0-3), from CIA 2
+    byte ReadRam(int address);           // A0-A16: the 128 KB of RAM (bitplanes: even ones in the first 64 KB, odd in the second)
+    void WriteRam(int address, byte value);
+}
+
 // CSG 4567 VIC-III: the C65's video chip, a VIC-II (same pinout) with more registers: $D02F-$D07F, a palette, and the
 // bits of control register A that make it decode the system ROMs. In "VIC-II mode" (after reset, and C64 mode) it
 // behaves as a 6569; the registers beyond $2E appear after writing $A5 and $96 to the KEY register ($D02F)
 public interface I4567Pinout : I6569Pinout
 {
+    new IVic3Memory? Memory { get; set; } // video bus
     bool NewMode { get; }                // VIC-III mode: the new registers, and the new I/O map ($D080-$D7FF), are visible
+    bool Fast { get; }                   // FAST: the CPU runs at 3.5 MHz instead of 1 MHz
     byte ControlA { get; }               // $D030: ROM@E000, CROM@9000, ROM@C000, ROM@A000, ROM@8000, PAL, EXT SYNC, CRAM@DC00
     byte ControlB { get; }               // $D031: H640, FAST, ATTR, BPM, V400, H1280, MONO, INT
     void WritePalette(int component, int index, byte value); // component 0 = red, 1 = green, 2 = blue ($D100-$D3FF)
