@@ -48,6 +48,7 @@ public partial class BoardC65
         Cia1Socket.Insert(new MOS6526());
         Cia2Socket.Insert(new MOS6526());
         DmaSocket.Insert(new F018());
+        FdcSocket.Insert(new F011());
 
         Reset();
 
@@ -113,6 +114,7 @@ public partial class BoardC65
         sidLeft?.Tick();
         AudioOut.Sample(((sidRight?.AudioOutput ?? 0) + (sidLeft?.AudioOutput ?? 0)) / 2);
         dma?.Tick();
+        fdc?.Tick();
         cpu?.Tick(); // the DMAgic and the VIC-III halt it through /DMA and AEC
         vic?.Tick();
 
@@ -134,7 +136,15 @@ public partial class BoardC65
         sidLeft?.Reset();
         vic?.Reset();
         dma?.Reset();
+        fdc?.Reset();
         cpu?.Reset();
+    }
+
+    // The disk in the internal drive (null = no disk). The F011 reads and writes sectors of it
+    public IDiskMedia? Disk
+    {
+        get => fdc?.Media;
+        set { if (fdc is not null) fdc.Media = value; }
     }
 
     // The 128 KB of RAM, bypassing the memory map (for tools and tests)

@@ -12,6 +12,7 @@ public partial class BoardC65
     public Socket<I6526Pinout> Cia1Socket { get; private set; } = null!;     // 6526 CIA 1 ($DC00)
     public Socket<I6526Pinout> Cia2Socket { get; private set; } = null!;     // 6526 CIA 2 ($DD00)
     public Socket<IF018Pinout> DmaSocket { get; private set; } = null!;      // CSG F018 DMAgic ($D700)
+    public Socket<IF011Pinout> FdcSocket { get; private set; } = null!;      // CSG F011 disk controller ($D080)
 
     // Chips currently in the sockets (null = empty socket), read at every cycle
     I4510Pinout? cpu;
@@ -21,8 +22,9 @@ public partial class BoardC65
     I6526Pinout? cia1;
     I6526Pinout? cia2;
     IF018Pinout? dma;
+    IF011Pinout? fdc;
 
-    // CPU /IRQ: VIC-III and CIA 1. /NMI: CIA 2 (the RESTORE key is not modelled yet)
+    // CPU /IRQ: VIC-III, CIA 1 and the disk controller. /NMI: CIA 2 (the RESTORE key is not modelled yet)
     OpenCollectorLine irqLine = null!;
     OpenCollectorLine nmiLine = null!;
 
@@ -35,7 +37,7 @@ public partial class BoardC65
 
     void CreateSockets()
     {
-        irqLine = new OpenCollectorLine("/IRQ", () => vic?.Irq == true, () => cia1?.Irq == true);
+        irqLine = new OpenCollectorLine("/IRQ", () => vic?.Irq == true, () => cia1?.Irq == true, () => fdc?.Irq == true);
         nmiLine = new OpenCollectorLine("/NMI", () => cia2?.Irq == true);
 
         CpuSocket = new Socket<I4510Pinout>("CPU", ConnectCpu, DisconnectCpu);
@@ -45,6 +47,7 @@ public partial class BoardC65
         Cia1Socket = new Socket<I6526Pinout>("CIA 1", ConnectCia1, DisconnectCia1);
         Cia2Socket = new Socket<I6526Pinout>("CIA 2", ConnectCia2, DisconnectCia2);
         DmaSocket = new Socket<IF018Pinout>("DMAgic", ConnectDma, DisconnectDma);
+        FdcSocket = new Socket<IF011Pinout>("F011", chip => fdc = chip, _ => fdc = null);
 
         // The CPU port has pull-ups on P0-P2: the memory map of the C64 mode
         cpuPort.External = () => 0xFF;

@@ -140,7 +140,8 @@ public partial class BoardC65
         if (offset < 0x400)
         {
             if (!NewMode || offset < 0x80) return vic?.Read(NewMode ? offset : offset & 0x3F) ?? 0xFF;
-            return 0xFF; // disk controller, RAM expansion controller and palettes are not readable (yet)
+            if (offset < 0xA0) return fdc?.Read(offset & 0x0F) ?? 0xFF;
+            return 0xFF; // RAM expansion controller and palettes are not readable
         }
 
         // $D400-$D7FF
@@ -175,6 +176,7 @@ public partial class BoardC65
         if (offset < 0x400)
         {
             if (!NewMode || offset < 0x80) vic?.Write(NewMode ? offset : offset & 0x3F, value);
+            else if (offset < 0xA0) fdc?.Write(offset & 0x0F, value);
             else if (offset >= 0x100) vic?.WritePalette((offset >> 8) - 1, offset & 0xFF, value);
             return;
         }

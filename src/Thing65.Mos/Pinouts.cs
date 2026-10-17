@@ -67,6 +67,27 @@ public interface IF018Pinout
     void Tick();                         // one cycle: one bus access
 }
 
+// A floppy disk as the controller sees it: 512-byte sectors addressed by physical track (cylinder), side and
+// sector number (1-based). The medium of a drive; null in the drive = no disk
+public interface IDiskMedia
+{
+    bool WriteProtected { get; }
+    bool ReadSector(int track, int side, int sector, Span<byte> buffer);       // false = sector not found
+    bool WriteSector(int track, int side, int sector, ReadOnlySpan<byte> data); // false = not found or protected
+}
+
+// CSG F011 disk controller, the C65's built-in 3.5" drive: sector-level commands, a 512-byte buffer, eight registers
+public interface IF011Pinout
+{
+    byte Read(int register);             // A0-A3, D0-D7, R/W = 1, /CS
+    void Write(int register, byte value);
+    IDiskMedia? Media { get; set; }      // the disk in the local drive (drive 0), if any
+    bool Irq { get; }                    // /IRQ
+    bool Motor { get; }                  // MOT: the motor (and the drive's LED) is on
+    void Reset();                        // /RES
+    void Tick();                         // one cycle (1 MHz)
+}
+
 // MOS 6526 CIA, DIP-40: timers, clock, parallel ports, serial line
 public interface I6526Pinout
 {
