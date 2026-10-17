@@ -11,6 +11,9 @@ public partial class MOS6502 : I6502Pinout
     public Func<bool> RdyInput { get; set; } = () => true;
     public Func<bool> AecInput { get; set; } = () => true;
 
+    // SO: a falling edge sets the V flag (the 1541 signals "byte ready" to its CPU this way). High when not connected
+    public Func<bool> SoInput { get; set; } = () => true;
+
     // /RES
     public void Reset()
     {

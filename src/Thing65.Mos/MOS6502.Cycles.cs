@@ -28,6 +28,7 @@ public partial class MOS6502
     public void Tick()
     {
         SampleNmi();
+        SampleSo();
         if (jammed) return;
         if (!AecInput()) return;
         if (!RdyInput() && !IsWriteCycle()) return;
@@ -41,6 +42,15 @@ public partial class MOS6502
         else Execute();
 
         if (cycle == 0) interruptPending = interruptRequested;
+    }
+
+    bool soWasHigh = true;
+
+    void SampleSo()
+    {
+        bool high = SoInput();
+        if (!high && soWasHigh) Status |= FLAG_V;
+        soWasHigh = high;
     }
 
     void SampleNmi()

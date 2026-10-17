@@ -21,6 +21,7 @@ public interface I6502Pinout
     Func<bool> IrqInput { get; set; }    // /IRQ (level triggered)
     Func<bool> NmiInput { get; set; }    // /NMI (edge triggered)
     Func<bool> RdyInput { get; set; }    // RDY
+    Func<bool> SoInput { get; set; }     // SO: a falling edge sets the V flag
     void Reset();                        // /RES
     void Tick();                         // one φ2 cycle
 }

@@ -33,3 +33,4 @@ such instruction.
 
 - `Pinouts.cs`: new `I6502Pinout` (the 6502 without the port); `MOS6502` implements it. No behavior change: the same
   change would do in Thing64 if the drives are to share its `Mos` library.
+- `MOS6502`: `SoInput` pin (a falling edge sets V), also in `I6502Pinout`. The 1541 uses it for "byte ready".
