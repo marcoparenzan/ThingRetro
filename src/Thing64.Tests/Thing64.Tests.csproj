@@ -21,7 +21,7 @@
 
   <!-- The same ROMs as the app, copied into roms next to the tests -->
   <ItemGroup>
-    <Content Include="..\Thing64.Computer\roms\*" Link="roms\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../roms/*" Link="roms\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

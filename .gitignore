@@ -370,4 +370,4 @@ samples/src/*.prg
 artifacts/
 
 # 1541 ROM of the drive window (Thing1500)
-src/Thing64.Computer/roms/c-drive-1541.rom
+roms/c-drive-1541.rom

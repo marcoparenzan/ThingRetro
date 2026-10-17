@@ -35,7 +35,7 @@
   <!-- The C64 ROMs are copyrighted and are not published with the site: the user loads them once from disk.
        Only Debug builds embed them, for local development -->
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">
-    <EmbeddedResource Include="..\Thing64.Computer\roms\*" LogicalName="roms/%(Filename)" />
+    <EmbeddedResource Include="../../roms/*" LogicalName="roms/%(Filename)" />
   </ItemGroup>
 
 </Project>

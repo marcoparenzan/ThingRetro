@@ -22,7 +22,7 @@
 
   <!-- C64 ROMs (KERNAL, BASIC, characters): read from the roms folder next to the executable -->
   <ItemGroup>
-    <Content Include="roms\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../roms/*" Link="roms/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- The application icon, for the windows -->
