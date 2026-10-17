@@ -7,7 +7,7 @@
 > **Status: work in progress.** Thing65 is the successor of Thing64, aiming at the **Commodore 65** (CSG 4510, VIC-III,
 > DMAgic, F011, two SIDs), using the MEGA65 open ROMs. For now the code is Thing64 renamed: everything below still
 > describes the Commodore 64 core it started from, and the images and logos are still Thing64's. The C65 chips are
-> added step by step: 4510 CPU, MAP, DMAgic, VIC-III, F011.
+> added step by step: **4510 CPU with its memory mapper (done, `MOS4510`)**, DMAgic, VIC-III, F011.
 
 The Thing64 core: a Commodore 64 (PAL) emulator in C#, written to be read: the code mirrors the real motherboard, with the MOS
 chips in their sockets, the traces that connect them and the cables to the monitor, the speakers and the keyboard.

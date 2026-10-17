@@ -3,7 +3,8 @@
     Downloads the external 6502 CPU test suites used by Thing65.Tests.
 
 .DESCRIPTION
-    - Klaus Dormann, 6502 functional test (GPL-3.0): 64 KB image and listing.
+    - Klaus Dormann, 6502 functional test and 65C02 extended opcodes test (GPL-3.0): 64 KB images and listings.
+      The second one also runs on the 4510 (65CE02), except for its NOP tests.
       https://github.com/Klaus2m5/6502_65C02_functional_tests
     - Tom Harte, SingleStepTests 65x02, folder 6502/v1 (MIT): 256 JSON files, one per opcode,
       each with 10,000 cases and the bus accesses cycle by cycle (about 1 GB in all).
@@ -29,7 +30,7 @@ $target = Join-Path $root 'src/Thing65.Tests/TestData/External'
 
 $dormann = Join-Path $target 'KlausDormann'
 New-Item -ItemType Directory -Force $dormann | Out-Null
-foreach ($file in '6502_functional_test.bin', '6502_functional_test.lst') {
+foreach ($file in '6502_functional_test.bin', '6502_functional_test.lst', '65C02_extended_opcodes_test.bin', '65C02_extended_opcodes_test.lst') {
     $url = "https://raw.githubusercontent.com/Klaus2m5/6502_65C02_functional_tests/master/bin_files/$file"
     Write-Host "Downloading $file"
     Invoke-WebRequest -Uri $url -OutFile (Join-Path $dormann $file)

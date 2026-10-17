@@ -27,6 +27,26 @@ public interface I6510Pinout
     void Tick();                         // one φ2 cycle
 }
 
+// Address/data bus of the 4510: 20 address bits (A0-A19) and the MAP/ output, which tells whether the address
+// has been translated by the on-chip memory mapper (mapped) or is the CPU's own 16-bit address (unmapped)
+public interface IMappedBus
+{
+    byte Read(int address, bool mapped);
+    void Write(int address, bool mapped, byte value);
+}
+
+// CSG 4510, 84-pin PLCC: the C65's CPU (a 65CE02 with a memory mapper that reaches 1 MB)
+public interface I4510Pinout
+{
+    IMappedBus? Bus { get; set; }        // A0-A19, D0-D7, R/W, MAP/
+    Func<bool> IrqInput { get; set; }    // /IRQ (level triggered)
+    Func<bool> NmiInput { get; set; }    // /NMI (edge triggered)
+    Func<bool> AecInput { get; set; }    // AEC: false = the bus belongs to someone else, the CPU is halted
+    Func<bool> DmaInput { get; set; }    // /DMA: false = the CPU is halted at the end of the cycle (any cycle, writes too)
+    void Reset();                        // /RES
+    void Tick();                         // one φ2 cycle
+}
+
 // MOS 6526 CIA, DIP-40: timers, clock, parallel ports, serial line
 public interface I6526Pinout
 {
