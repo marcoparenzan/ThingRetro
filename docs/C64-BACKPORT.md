@@ -10,9 +10,21 @@ anything listed here may deserve the same fix in Thing64.
 | --- | --- | --- | --- |
 | 2026-10-17 | `Pinouts.cs` | Added `IMappedBus` and `I4510Pinout` (new interfaces, nothing existing modified) | No |
 | 2026-10-17 | `Thing65.Computer/AppSettings.cs` | Removed the one-time read of the old `Fake64` settings folder | No |
+| 2026-10-17 | `Pinouts.cs` | Added `IVic3Memory`, `I4567Pinout`, `IF018Pinout`, `IF011Pinout`, `IDiskMedia`, `IMappedBus`, `I4510Pinout` | No |
+| 2026-10-17 | `Keyboard.cs` | A ninth line for the C65's extra keys (`C65Key.NoScroll`...`Escape`, `GetExtendedKeyboardState`); the 8x8 matrix is unchanged | No |
+| 2026-10-17 | `ControlPortSelector.cs`, `C65Monitor.cs` (WinForms) | The selector takes two `ControlPort`s; the monitor takes the frame size (default: the VIC-III's) | No |
+| 2026-10-17 | `Thing65.Asm` | `Assemble(..., cpu)`, `!cpu`, a 4510 table; the 6510 path is unchanged (default) | No |
 
 ## Problems noticed in the C64 code
 
-None so far.
+None so far. The C65 work found one bug of its own that is worth remembering when the C64 core is compared with it: `PHW`
+pushes the low byte first (it was wrong in `MOS4510` until BASIC 10 failed to restore its text pointer); the 6502 core has no
+such instruction.
+
+## Things the C65 shares with the C64 core
+
+- The C65 board runs the 6526 CIAs, the 6581 SIDs and the VIC-II compatibility on the same chip code as `Board`: a fix there
+  helps both.
+- `Thing65.WebComputer` and `Thing65.WebStudio` still use the C64 `Board` (see [ROADMAP.md](ROADMAP.md)).
 
 (When something is found: file, what is wrong, how it shows, and whether it was fixed here.)

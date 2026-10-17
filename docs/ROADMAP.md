@@ -1,9 +1,16 @@
 # Thing65 roadmap and deferred work
 
-## Current focus (decided 2026-10-17)
+## Done (2026-10-17)
 
-Command line and WinForms desktop app only. In order: VIC-III, FAST mode, C65 keyboard, `thing65 run` and the
-desktop window on `BoardC65`, 4510 support in the assembler.
+CSG 4510, DMAgic, VIC-III, F011 and `.d81`, FAST mode, C65 keyboard, `BoardC65` booting the 910828 ROM to BASIC 10, the desktop
+window and `thing65 run`/`asm` on it, the 4510 assembler. Decided then: command line and WinForms only; the web is deferred.
+
+## Next, in no particular order
+
+- Samples for the C65 (`samples/c65/`), a build manifest for them (`"cpu": "4510"`), and an editor/hover table for the 4510 opcodes.
+- The C64 mode of the C65 (`GO64`): untested with this ROM.
+- UART, RAM expansion, CAPS LOCK; the 80-column bad-line cycles; HPOS/VPOS.
+- Retire the old C64 `Board` once nothing needs it (its tests move to `BoardC65` in C64 mode).
 
 ## Deferred
 
