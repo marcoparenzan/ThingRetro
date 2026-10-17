@@ -125,12 +125,16 @@ public partial class Board
     // go through an inverter, so an output at 1 holds the line low
     void ConnectCia2(I6526Pinout chip)
     {
+        // PA3-PA5 go through inverting drivers to the IEC connector (Iec): a 1 pulls the line down. A cable takes the
+        // lines to the drives; without one only the outputs drive the lines
+        Iec.AtnLow = () => (chip.PortA.Output & 0x08) != 0;
+        Iec.ClkLow = () => (chip.PortA.Output & 0x10) != 0;
+        Iec.DataLow = () => (chip.PortA.Output & 0x20) != 0;
         chip.PortA.External = () =>
         {
-            byte output = chip.PortA.Output;
-            byte pins = 0x3F;                              // PA0-PA5: pull-up
-            if ((output & 0x10) == 0) pins |= 0x40;        // CLK IN: high if CLK OUT does not pull it down
-            if ((output & 0x20) == 0) pins |= 0x80;        // DATA IN: high if DATA OUT does not pull it down
+            byte pins = 0x3F;                                                // PA0-PA5: pull-up
+            if (!Iec.ClkLow() && !Iec.ClkInputLow()) pins |= 0x40;           // CLK IN: high if nobody pulls the line down
+            if (!Iec.DataLow() && !Iec.DataInputLow()) pins |= 0x80;         // DATA IN
             return pins;
         };
         chip.PortB.External = () => 0xFF;
@@ -142,6 +146,7 @@ public partial class Board
     void DisconnectCia2(I6526Pinout chip)
     {
         chip.PortA.Changed -= UpdateVicBank;
+        Iec.AtnLow = Iec.ClkLow = Iec.DataLow = () => false;
         chip.PortA.External = () => 0xFF;
         cia2 = null;
         UpdateVicBank();

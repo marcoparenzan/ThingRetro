@@ -20,6 +20,11 @@ public partial class Board
     public Keyboard Keyboard => keyboard;
     public ControlPort ControlPort1 { get; } = new("control port 1");
     public ControlPort ControlPort2 { get; } = new("control port 2");
+    public IecPort Iec { get; } = new();    // serial connector: a cable takes it to the disk drives
+
+    // Called at the end of every cycle: for what is clocked with the computer and lives outside the board, such as the
+    // disk drives on the IEC cable
+    public Action? AfterCycle { get; set; }
 
     // Direct RAM access, bypassing the memory map (like a DMA): it can write under the ROMs too.
     // To be used from the emulation thread, for example through Enqueue
@@ -147,6 +152,7 @@ public partial class Board
         vic?.Tick();
 
         totalCycles++;
+        AfterCycle?.Invoke();
     }
 
     // End of a VIC-II frame: the picture goes to the video socket
