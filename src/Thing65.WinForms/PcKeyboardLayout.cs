@@ -36,8 +36,8 @@ public static class PcKeyboardLayout
         map[Keys.RWin] = new(C65Key.Commodore);
         map[Keys.Home] = new(C65Key.Home);
         map[Keys.Delete] = new(C65Key.Delete, Shift: true); // INST: shifted INST/DEL
-        map[Keys.PageUp] = new(C65Key.F13);
-        map[Keys.PageDown] = new(C65Key.F13, Shift: true);
+        map[Keys.PageUp] = new(C65Key.Restore);
+        map[Keys.PageDown] = new(C65Key.F13);
 
         // Cursor keys: the C64 has only CRSR right and CRSR down, left and up are obtained with Shift
         map[Keys.Right] = new(C65Key.CursorRight);

@@ -160,3 +160,37 @@ public interface I6581Pinout
     void Reset();                        // /RES
     void Tick();                         // φ2
 }
+
+// The C65's UART (a 6511-style serial port): data, status, control, baud rate, interrupt mask and flags at $D600-$D606,
+// the fast serial control at $D609. Registers 7 and 8 ($D607/$D608, the port with the CAPS LOCK sense and the keyboard's
+// ninth line) are the board's
+public interface IUartPinout
+{
+    byte Read(int register);
+    void Write(int register, byte value);
+    Action<byte>? Transmit { get; set; } // TXD: a character leaves the UART
+    void Receive(byte value);            // RXD: a character arrives
+    bool Irq { get; }                    // /IRQ
+    bool Nmi { get; }                    // /NMI
+    void Reset();                        // /RES
+}
+
+// The RAM expansion card: the REC's four-bit control register ($D0A0) and 1 MB of RAM in two banks of 512 KB, which the
+// CPU (and the DMAgic) see at $80000-$FFFFF; the VIC-III can see a 128 KB window of it instead of the internal RAM
+public interface IRamExpansionPinout
+{
+    void WriteControl(byte value);       // $D0A0: write only, four bits
+    byte Read(int address);              // physical address $80000-$FFFFF
+    void Write(int address, byte value);
+    bool VicEnabled { get; }             // the VIC-III reads the card instead of the internal RAM
+    byte ReadVic(int address);           // 17 bits: the address inside the 128 KB window
+    void WriteVic(int address, byte value);
+    void Reset();                        // /RES: the control register is cleared, the RAM is not
+}
+
+// A cartridge in the C65's cartridge port: ROM seen at physical $40000-$7FFFF (up to 256 KB)
+public interface ICartridgePinout
+{
+    int Size { get; }
+    byte Read(int offset);
+}

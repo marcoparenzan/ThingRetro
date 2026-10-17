@@ -219,6 +219,23 @@ public sealed class C65BootTests
         Assert.IsFalse(board.VicSocket.Chip!.NewMode, "C64 mode is the VIC-II mode");
     }
 
+    // Not an emulator defect: the C64 BASIC returns FRE as a signed 16-bit number, so with 38909 bytes free it prints
+    // 38909 - 65536. The programs that need the true value add 65536 when it is negative
+    [TestMethod]
+    [Timeout(120_000)]
+    public void Go64_FreOfZero_ShouldBeNegativeAsOnTheRealC64()
+    {
+        var board = BootedBoard();
+        Type(board, "GO64" + CR, 1_000_000);
+        Type(board, "Y" + CR, 6_000_000);
+
+        Type(board, "PRINT FRE(0)" + CR);
+        StringAssert.Contains(Screen64(board), "-26627");
+
+        Type(board, "PRINT FRE(0)-65536*(FRE(0)<0)" + CR);
+        StringAssert.Contains(Screen64(board), " 38909 ");
+    }
+
     // The slow one: HEADER formats 160 tracks, a revolution (200 ms of the machine) each
     [TestMethod]
     [Timeout(600_000)]

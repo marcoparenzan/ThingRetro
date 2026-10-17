@@ -22,7 +22,6 @@ public partial class BoardC65
     readonly byte[] rom;                      // $20000-$3FFFF
     readonly ParallelPort cpuPort = new();    // the 4510's port at $0000/$0001: memory map of the C64 mode
     readonly ParallelPort keyPort = new();    // port at $D607 (data) and $D608 (direction): bit 1 selects the keyboard's ninth line
-    readonly byte[] uart = new byte[16];      // $D600-$D60F: the UART's registers are kept, not acted on
     int fastCredit;                           // half cycles of the 3.5 MHz clock not yet spent
 
     // External sockets, as in the C64 board
@@ -52,6 +51,7 @@ public partial class BoardC65
         Cia2Socket.Insert(new MOS6526());
         DmaSocket.Insert(new F018());
         FdcSocket.Insert(new F011());
+        UartSocket.Insert(new C65Uart());
 
         Reset();
 
@@ -146,7 +146,8 @@ public partial class BoardC65
     {
         cpuPort.Reset();
         keyPort.Reset();
-        Array.Clear(uart);
+        uart?.Reset();
+        expansion?.Reset();
         cia1?.Reset();
         cia2?.Reset();
         sidRight?.Reset();

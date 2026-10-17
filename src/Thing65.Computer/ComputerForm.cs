@@ -1,5 +1,6 @@
 using Thing65.WinForms;
 using Thing65.C65;
+using Thing65.Mos;
 
 namespace Thing65.Computer;
 
@@ -63,6 +64,11 @@ public class ComputerForm : Form
         menu.Items.Add(new ToolStripMenuItem("Save disk", null, (_, _) => board.Enqueue(() => disk.Save())));
         menu.Items.Add(new ToolStripMenuItem("Save disk as...", null, (_, _) => SaveDiskAs()));
         menu.Items.Add(new ToolStripMenuItem("Eject disk", null, (_, _) => board.Enqueue(() => { disk.Set(null, null); board.Disk = null; })));
+        var expansion = new ToolStripMenuItem("RAM expansion (1 MB)") { CheckOnClick = true };
+        expansion.CheckedChanged += (_, _) => SetRamExpansion(expansion.Checked);
+        menu.Items.Add(expansion);
+        menu.Items.Add(new ToolStripMenuItem("Insert cartridge...", null, (_, _) => InsertCartridge()));
+        menu.Items.Add(new ToolStripMenuItem("Remove cartridge", null, (_, _) => board.Enqueue(() => { board.CartridgeSocket.Remove(); board.Reset(); })));
         menu.Items.Add(new ToolStripMenuItem("Reset", null, (_, _) => Reset()));
         monitor.ContextMenuStrip = menu;
 
@@ -87,6 +93,34 @@ public class ComputerForm : Form
     }
 
     public void Reset() => board.Enqueue(board.Reset);
+
+    // Cards and cartridges are changed with the machine off, as on the real one: the board is reset
+    void SetRamExpansion(bool fitted) => board.Enqueue(() =>
+    {
+        board.RamExpansionSocket.Remove();
+        if (fitted) board.RamExpansionSocket.Insert(new RamExpansion());
+        board.Reset();
+    });
+
+    void InsertCartridge()
+    {
+        using var dialog = new OpenFileDialog { Filter = "ROM cartridge (*.bin;*.rom)|*.bin;*.rom|All files|*.*" };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            var cartridge = new RomCartridge(File.ReadAllBytes(dialog.FileName));
+            board.Enqueue(() =>
+            {
+                board.CartridgeSocket.Remove();
+                board.CartridgeSocket.Insert(cartridge);
+                board.Reset();
+            });
+        }
+        catch (Exception e) when (e is IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, e.Message, "Thing65", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
 
     // The disk is copied on the emulation thread, between two cycles, so the DOS is not writing while it is saved
     void SaveDiskAs()

@@ -53,10 +53,19 @@ C65, its manual, the CPU and C64 chip documents. See [docs/reference/README.md](
 
 ## Known limits of the C65
 
-- The 80-column bad lines do not take the extra cycles from the CPU (the VIC-II's timing is used); HPOS/VPOS and the 1280-pixel
-  mode are stored but not acted on; there is no external sync.
-- F011: sector-level commands only (no free-format track read/write). DMAgic: no MIX, SWAP, XY_MOD, no interrupt yielding.
-- No UART, no RAM expansion controller, no cartridge port, no RESTORE key, no CAPS LOCK.
+- VIC-III: the 1280-pixel mode shows only the early pixel of each pair; HPOS/VPOS are taken as dots and raster lines; there is
+  no external sync.
+- DMAgic: the XY_MOD misc byte (bit 3 = 640 wide) is an assumption; the F018A 11-byte list is accepted too.
+- F011: free-format tracks (RDT, WTT) work on one revolution of 6250 bytes; no weak bits or other copy protections.
+- UART: characters are sent as soon as they are written, baud rate and parity registers are only stored; nothing is connected
+  to its lines (`C65Uart.Transmit`, `Receive`).
+- RAM expansion (1 MB, REC at `$D0A0`) and ROM cartridges (`$40000`, 256 KB at most) are sockets of the board, empty by default
+  (right click menu of the app). The VIC-III reads the expansion for its bitplanes and DAT too, which the manual does not say.
+- CAPS LOCK is sensed at bit 0 of `$D607`, low = down: from the schematic of the keyboard, not checked on a real machine.
+- `PRINT FRE(0)` in C64 mode prints a negative number (-26627): it is the C64 BASIC's signed 16-bit result, as on the real C64.
+- Disks written by the C65 are saved to their `.d81` when ejected or replaced, on close and with *Save disk*; a disk made by
+  the app for a `.prg` has no file (*Save disk as...*).
+- Keys: PageUp is RESTORE, CAPS LOCK is the C65 one (not a shift).
 - Machine code started from BASIC must live below `$2000`: BASIC 10 maps its ROM over `$2000-$7FFF`.
 - ROM version 910828 (the prototype ROM) is the one tested.
 

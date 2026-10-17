@@ -13,6 +13,9 @@ public partial class BoardC65
     public Socket<I6526Pinout> Cia2Socket { get; private set; } = null!;     // 6526 CIA 2 ($DD00)
     public Socket<IF018Pinout> DmaSocket { get; private set; } = null!;      // CSG F018 DMAgic ($D700)
     public Socket<IF011Pinout> FdcSocket { get; private set; } = null!;      // CSG F011 disk controller ($D080)
+    public Socket<IUartPinout> UartSocket { get; private set; } = null!;     // UART ($D600)
+    public Socket<IRamExpansionPinout> RamExpansionSocket { get; private set; } = null!; // RAM expansion card: REC at $D0A0, RAM at $80000
+    public Socket<ICartridgePinout> CartridgeSocket { get; private set; } = null!;       // cartridge port: ROM at $40000
 
     // Chips currently in the sockets (null = empty socket), read at every cycle
     I4510Pinout? cpu;
@@ -23,8 +26,11 @@ public partial class BoardC65
     I6526Pinout? cia2;
     IF018Pinout? dma;
     IF011Pinout? fdc;
+    IUartPinout? uart;
+    IRamExpansionPinout? expansion;
+    ICartridgePinout? cartridge;
 
-    // CPU /IRQ: VIC-III, CIA 1 and the disk controller. /NMI: CIA 2 (the RESTORE key is not modelled yet)
+    // CPU /IRQ: VIC-III, CIA 1, the disk controller and the UART. /NMI: CIA 2, the RESTORE key and the UART
     OpenCollectorLine irqLine = null!;
     OpenCollectorLine nmiLine = null!;
 
@@ -37,8 +43,8 @@ public partial class BoardC65
 
     void CreateSockets()
     {
-        irqLine = new OpenCollectorLine("/IRQ", () => vic?.Irq == true, () => cia1?.Irq == true, () => fdc?.Irq == true);
-        nmiLine = new OpenCollectorLine("/NMI", () => cia2?.Irq == true);
+        irqLine = new OpenCollectorLine("/IRQ", () => vic?.Irq == true, () => cia1?.Irq == true, () => fdc?.Irq == true, () => uart?.Irq == true);
+        nmiLine = new OpenCollectorLine("/NMI", () => cia2?.Irq == true, () => keyboard.Restore, () => uart?.Nmi == true);
 
         CpuSocket = new Socket<I4510Pinout>("CPU", ConnectCpu, DisconnectCpu);
         VicSocket = new Socket<I4567Pinout>("VIC-III", ConnectVic, DisconnectVic);
@@ -48,10 +54,13 @@ public partial class BoardC65
         Cia2Socket = new Socket<I6526Pinout>("CIA 2", ConnectCia2, DisconnectCia2);
         DmaSocket = new Socket<IF018Pinout>("DMAgic", ConnectDma, DisconnectDma);
         FdcSocket = new Socket<IF011Pinout>("F011", chip => fdc = chip, _ => fdc = null);
+        UartSocket = new Socket<IUartPinout>("UART", chip => uart = chip, _ => uart = null);
+        RamExpansionSocket = new Socket<IRamExpansionPinout>("RAM expansion", chip => expansion = chip, _ => expansion = null);
+        CartridgeSocket = new Socket<ICartridgePinout>("cartridge port", chip => cartridge = chip, _ => cartridge = null);
 
         // The CPU port has pull-ups on P0-P2: the memory map of the C64 mode
         cpuPort.External = () => 0xFF;
-        keyPort.External = () => 0xFF; // bit 0 is high: English keyboard
+        keyPort.External = () => (byte)(keyboard.CapsLock ? 0xFE : 0xFF); // bit 0: CAPS LOCK sense, low = down
     }
 
     // CPU: address/data bus (20 bits and MAP/), /IRQ, /NMI, AEC from the VIC-III, /DMA from the DMAgic and from

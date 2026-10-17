@@ -38,6 +38,12 @@ public sealed class PcKeyboard : IDisposable
 
     void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.KeyCode == Keys.CapsLock && Excluded?.Invoke(e.KeyCode) != true)
+        {
+            target.CapsLock = !target.CapsLock; // a locking key: down until pressed again
+            e.Handled = e.SuppressKeyPress = true;
+            return;
+        }
         if (!Handles(e.KeyCode)) return;
         e.Handled = true;
         e.SuppressKeyPress = true; // F10 and the like do not activate the form's menu

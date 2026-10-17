@@ -6,7 +6,9 @@ namespace Thing65.C65;
     Physical memory (1 MB, 20 address bits):
       $00000-$1FFFF  128 KB of RAM (the last 2 KB, $1F800, are the Color RAM); $0000/$0001 are the 4510's port
       $20000-$3FFFF  128 KB of system ROM
-      $40000-$FFFFF  cartridge and RAM expansion: not fitted (reads $FF, writes are lost)
+      $40000-$7FFFF  cartridge port: the ROM of the cartridge, if there is one
+      $80000-$FFFFF  RAM expansion card (1 MB in two banks, the REC's register selects the one the CPU sees)
+      Where nothing is fitted the bus reads $FF and writes are lost
 
     What the CPU puts on the bus is decoded like this:
     - A block mapped by the 4510 (MAP) is already a physical address: the board uses it as it is.
@@ -24,6 +26,7 @@ namespace Thing65.C65;
 public partial class BoardC65
 {
     const int ROM_BASE = 0x20000;
+    const int CARTRIDGE_BASE = 0x40000;
 
     // ---- Physical memory --------------------------------------------------------------------------------
     byte ReadPhysical(int address)
@@ -32,7 +35,8 @@ public partial class BoardC65
         if (address < 2) return address == 0 ? cpuPort.Direction : cpuPort.Pins;
         if (address < ROM_BASE) return ram[address];
         if (address < ROM_BASE + 0x20000) return rom[address - ROM_BASE];
-        return 0xFF;
+        if (address < RamExpansion.BASE_ADDRESS) return cartridge?.Read(address - CARTRIDGE_BASE) ?? 0xFF;
+        return expansion?.Read(address) ?? 0xFF;
     }
 
     void WritePhysical(int address, byte value)
@@ -44,6 +48,7 @@ public partial class BoardC65
             ram[address] = value;
         }
         else if (address < ROM_BASE) ram[address] = value;
+        else if (address >= RamExpansion.BASE_ADDRESS) expansion?.Write(address, value);
     }
 
     // ---- CPU bus ----------------------------------------------------------------------------------------
@@ -141,7 +146,7 @@ public partial class BoardC65
         {
             if (!NewMode || offset < 0x80) return vic?.Read(NewMode ? offset : offset & 0x3F) ?? 0xFF;
             if (offset < 0xA0) return fdc?.Read(offset & 0x0F) ?? 0xFF;
-            return 0xFF; // RAM expansion controller and palettes are not readable
+            return 0xFF; // the RAM expansion controller (write only) and the palettes are not readable
         }
 
         // $D400-$D7FF
@@ -154,21 +159,20 @@ public partial class BoardC65
         return (offset & 0x20) == 0 ? sidRight?.Read(offset & 0x1F) ?? 0xFF : sidLeft?.Read(offset & 0x1F) ?? 0xFF;
     }
 
-    // $D600-$D60F: the UART (RS-232, fast serial), not emulated: the registers keep what is written. $D607 and $D608
-    // are the data and direction registers of a port: its bit 0 reads the keyboard's language jumper, bit 1
-    // selects the keyboard's ninth line
+    // $D600-$D60F: the UART (RS-232, fast serial). $D607 and $D608 are the data and direction registers of a port:
+    // its bit 0 senses the CAPS LOCK key, bit 1 selects the keyboard's ninth line
     byte ReadUart(int register) => register switch
     {
         7 => keyPort.Pins,
         8 => keyPort.Direction,
-        _ => uart[register],
+        _ => uart?.Read(register) ?? 0xFF,
     };
 
     void WriteUart(int register, byte value)
     {
         if (register == 7) keyPort.Latch = value;
         else if (register == 8) keyPort.Direction = value;
-        else uart[register] = value;
+        else uart?.Write(register, value);
     }
 
     byte ReadIoUpper(int offset)
@@ -196,6 +200,7 @@ public partial class BoardC65
             if (!NewMode || offset < 0x80) vic?.Write(NewMode ? offset : offset & 0x3F, value);
             else if (offset < 0xA0) fdc?.Write(offset & 0x0F, value);
             else if (offset >= 0x100) vic?.WritePalette((offset >> 8) - 1, offset & 0xFF, value);
+            else expansion?.WriteControl(value); // $D0A0-$D0FF
             return;
         }
 
@@ -239,8 +244,15 @@ public partial class BoardC65
     sealed class VicBus(BoardC65 board) : IVic3Memory
     {
         public int Bank => board.vicBank;
-        public byte ReadRam(int address) => board.ram[address & 0x1FFFF];
-        public void WriteRam(int address, byte value) => board.ram[address & 0x1FFFF] = value;
+        // The RAM expansion card can take the place of the internal RAM for the VIC-III
+        public byte ReadRam(int address) =>
+            board.expansion is { VicEnabled: true } card ? card.ReadVic(address) : board.ram[address & 0x1FFFF];
+
+        public void WriteRam(int address, byte value)
+        {
+            if (board.expansion is { VicEnabled: true } card) card.WriteVic(address, value);
+            else board.ram[address & 0x1FFFF] = value;
+        }
 
         public byte Read(int address)
         {
@@ -250,6 +262,7 @@ public partial class BoardC65
                 int charset = (board.ControlA & 0x40) != 0 ? 0x09000 : 0x0D000;
                 return board.rom[charset + (address & 0x0FFF)];
             }
+            if (board.expansion is { VicEnabled: true } card) return card.ReadVic(board.vicBank << 14 | address);
             return board.ram[board.vicBank << 14 | address];
         }
 
