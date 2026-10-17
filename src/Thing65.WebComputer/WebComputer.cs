@@ -1,11 +1,9 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.JavaScript;
 using System.Runtime.Versioning;
 using Thing65.C65;
-using Thing65.Crt;
 using Thing65.Mos;
-using Thing65.Prg;
 
 namespace Thing65.WebComputer;
 
@@ -17,17 +15,17 @@ namespace Thing65.WebComputer;
 public static partial class WebComputer
 {
     const long CyclesPerSecond = 985248;
-    static readonly TimeSpan BootTime = TimeSpan.FromSeconds(2.5);
+    static readonly TimeSpan BootTime = TimeSpan.FromSeconds(9);   // the memory test and the banner of the ROM
 
-    static Board? board;
+    static BoardC65? board;
     static readonly CanvasScreen screen = new();
     static MonitorCable? monitorCable;
     static AudioCable? audioCable;
     static readonly HashSet<string> pressed = new(StringComparer.Ordinal);
 
-    // A program waits for the KERNAL to reach READY. before it is loaded (the boot runs in real time, a frame at a time)
-    static byte[]? pendingProgram;
-    static long cycles, loadAtCycle;
+    // A program is started after the disk with it is loaded: its RUN or SYS is typed once the DOS has read the file
+    static string? pendingGo;
+    static long cycles, goAtCycle;
 
     [JSImport("present", "computer")]
     internal static partial void Present([JSMarshalAs<JSType.MemoryView>] Span<byte> pixels);
@@ -35,25 +33,23 @@ public static partial class WebComputer
     [JSImport("playAudio", "computer")]
     internal static partial void PlayAudio([JSMarshalAs<JSType.MemoryView>] Span<byte> samples);
 
-    public static bool HasEmbeddedRoms => typeof(WebComputer).Assembly.GetManifestResourceNames().Contains("roms/kernal");
+    public const string RomName = "c-65-19910828.rom";
 
-    // Debug builds carry the ROMs (see the project file); the published site asks the user for them
-    public static SystemRoms? EmbeddedRoms()
+    public static bool HasEmbeddedRoms => typeof(WebComputer).Assembly.GetManifestResourceNames().Contains("roms/" + RomName);
+
+    // Debug builds carry the ROM (see the project file); the published site asks the user for it
+    public static SystemRom128? EmbeddedRom()
     {
         if (!HasEmbeddedRoms) return null;
-        byte[] Read(string name)
-        {
-            using var stream = typeof(WebComputer).Assembly.GetManifestResourceStream("roms/" + name)!;
-            using var copy = new MemoryStream();
-            stream.CopyTo(copy);
-            return copy.ToArray();
-        }
-        return new SystemRoms(kernal: Read("kernal"), basic: Read("basic"), chargen: Read("chargen"));
+        using var stream = typeof(WebComputer).Assembly.GetManifestResourceStream("roms/" + RomName)!;
+        using var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        return new SystemRom128(copy.ToArray());
     }
 
-    public static void Start(SystemRoms roms)
+    public static void Start(SystemRom128 rom)
     {
-        board = new Board(roms, startClock: false);
+        board = new BoardC65(rom, startClock: false);
         monitorCable = new MonitorCable(board.VideoOut, screen);
         cycles = 0;
         SetJoystick(joystickPort, joystickKeys);
@@ -72,12 +68,10 @@ public static partial class WebComputer
         cycles += count;
         double speed = count / (double)CyclesPerSecond / Math.Max(clock.Elapsed.TotalSeconds, 1e-6);
 
-        if (pendingProgram is not null && cycles >= loadAtCycle)
+        if (pendingGo is not null && !board.IsTyping && cycles >= goAtCycle)
         {
-            var program = pendingProgram;
-            pendingProgram = null;
-            var (start, _) = board.LoadPrg(program);
-            board.TypeText(board.IsBasicProgram(start) ? "RUN\r" : $"SYS{start}\r");
+            board.TypeText(pendingGo);
+            pendingGo = null;
         }
         return speed;
     }
@@ -210,44 +204,59 @@ public static partial class WebComputer
 
     #endregion
 
-    // What the VIC-II shows, for the studio's capture of a screen: Board.CaptureVideo(), or nothing if the C65 is off
+    // The studio's capture of a screen is not available yet for the C65
     [JSExport]
-    public static byte[] CaptureVideo() => board?.CaptureVideo() ?? [];
+    public static byte[] CaptureVideo() => [];
 
-    // The whole memory (Board.CaptureMemory), for the studio's memory viewer
+    // The 64 KB of bank 0, for the studio's memory viewer
     [JSExport]
-    public static byte[] CaptureMemory() => board?.CaptureMemory() ?? [];
+    public static byte[] CaptureMemory()
+    {
+        if (board is null) return [];
+        var bytes = new byte[0x10000];
+        for (int i = 0; i < bytes.Length; i++) bytes[i] = board.Ram(i);
+        return bytes;
+    }
 
     [JSExport]
     public static void Reset()
     {
         if (board is null) return;
-        pendingProgram = null;
-        board.RemoveCartridge();
+        pendingGo = null;
         board.Reset();
     }
 
-    // A .prg restarts the machine and runs after the boot; a .crt is inserted (which restarts the machine).
-    // Returns a description for the page, or the error
+    // A .d81 goes into the drive; a .prg is put on a disk that is made for it, and loaded and started like the
+    // desktop app does (DLOAD + RUN for BASIC, BLOAD + SYS for machine code). Returns a description for the page,
+    // or the error
     [JSExport]
     public static string Load(string name, byte[] content)
     {
         if (board is null) return "The C65 is not running";
         try
         {
-            if (name.EndsWith(".crt", StringComparison.OrdinalIgnoreCase))
+            if (name.EndsWith(".d81", StringComparison.OrdinalIgnoreCase))
             {
-                var cartridge = CrtFile.Load(content);
-                pendingProgram = null;
-                board.InsertCartridge(cartridge);
-                return $"{(string.IsNullOrEmpty(cartridge.Name) ? name : cartridge.Name)} ({cartridge.TypeName})";
+                board.Disk = new D81Image(content);
+                return $"{name} (disk)";
             }
-            var (start, end) = PrgFile.GetRange(content);
-            board.RemoveCartridge();
+            if (!name.EndsWith(".prg", StringComparison.OrdinalIgnoreCase))
+                return "Error: only .prg and .d81 files can be loaded";
+
+            if (content.Length < 3) throw new InvalidDataException("A .prg file has at least 3 bytes");
+            int start = content[0] | content[1] << 8, end = start + content.Length - 2;
+            string diskName = DiskName(name);
+            bool basic = start == BasicStart;
+
+            pendingGo = null;
+            board.Disk = null;
             board.Reset();
-            pendingProgram = content;
-            loadAtCycle = cycles + (long)(BootTime.TotalSeconds * CyclesPerSecond);
-            return $"{name} ${start:X4}-${end - 1:X4}";
+            board.FastForward(BootTime);
+            board.Disk = D81Writer.Create(diskName, content);
+            board.TypeText(basic ? $"DLOAD\"{diskName}\"\u000D" : $"BLOAD\"{diskName}\",B0\u000D");
+            pendingGo = basic ? "RUN\u000D" : $"SYS {start}\u000D";
+            goAtCycle = cycles + 5_000_000;   // typing the command and the DOS reading the file
+            return basic ? $"{name} (BASIC)" : $"{name} ${start:X4}-${end - 1:X4}";
         }
         catch (Exception e) when (e is ArgumentException or InvalidDataException or NotSupportedException)
         {
@@ -255,10 +264,19 @@ public static partial class WebComputer
         }
     }
 
+    const int BasicStart = 0x2001;   // the text of BASIC 10 programs
+
+    // The name on the disk: the file name in capitals, at most 16 characters, letters and digits
+    static string DiskName(string file)
+    {
+        var name = new string(Path.GetFileNameWithoutExtension(file).ToUpperInvariant().Where(char.IsAsciiLetterOrDigit).Take(16).ToArray());
+        return name.Length == 0 ? "PROGRAM" : name;
+    }
+
     // The monitor: the VIC-II renders into an unmanaged buffer (32-bit BGRA), which the page copies to the canvas
     sealed unsafe class CanvasScreen : IScreen
     {
-        const int Size = MOS6569.SCREEN_WIDTH * MOS6569.SCREEN_HEIGHT * 4;
+        const int Size = CSG4567.SCREEN_WIDTH * CSG4567.SCREEN_HEIGHT * 4;
         readonly byte* pixels = (byte*)NativeMemory.AllocZeroed(Size);
 
         public byte* BeginRender() => pixels;

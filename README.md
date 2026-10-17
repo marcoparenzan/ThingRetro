@@ -15,7 +15,7 @@ It boots the original C65 ROM to the `READY.` prompt of **BASIC 10**, with 80 co
 
 > **Status.** The C65 works: CPU, VIC-III, DMAgic, floppy controller, two SIDs, keyboard, desktop window and command line.
 > What is still missing is in [Known limits of the C65](#known-limits-of-the-c65) and in [docs/ROADMAP.md](docs/ROADMAP.md).
-> The web part (WebComputer, WebStudio) and the images and logos are still Thing64's, and the sections of this document
+> The web computer now runs the C65 (ROM of 128 KB, `.prg` and `.d81` through a disk); the web studio still carries Thing64 text and its captures (screen) are not ported yet. The sections of this document
 > about the C64 board describe the Thing64 core that is still in the repository (`Board`, `MOS6569`...), with its tests.
 
 ## What works (the C65)
@@ -130,7 +130,7 @@ Not yet: the 1541 drive and disk/tape images (`.d64`, `.t64`). See [Known limits
 | `src/Thing65.WinForms` | `C65Monitor` (the screen, a UserControl), `PcKeyboard` (the keyboard cable), `PcSpeakers` (the speakers), joystick and paddle simulators |
 | `src/Thing65.Computer` | The desktop app: one **C65** in a window (`ComputerForm`), loading of `.prg`/`.d81`, the ROM folder, the settings |
 | `src/Thing65` | The `thing65` command line (Spectre.Console), a .NET global tool: `run`, `asm`, `basic`, `build` |
-| `src/Thing65.WebComputer` | The C64 in the browser: the same board compiled to WebAssembly (Blazor, AOT), on a canvas |
+| `src/Thing65.WebComputer` | The C65 in the browser: the same board compiled to WebAssembly (Blazor, AOT), on a canvas |
 | `src/Thing65.WebStudio` | The studio in the browser (Blazor Server): projects in a local folder, Monaco, builds, the web computer |
 | `src/Thing65.Tests` | Tests (MSTest) |
 | `samples` | Sample programs ready to load, with the commented BASIC and assembly sources in `samples/src` |

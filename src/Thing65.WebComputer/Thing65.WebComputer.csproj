@@ -22,8 +22,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Thing65.C65\Thing65.C65.csproj" />
-    <ProjectReference Include="..\Thing65.Crt\Thing65.Crt.csproj" />
-    <ProjectReference Include="..\Thing65.Prg\Thing65.Prg.csproj" />
   </ItemGroup>
 
   <!-- Logo and icons from images/ of the repository, served from img/ -->
