@@ -21,6 +21,9 @@ public partial class BoardC65
     readonly byte[] ram = new byte[0x20000];  // $00000-$1FFFF; the Color RAM is the last 2 KB, $1F800
     readonly byte[] rom;                      // $20000-$3FFFF
     readonly ParallelPort cpuPort = new();    // the 4510's port at $0000/$0001: memory map of the C64 mode
+    readonly ParallelPort keyPort = new();    // port at $D607 (data) and $D608 (direction): bit 1 selects the keyboard's ninth line
+    readonly byte[] uart = new byte[16];      // $D600-$D60F: the UART's registers are kept, not acted on
+    int fastCredit;                           // half cycles of the 3.5 MHz clock not yet spent
 
     // External sockets, as in the C64 board
     public VideoPort VideoOut { get; } = new();
@@ -115,7 +118,16 @@ public partial class BoardC65
         AudioOut.Sample(((sidRight?.AudioOutput ?? 0) + (sidLeft?.AudioOutput ?? 0)) / 2);
         dma?.Tick();
         fdc?.Tick();
-        cpu?.Tick(); // the DMAgic and the VIC-III halt it through /DMA and AEC
+        // The DMAgic and the VIC-III halt the CPU through /DMA and AEC. With FAST it runs at 3.5 MHz: 7 of its cycles
+        // every 2 of the board's, alternating 3 and 4
+        int cpuCycles = 1;
+        if (vic?.Fast == true)
+        {
+            fastCredit += 7;
+            cpuCycles = fastCredit >> 1;
+            fastCredit &= 1;
+        }
+        for (int i = 0; i < cpuCycles; i++) cpu?.Tick();
         vic?.Tick();
 
         totalCycles++;
@@ -130,6 +142,8 @@ public partial class BoardC65
     public void Reset()
     {
         cpuPort.Reset();
+        keyPort.Reset();
+        Array.Clear(uart);
         cia1?.Reset();
         cia2?.Reset();
         sidRight?.Reset();

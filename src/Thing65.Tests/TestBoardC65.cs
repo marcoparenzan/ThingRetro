@@ -271,6 +271,76 @@ public sealed class BoardC65Tests
 
     #endregion
 
+    #region Keyboard and FAST
+
+    [TestMethod]
+    public void ExtraKeys_ShouldBeReadOnTheNinthLineSelectedByD607()
+    {
+        var board = NewBoard(withCpu: false);
+        EnterVic3Mode(board);
+        board.CpuWrite(0xDC02, 0xFF); // CIA 1 port A: outputs (they select the lines)
+        board.CpuWrite(0xDC03, 0x00); // port B: inputs
+        board.CpuWrite(0xD608, 0xFE); // $D607: bit 0 input, the others outputs
+        board.Keyboard.SetPressedKeys([C65Key.Escape]);
+
+        board.CpuWrite(0xDC00, 0xFF);                     // no normal line selected
+        board.CpuWrite(0xD607, 0xFF);                     // C8 not selected
+        Assert.AreEqual(0xFF, board.CpuRead(0xDC01));
+
+        board.CpuWrite(0xD607, 0xFD);                     // C8 selected (bit 1 low)
+        Assert.AreEqual(0x7F, board.CpuRead(0xDC01), "ESC is the last column of the ninth line");
+    }
+
+    [TestMethod]
+    public void Keyboard_ShouldKeepTheNormalMatrixWorking()
+    {
+        var board = NewBoard(withCpu: false);
+        board.CpuWrite(0xDC02, 0xFF);
+        board.CpuWrite(0xDC03, 0x00);
+        board.Keyboard.SetPressedKeys([C65Key.A]); // row 1 (PA1), column 2
+
+        board.CpuWrite(0xDC00, 0xFD);
+        Assert.AreEqual(0xFB, board.CpuRead(0xDC01));
+    }
+
+    [TestMethod]
+    public void Port_D607_ShouldReadTheKeyboardLanguageJumper()
+    {
+        var board = NewBoard(withCpu: false);
+        EnterVic3Mode(board);
+        board.CpuWrite(0xD608, 0xFE);
+        board.CpuWrite(0xD607, 0x00);
+
+        Assert.AreEqual(1, board.CpuRead(0xD607) & 1, "bit 0 is an input with a pull-up: English keyboard");
+        Assert.AreEqual(0xFE, board.CpuRead(0xD608));
+    }
+
+    [TestMethod]
+    public void Fast_ShouldRunTheCpuAt3Point5TimesTheClock()
+    {
+        var image = new byte[SystemRom128.SIZE];
+        Array.Fill(image, (byte)0xEA); // NOPs: one instruction per cycle
+        image[0xFFFC] = 0x00;
+        image[0xFFFD] = 0xE0;
+        var board = new BoardC65(new SystemRom128(image), startClock: false);
+        var cpu = (MOS4510)board.CpuSocket.Chip!;
+        EnterVic3Mode(board);
+
+        long start = cpu.InstructionCount;
+        board.RunCycles(10_000);
+        long slow = cpu.InstructionCount - start;
+
+        board.CpuWrite(0xD031, 0x40); // FAST
+        start = cpu.InstructionCount;
+        board.RunCycles(10_000);
+        long fast = cpu.InstructionCount - start;
+
+        Assert.IsTrue(Math.Abs(slow - 10_000) < 50, $"slow: {slow}");
+        Assert.IsTrue(Math.Abs(fast - 35_000) < 50, $"fast: {fast}");
+    }
+
+    #endregion
+
     #region DMAgic on the board
 
     [TestMethod]

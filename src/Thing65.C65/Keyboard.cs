@@ -13,6 +13,9 @@ public enum C65Key
     Plus = 40, P, L, Minus, Period, Colon, At, Comma,
     Pound = 48, Asterisk, Semicolon, Home, RightShift, Equals, UpArrow, Slash,
     D1 = 56, LeftArrow, Control, D2, Space, Commodore, Q, RunStop,
+    // The nine extra keys of the C65 keyboard, on a ninth line (C8): row 8, read through the same columns. F10, F12 and
+    // F14 are the shifted F9, F11 and F13
+    NoScroll = 64, Tab, Alt, Help, F9, F11, F13, Escape,
 }
 
 // The C64 keyboard: the 8x8 contact matrix read by CIA1.
@@ -23,7 +26,7 @@ public class Keyboard
     // updated from another thread while CIA1 reads it
     volatile byte[] matrix = NewMatrix();
 
-    static byte[] NewMatrix() => [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+    static byte[] NewMatrix() => [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
 
     // Columns read by CIA1 (port B) with the rows selected by the bits at 0 of port A
     public byte GetKeyboardState(byte rowSelectionMask)
@@ -37,6 +40,9 @@ public class Keyboard
         }
         return result;
     }
+
+    // Columns read when the C65's ninth line (C8) is selected: the keys NoScroll...Escape
+    public byte GetExtendedKeyboardState() => matrix[8];
 
     // Sets the complete set of pressed keys; the keys not listed are released
     public void SetPressedKeys(IEnumerable<C65Key> keys)

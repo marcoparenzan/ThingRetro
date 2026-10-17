@@ -51,6 +51,7 @@ public partial class BoardC65
 
         // The CPU port has pull-ups on P0-P2: the memory map of the C64 mode
         cpuPort.External = () => 0xFF;
+        keyPort.External = () => 0xFF; // bit 0 is high: English keyboard
     }
 
     // CPU: address/data bus (20 bits and MAP/), /IRQ, /NMI, AEC from the VIC-III, /DMA from the DMAgic and from
@@ -105,7 +106,7 @@ public partial class BoardC65
     void ConnectCia1(I6526Pinout chip)
     {
         chip.PortA.External = () => ControlPort2.DigitalLines;
-        chip.PortB.External = () => (byte)(keyboard.GetKeyboardState(chip.PortA.Pins) & ControlPort1.DigitalLines);
+        chip.PortB.External = () => (byte)(keyboard.GetKeyboardState(chip.PortA.Pins) & ExtendedKeys() & ControlPort1.DigitalLines);
         cia1 = chip;
     }
 
@@ -131,6 +132,9 @@ public partial class BoardC65
         field.PotYInput = () => 0xFF;
         field = null;
     }
+
+    // The ninth keyboard line (C8, the C65's extra keys) is selected by bit 1 of the port at $D607, active low
+    byte ExtendedKeys() => (keyPort.Pins & 0x02) == 0 ? keyboard.GetExtendedKeyboardState() : (byte)0xFF;
 
     ControlPort? SelectedPotPort()
     {

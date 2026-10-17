@@ -148,9 +148,27 @@ public partial class BoardC65
         if (NewMode && offset >= 0x600)
         {
             if (offset >= 0x700 && offset < 0x710) return dma?.Read(offset & 3) ?? 0xFF;
-            return 0xFF; // UART and the rest of the C65 registers
+            if (offset >= 0x600 && offset < 0x610) return ReadUart(offset & 0x0F);
+            return 0xFF; // the rest of the C65 registers
         }
         return (offset & 0x20) == 0 ? sidRight?.Read(offset & 0x1F) ?? 0xFF : sidLeft?.Read(offset & 0x1F) ?? 0xFF;
+    }
+
+    // $D600-$D60F: the UART (RS-232, fast serial), not emulated: the registers keep what is written. $D607 and $D608
+    // are the data and direction registers of a port: its bit 0 reads the keyboard's language jumper, bit 1
+    // selects the keyboard's ninth line
+    byte ReadUart(int register) => register switch
+    {
+        7 => keyPort.Pins,
+        8 => keyPort.Direction,
+        _ => uart[register],
+    };
+
+    void WriteUart(int register, byte value)
+    {
+        if (register == 7) keyPort.Latch = value;
+        else if (register == 8) keyPort.Direction = value;
+        else uart[register] = value;
     }
 
     byte ReadIoUpper(int offset)
@@ -184,6 +202,7 @@ public partial class BoardC65
         if (NewMode && offset >= 0x600)
         {
             if (offset >= 0x700 && offset < 0x710) dma?.Write(offset & 3, value);
+            else if (offset >= 0x600 && offset < 0x610) WriteUart(offset & 0x0F, value);
             return;
         }
         if ((offset & 0x20) == 0) sidRight?.Write(offset & 0x1F, value); else sidLeft?.Write(offset & 0x1F, value);
