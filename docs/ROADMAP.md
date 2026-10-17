@@ -3,12 +3,12 @@
 ## Done (2026-10-17)
 
 CSG 4510, DMAgic, VIC-III, F011 and `.d81`, FAST mode, C65 keyboard, `BoardC65` booting the 910828 ROM to BASIC 10, the desktop
-window and `thing65 run`/`asm` on it, the 4510 assembler. Decided then: command line and WinForms only; the web is deferred.
+window and `thing65 run`/`asm` on it, the 4510 assembler, the C64 mode, four samples in `samples/c65`. Decided then: command line and WinForms only; the web is deferred.
 
 ## Next, in no particular order
 
-- Samples for the C65 (`samples/c65/`), a build manifest for them (`"cpu": "4510"`), and an editor/hover table for the 4510 opcodes.
-- The C64 mode of the C65 (`GO64`): untested with this ROM.
+- An editor/hover table for the 4510 opcodes (the studio is deferred with the web).
+- The C64 mode (`GO64`) boots and runs BASIC V2 (tested); only its details are untested (`FRE(0)` printed nothing).
 - UART, RAM expansion, CAPS LOCK; the 80-column bad-line cycles; HPOS/VPOS.
 - Retire the old C64 `Board` once nothing needs it (its tests move to `BoardC65` in C64 mode).
 

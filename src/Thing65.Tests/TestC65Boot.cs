@@ -186,4 +186,36 @@ public sealed class C65BootTests
             }
         }
     }
+
+    // The 40-column text screen of the C64 mode: characters at $0400
+    static string Screen64(BoardC65 board)
+    {
+        var text = new System.Text.StringBuilder();
+        for (int row = 0; row < 25; row++)
+        {
+            for (int column = 0; column < 40; column++)
+            {
+                byte code = board.Ram(0x0400 + row * 40 + column);
+                text.Append(code is >= 1 and <= 26 ? (char)('A' + code - 1) : code is >= 0x20 and < 0x60 ? (char)code : '.');
+            }
+            text.AppendLine();
+        }
+        return text.ToString();
+    }
+
+    [TestMethod]
+    [Timeout(120_000)]
+    public void Go64_ShouldBootTheC64ModeAndRunBasicV2()
+    {
+        var board = BootedBoard();
+        Type(board, "GO64" + CR, 1_000_000);
+        Type(board, "Y" + CR, 6_000_000);
+
+        StringAssert.Contains(Screen64(board), "**** COMMODORE 64 BASIC V2 ****");
+        StringAssert.Contains(Screen64(board), "38911 BASIC BYTES FREE");
+
+        Type(board, "PRINT 2+3" + CR);
+        StringAssert.Contains(Screen64(board), " 5 ");
+        Assert.IsFalse(board.VicSocket.Chip!.NewMode, "C64 mode is the VIC-II mode");
+    }
 }
