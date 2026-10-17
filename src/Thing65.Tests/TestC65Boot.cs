@@ -112,4 +112,36 @@ public sealed class C65BootTests
         StringAssert.Contains(screen, " 2 ");
         StringAssert.Contains(screen, " 3 ");
     }
+
+    // 10 PRINT"HI" as BASIC 10 stores it: load address $2001, line link, line number, tokens
+    static readonly byte[] HiProgram = [0x01, 0x20, 0x0B, 0x20, 0x0A, 0x00, 0x99, 0x22, 0x48, 0x49, 0x22, 0x00, 0x00, 0x00];
+
+    [TestMethod]
+    [Timeout(120_000)]
+    public void Disk_ShouldShowTheDirectory()
+    {
+        var board = BootedBoard();
+        board.Disk = D81Writer.Create("HI", HiProgram);
+
+        Type(board, "DIRECTORY" + CR, 2_000_000);
+
+        string screen = Screen(board);
+        StringAssert.Contains(screen, "\"HI\"");
+        StringAssert.Contains(screen, "PRG");
+    }
+
+    [TestMethod]
+    [Timeout(120_000)]
+    public void Disk_ShouldLoadAndRunAProgram()
+    {
+        var board = BootedBoard();
+        board.Disk = D81Writer.Create("HI", HiProgram);
+
+        Type(board, "DLOAD\"HI\"" + CR, 3_000_000);
+        Type(board, "RUN" + CR, 1_000_000);
+
+        StringAssert.Contains(Screen(board), "HI");
+        var lines = Screen(board).Split(Environment.NewLine);
+        Assert.IsTrue(lines.Any(line => line.TrimStart().StartsWith("HI")), Screen(board));
+    }
 }
