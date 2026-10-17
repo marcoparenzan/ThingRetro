@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- The desktop app: one C64 in a window, with board, monitor, keyboard, speakers and control ports wired
        together, plus loading .prg/.crt files, the ROM folder and the settings -->
@@ -16,6 +16,8 @@
     <ProjectReference Include="..\Thing64.Crt\Thing64.Crt.csproj" />
     <ProjectReference Include="..\Thing64.Prg\Thing64.Prg.csproj" />
     <ProjectReference Include="..\Thing64.WinForms\Thing64.WinForms.csproj" />
+    <!-- The 1541 drive of the sibling project Thing1500 -->
+    <ProjectReference Include="..\..\..\Thing1500\src\Thing1500.Drive\Thing1500.Drive.csproj" />
   </ItemGroup>
 
   <!-- C64 ROMs (KERNAL, BASIC, characters): read from the roms folder next to the executable -->

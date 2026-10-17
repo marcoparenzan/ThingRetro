@@ -368,3 +368,6 @@ src/Thing64.Tests/TestData/External/
 # Programs assembled by the studio next to the sample sources (the published ones are in samples/)
 samples/src/*.prg
 artifacts/
+
+# 1541 ROM of the drive window (Thing1500)
+src/Thing64.Computer/roms/c-drive-1541.rom
