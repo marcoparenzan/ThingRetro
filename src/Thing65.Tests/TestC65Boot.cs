@@ -218,4 +218,36 @@ public sealed class C65BootTests
         StringAssert.Contains(Screen64(board), " 5 ");
         Assert.IsFalse(board.VicSocket.Chip!.NewMode, "C64 mode is the VIC-II mode");
     }
+
+    // The slow one: HEADER formats 160 tracks, a revolution (200 ms of the machine) each
+    [TestMethod]
+    [Timeout(600_000)]
+    public void Disk_ShouldBeFormattedWrittenAndReadOnAnotherMachine()
+    {
+        var board = BootedBoard();
+        var disk = D81Image.Blank();
+        board.Disk = disk;
+
+        Type(board, "DIRECTORY" + CR, 1_500_000);
+        Assert.IsFalse(Screen(board).Contains("BLOCKS FREE"), "an unformatted disk has no directory");
+
+        Type(board, "HEADER\"TEST\",I65,D0" + CR, 500_000);
+        Type(board, "Y" + CR, 160_000_000);
+        Type(board, "DIRECTORY" + CR, 3_000_000);
+        StringAssert.Contains(Screen(board), "3160 BLOCKS FREE");
+
+        Type(board, "10 PRINT\"SAVED\"" + CR);
+        Type(board, "DSAVE\"KEEP\"" + CR, 6_000_000);
+        Type(board, "DIRECTORY" + CR, 3_000_000);
+        StringAssert.Contains(Screen(board), "\"KEEP\"");
+        Assert.IsTrue(disk.Modified);
+
+        // The disk is a file now: another machine reads it
+        var copy = new D81Image((byte[])disk.Data.Clone());
+        var other = BootedBoard();
+        other.Disk = copy;
+        Type(other, "DLOAD\"KEEP\"" + CR, 3_000_000);
+        Type(other, "RUN" + CR, 1_000_000);
+        StringAssert.Contains(Screen(other), "SAVED");
+    }
 }

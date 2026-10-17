@@ -17,6 +17,7 @@ public class ComputerForm : Form
     readonly AudioCable? audioCable;
     readonly ControlPortSelector controlPorts;
     readonly AppSettings settings = AppSettings.Current;
+    readonly DiskSlot disk = new();
 
     public ComputerForm(SystemRom128 rom, string? startupFile = null)
     {
@@ -59,7 +60,9 @@ public class ComputerForm : Form
         };
         menu.Items.Add(audio);
         menu.Items.Add(new ToolStripMenuItem("Insert disk or run program...", null, (_, _) => Browse()));
-        menu.Items.Add(new ToolStripMenuItem("Eject disk", null, (_, _) => board.Enqueue(() => board.Disk = null)));
+        menu.Items.Add(new ToolStripMenuItem("Save disk", null, (_, _) => board.Enqueue(() => disk.Save())));
+        menu.Items.Add(new ToolStripMenuItem("Save disk as...", null, (_, _) => SaveDiskAs()));
+        menu.Items.Add(new ToolStripMenuItem("Eject disk", null, (_, _) => board.Enqueue(() => { disk.Set(null, null); board.Disk = null; })));
         menu.Items.Add(new ToolStripMenuItem("Reset", null, (_, _) => Reset()));
         monitor.ContextMenuStrip = menu;
 
@@ -85,6 +88,22 @@ public class ComputerForm : Form
 
     public void Reset() => board.Enqueue(board.Reset);
 
+    // The disk is copied on the emulation thread, between two cycles, so the DOS is not writing while it is saved
+    void SaveDiskAs()
+    {
+        using var dialog = new SaveFileDialog { Filter = "C65 disk (*.d81)|*.d81", FileName = "disk.d81" };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        string path = dialog.FileName;
+        board.Enqueue(() =>
+        {
+            try { disk.SaveAs(path); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                BeginInvoke(() => MessageBox.Show(this, e.Message, "Thing65", MessageBoxButtons.OK, MessageBoxIcon.Error));
+            }
+        });
+    }
+
     void Browse()
     {
         using var dialog = new OpenFileDialog { Filter = "C65 disks and programs (*.d81;*.prg)|*.d81;*.prg|All files|*.*" };
@@ -92,10 +111,10 @@ public class ComputerForm : Form
     }
 
     // Restarts the machine and runs a .prg (or boots a .d81)
-    public void Run(string path) => LoadFile(path, () => MediaLoader.Run(board, path));
+    public void Run(string path) => LoadFile(path, () => MediaLoader.Run(board, path, disk));
 
     // Puts a disk in the running machine, or starts a program, as when it is dropped on the monitor
-    public void Open(string path) => LoadFile(path, () => MediaLoader.Open(board, path));
+    public void Open(string path) => LoadFile(path, () => MediaLoader.Open(board, path, disk));
 
     void LoadFile(string path, Func<string> load)
     {
@@ -125,6 +144,11 @@ public class ComputerForm : Form
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         board.Stop();
+        try { disk.Save(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"The disk could not be saved: {ex.Message}", "Thing65", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
         controlPorts.Dispose();
         keyboardCable.Dispose();
         audioCable?.Dispose();

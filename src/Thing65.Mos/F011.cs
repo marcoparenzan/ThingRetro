@@ -3,13 +3,13 @@ namespace Thing65.Mos;
 // CSG F011: the C65's disk controller. The real chip reads and writes MFM; this one works one sector at a time (what
 // the C65 DOS does with it): the head position, the 512-byte buffer with its two pointers (one for the CPU, one for
 // the disk), the status bits and the commands READ SECTOR, WRITE SECTOR, step in/out, spin up, cancel, clear buffer.
-// Free-format track read/write (RDT, WTT) is not implemented: it finds no record.
+// Free-format track commands (RDT, WTT) work on the byte stream of the track: see F011.Tracks.cs.
 // A command keeps BUSY set for a while (BusyCycles) and its effects appear when it ends, together with IRQ.
 //
 // Registers ($D080-$D08A): 0 control, 1 command, 2 status A, 3 status B, 4 track, 5 sector, 6 side, 7 data,
 // 8 clock, 9 step, 10 protect code
 // Reference: "C65 Specifications", chapter 2.5
-public class F011 : IF011Pinout
+public partial class F011 : IF011Pinout
 {
     // Control register bits
     const int CONTROL_IRQ = 0x80;
@@ -64,6 +64,8 @@ public class F011 : IF011Pinout
         statusB = 0;
         busy = 0;
         pending = -1;
+        trackOp = TrackOp.None;
+        waitingForIndex = false;
         drive = 0;
         headTrack = 0;
         cpuPointer = diskPointer = 0;
@@ -72,6 +74,7 @@ public class F011 : IF011Pinout
     public void Tick()
     {
         cycles++;
+        if (trackOp != TrackOp.None) TrackTick();
         if (busy > 0 && --busy == 0) Complete();
     }
 
@@ -111,7 +114,7 @@ public class F011 : IF011Pinout
     }
 
     // BUSY, TK0 (head on track 0) and PROT (write protected) are read from the drive
-    byte StatusA => (byte)((statusA & (DRQ | EQ | RNF | CRC | LOST)) | (busy > 0 ? BUSY : 0) |
+    byte StatusA => (byte)((statusA & (DRQ | EQ | RNF | CRC | LOST)) | (busy > 0 || TrackBusy ? BUSY : 0) |
                            (headTrack == 0 ? TK0 : 0) | (media?.WriteProtected == true ? PROT : 0));
 
     // DSKIN (a disk is in) and INDEX (the index hole passes under the sensor, once per turn while the motor spins)
@@ -135,7 +138,8 @@ public class F011 : IF011Pinout
     void WriteCommand(byte value)
     {
         // A running command is only interrupted by CANcel
-        if (busy > 0 && (value & 0xF8) != 0) return;
+        if ((busy > 0 || TrackBusy) && (value & 0xF8) != 0) return;
+        if (TrackBusy && (value & 0xF8) == 0) CancelTrack();
 
         command = value;
         // Cancel and clear buffer pointers take no time
@@ -171,7 +175,8 @@ public class F011 : IF011Pinout
         {
             case 0x40: ReadSector(); break;                 // RDS (bit 0 = unbuffered, handled as buffered)
             case 0x80: WriteSector(); break;                // WTS
-            case 0x60: case 0xA0: statusA |= RNF; break;    // RDT, WTT: free format is not supported
+            case 0x60: StartTrack(TrackOp.Read); break;     // RDT: until it is cancelled
+            case 0xA0: StartTrack(TrackOp.Write); break;    // WTT: from the next index pulse to the one after
             case 0x10:                                      // STOUT, or TIME if bit 2 is set (no pulse)
                 if ((value & 4) == 0 && headTrack > 0) headTrack--;
                 break;
@@ -223,6 +228,7 @@ public class F011 : IF011Pinout
     {
         statusA = (byte)(statusA & ~DRQ);
         statusB = (byte)(statusB & ~RDREQ);
+        if (UnbufferedTrackRead) return latch;
         if ((statusA & EQ) != 0) statusA |= LOST; // another byte after the pointers met: the disk side lost data
         byte value = buffer[cpuPointer ^ SwapMask];
         AdvanceCpuPointer();
@@ -232,6 +238,12 @@ public class F011 : IF011Pinout
     void WriteData(byte value)
     {
         statusA = (byte)(statusA & ~DRQ);
+        if (UnbufferedTrackWrite)
+        {
+            latch = value;
+            freshByte = true;
+            return;
+        }
         if ((statusA & EQ) != 0) statusA |= LOST;
         buffer[cpuPointer ^ SwapMask] = value;
         AdvanceCpuPointer();

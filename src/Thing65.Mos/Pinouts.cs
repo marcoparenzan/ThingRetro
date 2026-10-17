@@ -73,8 +73,11 @@ public interface IF018Pinout
 public interface IDiskMedia
 {
     bool WriteProtected { get; }
+    int SectorsPerTrack { get; }
+    void EraseTrack(int track, int side);                                      // the track becomes unformatted: no sector is found until it is written
     bool ReadSector(int track, int side, int sector, Span<byte> buffer);       // false = sector not found
     bool WriteSector(int track, int side, int sector, ReadOnlySpan<byte> data); // false = not found or protected
+    bool FormatSector(int track, int side, int sector, ReadOnlySpan<byte> data); // writes a sector header and its data: the sector exists from now on
 }
 
 // CSG F011 disk controller, the C65's built-in 3.5" drive: sector-level commands, a 512-byte buffer, eight registers

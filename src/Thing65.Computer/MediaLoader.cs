@@ -25,24 +25,29 @@ public static class MediaLoader
 
     // Puts a disk image in the drive of a running machine and returns a description for the title.
     // A program is started from scratch (see Run). Invalid files throw (IOException, InvalidDataException, ArgumentException)
-    public static string Open(BoardC65 board, string path)
+    public static string Open(BoardC65 board, string path, DiskSlot slot)
     {
-        if (!IsDisk(path)) return Run(board, path);
+        if (!IsDisk(path)) return Run(board, path, slot);
 
         var image = new D81Image(File.ReadAllBytes(path));
-        board.Enqueue(() => board.Disk = image);
+        board.Enqueue(() =>
+        {
+            slot.Set(image, path); // the disk that was in is written back to its file
+            board.Disk = image;
+        });
         return $"{Path.GetFileName(path)} (disk)";
     }
 
     // Starts a program or a disk from scratch: reset, boot at full speed, then (program) a disk with it is inserted
     // and loaded, and RUN or SYS typed
-    public static string Run(BoardC65 board, string path)
+    public static string Run(BoardC65 board, string path, DiskSlot slot)
     {
         if (IsDisk(path))
         {
             var image = new D81Image(File.ReadAllBytes(path));
             board.Enqueue(() =>
             {
+                slot.Set(image, path);
                 board.Disk = image;
                 board.Reset();
                 board.FastForward(BootTime);
@@ -59,9 +64,11 @@ public static class MediaLoader
 
         board.Enqueue(() =>
         {
+            slot.Set(null, null);
             board.Disk = null;
             board.Reset();
             board.FastForward(BootTime);
+            slot.Set(disk, null); // made for the program: it has no file
             board.Disk = disk;
             board.TypeText(load);
             while (board.IsTyping) board.RunCycles(1000);
