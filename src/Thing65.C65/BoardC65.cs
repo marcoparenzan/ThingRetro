@@ -30,6 +30,11 @@ public partial class BoardC65
     public Keyboard Keyboard => keyboard;
     public ControlPort ControlPort1 { get; } = new("control port 1");
     public ControlPort ControlPort2 { get; } = new("control port 2");
+    public IecPort Iec { get; } = new();                      // serial connector: a cable takes it to the disk drives
+
+    // Called at the end of every board cycle (1 MHz of the PAL clock): for whatever is clocked with the computer and lives
+    // outside the board, such as the disk drives on the IEC cable
+    public Action? AfterCycle { get; set; }
 
     internal long TotalCycles => totalCycles;
 
@@ -134,6 +139,7 @@ public partial class BoardC65
         vic?.Tick();
 
         totalCycles++;
+        AfterCycle?.Invoke();
     }
 
     void OnFrameCompleted()

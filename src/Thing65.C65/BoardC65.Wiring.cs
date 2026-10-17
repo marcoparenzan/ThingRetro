@@ -155,15 +155,18 @@ public partial class BoardC65
     }
 
     // CIA 2: PA0-PA1 = VIC bank (inverted), PA2 = user port, PA3-PA5 = ATN/CLK/DATA out on the serial bus,
-    // PA6-PA7 = CLK/DATA in (no drive connected: the outputs drive the lines)
+    // PA6-PA7 = CLK/DATA in. The drivers invert: a 1 on an output pulls the line down. The lines go to the IEC connector
+    // (Iec): a cable takes them to the drives; without one the outputs are the only ones to drive the lines
     void ConnectCia2(I6526Pinout chip)
     {
+        Iec.AtnLow = () => (chip.PortA.Output & 0x08) != 0;
+        Iec.ClkLow = () => (chip.PortA.Output & 0x10) != 0;
+        Iec.DataLow = () => (chip.PortA.Output & 0x20) != 0;
         chip.PortA.External = () =>
         {
-            byte output = chip.PortA.Output;
             byte pins = 0x3F;
-            if ((output & 0x10) == 0) pins |= 0x40;
-            if ((output & 0x20) == 0) pins |= 0x80;
+            if (!Iec.ClkLow() && !Iec.ClkInputLow()) pins |= 0x40;
+            if (!Iec.DataLow() && !Iec.DataInputLow()) pins |= 0x80;
             return pins;
         };
         chip.PortB.External = () => 0xFF;
@@ -175,6 +178,7 @@ public partial class BoardC65
     void DisconnectCia2(I6526Pinout chip)
     {
         chip.PortA.Changed -= UpdateVicBank;
+        Iec.AtnLow = Iec.ClkLow = Iec.DataLow = () => false;
         chip.PortA.External = () => 0xFF;
         cia2 = null;
         UpdateVicBank();
