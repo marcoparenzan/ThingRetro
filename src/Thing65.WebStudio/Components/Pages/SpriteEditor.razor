@@ -1,0 +1,534 @@
+@using Thing65.Graphics
+@using Thing65.WebStudio.CodeBehind
+@implements IRegionEditor
+@implements IDisposable
+@inject IJSRuntime JS
+
+@* The editor of a ;@ sprites region: every sprite of the region (hires and multicolor), the animations declared in
+   it playing, and the selected sprite in big pixels. Left button paints with the chosen color, right button erases.
+   Copy puts the sprite on the clipboard as a picture; Ctrl+V (or Paste) converts a picture from the clipboard into it *@
+<div class="absolute inset-0 flex flex-col overflow-hidden @(Visible ? null : "invisible")">
+    <div class="flex flex-wrap items-center gap-2 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
+        <span class="mr-2 font-mono text-chip-300">@File · sprites</span>
+        <button class="@(fill ? "border-night-600" : "border-chip-400 bg-night-700 text-white") rounded border px-2 py-1" @onclick="() => fill = false" title="Paint pixel by pixel">✎ Pencil</button>
+        <button class="@(fill ? "border-chip-400 bg-night-700 text-white" : "border-night-600") rounded border px-2 py-1" @onclick="() => fill = true" title="Fill the area of the same color">◩ Fill</button>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Mirror" title="Mirror left and right">⇋ Mirror</button>
+        <span class="flex items-center gap-0.5" title="Slide the pixels; what leaves one side comes back on the other">
+            slide
+            <button class="rounded border border-night-600 px-1.5 py-1" @onclick="() => Slide(-1, 0)">←</button>
+            <button class="rounded border border-night-600 px-1.5 py-1" @onclick="() => Slide(1, 0)">→</button>
+            <button class="rounded border border-night-600 px-1.5 py-1" @onclick="() => Slide(0, -1)">↑</button>
+            <button class="rounded border border-night-600 px-1.5 py-1" @onclick="() => Slide(0, 1)">↓</button>
+        </span>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Clear" title="Erase the whole sprite">⌫ Clear</button>
+        <button class="rounded border border-night-600 px-2 py-1 disabled:opacity-40" disabled="@(undo.Count == 0)" @onclick="Undo">↶ Undo</button>
+        <span class="mx-1 h-5 border-l border-night-700"></span>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Copy" title="Copy the sprite to the clipboard as a picture">⧉ Copy</button>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="PasteFromClipboard" title="Convert a picture from the clipboard into this sprite (or Ctrl+V)">📋 Paste</button>
+        <span class="mx-1 h-5 border-l border-night-700"></span>
+        <label class="flex items-center gap-1"><input type="checkbox" @bind="grid" /> grid</label>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Load" title="Read the file and the program again">⟳ Reload</button>
+        <span class="ml-auto text-night-300">@status</span>
+    </div>
+
+    @if (error is not null)
+    {
+        <p class="m-3 rounded border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">@error</p>
+    }
+    @if (sheet is not null && Current is { } sprite)
+    {
+        <div class="flex min-h-0 flex-1">
+            <div class="w-64 shrink-0 overflow-y-auto border-r border-night-800 bg-night-950 p-2 text-xs">
+                <div class="mb-2 flex flex-wrap gap-1">
+                    <button class="tool border border-night-700" @onclick='() => StartNaming("new")' title="A new empty sprite after the selected one">＋ New</button>
+                    <button class="tool border border-night-700" @onclick='() => StartNaming("duplicate")' title="A copy of the selected sprite, after it">⧉ Duplicate</button>
+                    <button class="tool border border-night-700" @onclick='() => StartNaming("rename")' title="Rename the sprite's label in every source of the project">✎ Rename</button>
+                    <button class="tool border border-night-700" @onclick="DeleteSprite" title="Delete the selected sprite">🗑</button>
+                </div>
+                @if (naming is not null)
+                {
+                    <form class="mb-2" @onsubmit="ApplyNaming">
+                        <label class="mb-1 block text-night-300">@NamingLabel</label>
+                        <input class="field w-full font-mono" @bind="name" @bind:event="oninput" @onkeydown="NamingKey" @ref="nameInput" />
+                    </form>
+                }
+                @for (int s = 0; s < sheet.Sprites.Count; s++)
+                {
+                    int index = s;
+                    var item = sheet.Sprites[s];
+                    <button class="@(selected == index ? "bg-night-700 ring-1 ring-chip-400" : "hover:bg-night-800") mb-1 flex w-full items-center gap-2 rounded px-1.5 py-1 text-left"
+                            @onclick="() => Select(index)">
+                        <img src="@thumbnails[index]" alt="" class="pixelated h-[42px] w-12 shrink-0 border border-night-700" />
+                        <span class="min-w-0">
+                            <span class="block truncate text-night-100">@item.Name</span>
+                            <span class="text-night-400">@(item.Multicolor ? "multicolor" : "hires") · @C65Palette.Names[item.Color]</span>
+                        </span>
+                    </button>
+                }
+                <div class="mt-3 mb-1 flex items-center border-t border-night-800 pt-2">
+                    <span class="mr-auto text-[11px] font-semibold tracking-wider text-night-300 uppercase">Animations</span>
+                    <button class="tool border border-night-700" @onclick='() => StartNaming("animation")' title="A new animation, starting with the selected sprite">＋ Animation</button>
+                </div>
+                @for (int a = 0; a < sheet.Animations.Count; a++)
+                {
+                    int number = a;
+                    var animation = sheet.Animations[a];
+                    <div class="mb-2 rounded border border-night-800 p-1.5">
+                        <div class="flex items-center gap-2">
+                            <img id="@($"anim-{id}-{a}")" alt="" class="pixelated h-[42px] w-12 shrink-0 border border-night-700" />
+                            <span class="min-w-0 flex-1">
+                                <span class="block truncate text-night-100">@animation.Name</span>
+                                <label class="text-night-400">every
+                                    <input type="number" min="1" max="255" class="field w-12 px-1 py-0" value="@animation.Speed"
+                                           @onchange="e => SetSpeed(number, e)" />/50 s
+                                </label>
+                            </span>
+                            <button class="tool" title="Rename the animation" @onclick='() => StartNaming("rename-animation", number)'>✎</button>
+                            <button class="tool" title="Delete the animation" @onclick="() => DeleteAnimation(number)">🗑</button>
+                        </div>
+                        <div class="mt-1 flex flex-wrap items-center gap-1">
+                            @for (int f = 0; f < animation.Frames.Count; f++)
+                            {
+                                int position = f;
+                                <img src="@thumbnails[animation.Frames[f]]" alt="" title="@sheet.Sprites[animation.Frames[f]].Name: click to remove"
+                                     class="pixelated h-[21px] w-6 cursor-pointer border border-night-700 hover:border-red-400" @onclick="() => RemoveFrame(number, position)" />
+                            }
+                            <button class="tool border border-night-700" title="Add the selected sprite as the next frame" @onclick="() => AddFrame(number)">＋ @Current?.Name</button>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="min-w-0 flex-1 overflow-auto p-4">
+                <div class="mb-3 flex flex-wrap items-center gap-2 text-xs text-night-200">
+                    <span class="mr-1">@sprite.Name — @(sprite.Multicolor ? "multicolor 12x21" : "hires 24x21"). Paint with:</span>
+                    @for (int c = 1; c < (sprite.Multicolor ? 4 : 2); c++)
+                    {
+                        int code = c;
+                        int color = sheet.ColorOf(sprite, code);
+                        <button class="@(paintCode == code ? "ring-2 ring-chip-400" : "") flex items-center gap-1.5 rounded border border-night-600 px-2 py-1"
+                                @onclick="() => paintCode = code">
+                            <span class="h-4 w-4 rounded-sm border border-night-700" style="background: #@sheet.Palette.Rgb[color].ToString("X6")"></span>
+                            @(sprite.Multicolor ? code switch { 1 => "multicolor 1", 2 => "sprite color", _ => "multicolor 2" } : "sprite color")
+                        </button>
+                    }
+                    <span class="text-night-400">right button erases</span>
+                </div>
+                <div class="relative inline-block select-none" style="width: @(24 * Zoom)px; height: @(SpriteSheet.Rows * Zoom)px"
+                     @onmousedown="Down" @onmousemove="Move" @onmouseup="Up" @onmouseleave="Up" @oncontextmenu:preventDefault>
+                    <img src="@bigImage" alt="" draggable="false" class="pixelated pointer-events-none absolute inset-0 h-full w-full" />
+                    @if (grid)
+                    {
+                        <div class="pointer-events-none absolute inset-0"
+                             style="background-image: linear-gradient(to right, rgba(124,138,247,.3) 1px, transparent 1px), linear-gradient(to bottom, rgba(124,138,247,.3) 1px, transparent 1px); background-size: @(Zoom * (sprite.Multicolor ? 2 : 1))px @(Zoom)px"></div>
+                    }
+                </div>
+                <div class="mt-3 flex items-end gap-4 text-xs text-night-400">
+                    <figure><img src="@actualImage" alt="" class="pixelated" style="width: 48px" /><figcaption>2x</figcaption></figure>
+                    <figure><img src="@actualImage" alt="" class="pixelated" style="width: 96px" /><figcaption>4x</figcaption></figure>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Project Project { get; set; } = default!;
+    [Parameter, EditorRequired] public string File { get; set; } = "";
+    [Parameter, EditorRequired] public int Index { get; set; }
+    [Parameter, EditorRequired] public IRegionHost Host { get; set; } = default!;
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> OnDirty { get; set; }
+
+    const int Zoom = 16;
+    readonly string id = Guid.NewGuid().ToString("N")[..8];
+    DotNetObjectReference<SpriteEditor>? self;
+    bool? pasteTarget;
+
+    SpriteSheet? sheet;
+    int[] values = [];
+    int selected;
+    int[] codes = [];
+    string[] thumbnails = [];
+    string? bigImage, actualImage;
+    string? error;
+    string status = "";
+    bool dirty, fill, grid = true, painting, animationsChanged;
+    int paintCode = 1;
+    readonly Stack<int[]> undo = new();
+
+    string? naming;          // new, duplicate, rename, animation, rename-animation
+    int namingAnimation;
+    string name = "";
+    ElementReference nameInput;
+    bool focusName;
+
+    SpriteSheet.Sprite? Current => sheet is not null && selected < sheet.Sprites.Count ? sheet.Sprites[selected] : null;
+
+    protected override void OnInitialized() => Load();
+
+    public void Load()
+    {
+        try
+        {
+            string[] lines = Lines();
+            var region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"There is no region {Index + 1} in {File}");
+            ProgramImage? image = null;
+            try { image = ProgramImage.Assemble(Project); }
+            catch (FormatException) { status = "The program does not assemble: only numbers work as parameters"; }
+            values = region.ReadBytes(lines, image).ToArray();
+            sheet = new SpriteSheet(region, lines, image, values.Length);
+            int needed = sheet.Sprites.Max(s => s.Offset) + 63;
+            if (values.Length < needed) status = $"The region has {values.Length} values: a sprite needs 63";
+            selected = Math.Min(selected, sheet.Sprites.Count - 1);
+            undo.Clear();
+            SetDirty(false);
+            error = null;
+            SelectCodes();
+            RenderAll();
+        }
+        catch (Exception e) when (e is FormatException or IOException or OverflowException)
+        {
+            error = e.Message;
+            sheet = null;
+        }
+    }
+
+    string[] Lines() => Project.ReadText(File).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+
+    public async Task<bool> Save()
+    {
+        if (sheet is null) return false;
+        if (!await Host.CanWriteAsync(File)) return false;
+        string[] lines = Lines();
+        var region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"The region {Index + 1} of {File} is gone");
+        string newline = Project.ReadText(File).Contains("\r\n") ? "\r\n" : "\n";
+        Project.WriteText(File, string.Join(newline, region.WriteBytes(lines, values, 3)));
+        SetDirty(false);
+        await Host.WrittenAsync(File);
+        return true;
+    }
+
+    void SetDirty(bool value)
+    {
+        if (dirty == value) return;
+        dirty = value;
+        _ = OnDirty.InvokeAsync(value);
+    }
+
+    void Select(int index)
+    {
+        selected = index;
+        SelectCodes();
+        RenderCurrent();
+        paintCode = Math.Min(paintCode, Current!.Multicolor ? 3 : 1);
+    }
+
+    void SelectCodes() => codes = Current is { } sprite ? SpriteSheet.Decode(sprite, values) : [];
+
+    (int X, int Y)? PixelAt(MouseEventArgs e)
+    {
+        var sprite = Current!;
+        int x = (int)(e.OffsetX / (Zoom * (sprite.Multicolor ? 2 : 1))), y = (int)(e.OffsetY / Zoom);
+        return x < 0 || y < 0 || x >= sprite.Across || y >= SpriteSheet.Rows ? null : (x, y);
+    }
+
+    void Down(MouseEventArgs e)
+    {
+        if (PixelAt(e) is not { } pixel) return;
+        undo.Push((int[])values.Clone());
+        int code = e.Button == 2 ? 0 : paintCode;
+        if (fill) Fill(pixel, code);
+        else
+        {
+            painting = true;
+            Paint(pixel, code);
+        }
+    }
+
+    void Move(MouseEventArgs e)
+    {
+        var pixel = PixelAt(e);
+        status = pixel is { } p ? $"{p.X},{p.Y}" : "";
+        if (painting && pixel is { } at && (e.Buttons & 3) != 0) Paint(at, (e.Buttons & 2) != 0 ? 0 : paintCode);
+    }
+
+    void Up(MouseEventArgs e) => painting = false;
+
+    void Paint((int X, int Y) pixel, int code)
+    {
+        int i = pixel.Y * Current!.Across + pixel.X;
+        if (codes[i] == code) return;
+        codes[i] = code;
+        Changed();
+    }
+
+    void Fill((int X, int Y) pixel, int code)
+    {
+        int across = Current!.Across, start = pixel.Y * across + pixel.X, target = codes[start];
+        if (target == code) return;
+        var pending = new Stack<int>([start]);
+        while (pending.Count > 0)
+        {
+            int i = pending.Pop();
+            if (codes[i] != target) continue;
+            codes[i] = code;
+            if (i % across > 0) pending.Push(i - 1);
+            if (i % across < across - 1) pending.Push(i + 1);
+            if (i >= across) pending.Push(i - across);
+            if (i < across * (SpriteSheet.Rows - 1)) pending.Push(i + across);
+        }
+        Changed();
+    }
+
+    void Mirror()
+    {
+        undo.Push((int[])values.Clone());
+        int across = Current!.Across;
+        for (int y = 0; y < SpriteSheet.Rows; y++) Array.Reverse(codes, y * across, across);
+        Changed();
+    }
+
+    void Clear()
+    {
+        undo.Push((int[])values.Clone());
+        Array.Clear(codes);
+        Changed();
+    }
+
+    void Undo()
+    {
+        if (undo.Count == 0) return;
+        values = undo.Pop();
+        SelectCodes();
+        SetDirty(true);
+        RenderAll();
+    }
+
+    // The codes of the selected sprite back into the values, and everything that shows it drawn again
+    void Changed()
+    {
+        SpriteSheet.Encode(Current!, codes, values);
+        SetDirty(true);
+        thumbnails[selected] = Url(sheet!.Render(Current!, codes, 2, onBackground: true));
+        RenderCurrent();
+        animationsChanged = true;
+    }
+
+    void RenderAll()
+    {
+        thumbnails = sheet!.Sprites.Select(s => Url(sheet.Render(s, SpriteSheet.Decode(s, values), 2, onBackground: true))).ToArray();
+        RenderCurrent();
+        animationsChanged = true;
+    }
+
+    void RenderCurrent()
+    {
+        bigImage = Url(sheet!.Render(Current!, codes, 1, onBackground: true));
+        actualImage = bigImage;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        self ??= DotNetObjectReference.Create(this);
+        if (focusName && naming is not null)
+        {
+            focusName = false;
+            await nameInput.FocusAsync();
+        }
+        if (pasteTarget != Visible)
+        {
+            pasteTarget = Visible;
+            await JS.InvokeVoidAsync("thing65Studio.pasteTarget", id, Visible ? self : null);
+        }
+        if (animationsChanged && sheet is not null)
+        {
+            animationsChanged = false;
+            for (int a = 0; a < sheet.Animations.Count; a++)
+                await JS.InvokeVoidAsync("thing65Studio.animate", $"anim-{id}-{a}", sheet.Animations[a].Frames.Select(f => thumbnails[f]).ToArray(), sheet.Animations[a].Speed * 20);
+        }
+    }
+
+    async Task Copy()
+    {
+        var picture = sheet!.Render(Current!, codes, 4, onBackground: false);
+        await JS.InvokeVoidAsync("thing65Studio.copyImage", Convert.ToBase64String(Png.Write(picture)));
+        status = "Copied: paste it in another sprite, or in any program";
+    }
+
+    async Task PasteFromClipboard()
+    {
+        if (!await JS.InvokeAsync<bool>("thing65Studio.pasteFromClipboard", self)) status = "There is no picture in the clipboard";
+    }
+
+    // A picture from the clipboard (studio.js has made it a PNG), converted into the selected sprite
+    [JSInvokable]
+    public async Task PasteImage(byte[] png)
+    {
+        try
+        {
+            undo.Push((int[])values.Clone());
+            codes = sheet!.FromPicture(Current!, Png.Read(png));
+            Changed();
+            status = "Pasted";
+        }
+        catch (Exception e) when (e is InvalidDataException or NotSupportedException or ArgumentException)
+        {
+            status = "The picture could not be pasted: " + e.Message;
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Slide the pixels by one, wrapping around (in multicolor a step is a double-wide pixel)
+    void Slide(int dx, int dy)
+    {
+        undo.Push((int[])values.Clone());
+        int across = Current!.Across, rows = SpriteSheet.Rows;
+        var moved = new int[codes.Length];
+        for (int y = 0; y < rows; y++)
+            for (int x = 0; x < across; x++)
+                moved[(y + dy + rows) % rows * across + (x + dx + across) % across] = codes[y * across + x];
+        codes = moved;
+        Changed();
+    }
+
+    // The names asked by the small form above the list
+    string NamingLabel => naming switch
+    {
+        "new" => "Label of the new sprite",
+        "duplicate" => $"Label of the copy of {Current?.Name}",
+        "rename" => $"New label for {Current?.Name} (in every source)",
+        "animation" => "Name of the new animation",
+        _ => $"New name for the animation {sheet?.Animations.ElementAtOrDefault(namingAnimation)?.Name}",
+    };
+
+    void StartNaming(string mode, int animation = 0)
+    {
+        naming = mode;
+        focusName = true;
+        namingAnimation = animation;
+        name = mode switch
+        {
+            "duplicate" => Current?.Name + "Copy",
+            "rename" => Current?.Name ?? "",
+            "rename-animation" => sheet?.Animations.ElementAtOrDefault(animation)?.Name ?? "",
+            "new" => "sprite" + (sheet?.Sprites.Count ?? 0),
+            _ => "",
+        };
+    }
+
+    void NamingKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") naming = null;
+    }
+
+    async Task ApplyNaming()
+    {
+        string newName = name.Trim();
+        string? mode = naming;
+        if (!AsmRegion.IsIdentifier(newName)) { status = $"\"{newName}\" is not a valid name"; return; }
+        naming = null;
+        switch (mode)
+        {
+            case "new":
+            case "duplicate":
+            {
+                if (sheet!.Sprites.Any(s => s.Name == newName)) { status = $"{newName} already exists"; return; }
+                int[] bytes = mode == "new" ? new int[64] : values.Skip(Current!.Offset).Take(64).Concat(new int[64]).Take(64).ToArray();
+                string[] directives = Current is { } c && (c.Multicolor || c.Color != DefaultColor) ? [$"multicolor={(c.Multicolor ? 1 : 0)} color={c.Color}"] : [];
+                int after = selected;
+                await Restructure((lines, region) => SpriteFile.Insert(lines, region, after, newName, bytes, directives), $"{newName} added");
+                if (sheet is not null) Select(Math.Min(after + 1, sheet.Sprites.Count - 1));
+                break;
+            }
+            case "rename":
+            {
+                if (Current is not { } sprite || sprite.Name == newName) return;
+                if (dirty && !await Save()) return;
+                if (!await Host.CanWriteAsync(File)) return;
+                int changes = SpriteFile.RenameEverywhere(Project, sprite.Name, newName);
+                await Host.WrittenAsync(File);
+                Load();
+                status = $"{sprite.Name} is now {newName} ({changes} places)";
+                break;
+            }
+            case "animation":
+                await WriteAnimations(list => list.Add((newName, Current is { } s ? [s.Name] : [], 8)), $"Animation {newName} added");
+                break;
+            case "rename-animation":
+            {
+                int index = namingAnimation;
+                await WriteAnimations(list => list[index] = (newName, list[index].Frames, list[index].Speed), $"Animation renamed {newName}");
+                break;
+            }
+        }
+    }
+
+    // The color of the region's sprites, so that a copy says only what differs from it
+    int DefaultColor => sheet?.Sprites.FirstOrDefault()?.Color ?? 1;
+
+    async Task DeleteSprite()
+    {
+        if (Current is not { } sprite || sheet!.Sprites.Count <= 1) { status = "The region needs at least one sprite"; return; }
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete the sprite {sprite.Name}? References to its label elsewhere will not assemble.")) return;
+        int index = selected;
+        await Restructure((lines, region) => SpriteFile.Delete(lines, region, index), $"{sprite.Name} deleted");
+        if (sheet is not null) Select(Math.Max(0, index - 1));
+    }
+
+    Task AddFrame(int animation) =>
+        WriteAnimations(list => list[animation] = (list[animation].Name, [.. list[animation].Frames, Current!.Name], list[animation].Speed), "Frame added");
+
+    Task RemoveFrame(int animation, int position) =>
+        WriteAnimations(list => list[animation] = (list[animation].Name, list[animation].Frames.Where((_, i) => i != position).ToList(), list[animation].Speed), "Frame removed");
+
+    Task SetSpeed(int animation, ChangeEventArgs e) =>
+        int.TryParse(e.Value?.ToString(), out int speed) && speed > 0
+            ? WriteAnimations(list => list[animation] = (list[animation].Name, list[animation].Frames, speed), "Speed changed")
+            : Task.CompletedTask;
+
+    async Task DeleteAnimation(int animation)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete the animation {sheet!.Animations[animation].Name}? The sprites stay.")) return;
+        await WriteAnimations(list => list.RemoveAt(animation), "Animation deleted");
+    }
+
+    // The animations by sprite name, changed, written back into the header of the region
+    Task WriteAnimations(Action<List<(string Name, IReadOnlyList<string> Frames, int Speed)>> change, string done)
+    {
+        var list = sheet!.Animations.Select(a => (a.Name, Frames: (IReadOnlyList<string>)a.Frames.Select(f => sheet.Sprites[f].Name).ToList(), a.Speed)).ToList();
+        change(list);
+        return Restructure((lines, region) => SpriteFile.WriteAnimations(lines, region, list.Select(a => (a.Name, a.Frames.AsEnumerable(), a.Speed))), done);
+    }
+
+    // A change to the file's structure: the pixels not saved yet are saved first, then the file is changed and read
+    // again. An error (the file changed meanwhile, a label is gone) is shown, not thrown
+    async Task Restructure(Func<string[], AsmRegion, string[]> change, string done)
+    {
+        try
+        {
+            if (dirty && !await Save()) return;
+            if (!await Host.CanWriteAsync(File)) return;
+            string[] lines = Lines();
+            var region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"The region {Index + 1} of {File} is gone");
+            string newline = Project.ReadText(File).Contains("\r\n") ? "\r\n" : "\n";
+            Project.WriteText(File, string.Join(newline, change(lines, region)));
+            await Host.WrittenAsync(File);
+            Load();
+            status = done;
+        }
+        catch (Exception e) when (e is FormatException or IOException or UnauthorizedAccessException or IndexOutOfRangeException or ArgumentOutOfRangeException)
+        {
+            Load();
+            status = "Not done: " + e.Message;
+        }
+    }
+
+    static string Url(RgbImage image) => "data:image/png;base64," + Convert.ToBase64String(Png.Write(image));
+
+    public void Dispose()
+    {
+        _ = JS.InvokeVoidAsync("thing65Studio.pasteTarget", id, null).AsTask().ContinueWith(_ => { });
+        self?.Dispose();
+    }
+}

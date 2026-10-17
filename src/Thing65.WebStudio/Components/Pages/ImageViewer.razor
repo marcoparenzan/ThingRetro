@@ -1,0 +1,167 @@
+@using System.Buffers.Binary
+@using Thing65.Graphics
+
+@* A PNG in three views: the picture (zoomed, with the pixel under a click: its RGBA and the nearest C64 color), its
+   structure (the chunks of the file, IHDR decoded) and its bytes *@
+<div class="absolute inset-0 flex flex-col overflow-hidden @(Visible ? null : "invisible")">
+    <div class="flex flex-wrap items-center gap-2 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
+        <span class="mr-2 font-mono text-chip-300">@Path</span>
+        @foreach (var name in Views)
+        {
+            <button class="@(view == name ? "border-chip-400 bg-night-700 text-white" : "border-night-600") rounded border px-2 py-1" @onclick="() => view = name">@name</button>
+        }
+        @if (view == "Picture")
+        {
+            <label class="ml-2 flex items-center gap-1">zoom
+                <select class="field py-0.5" @bind="zoom">
+                    @foreach (int z in new[] { 1, 2, 3, 4, 6, 8 }) { <option value="@z">@(z)x</option> }
+                </select>
+            </label>
+        }
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="OnMakeGraphics" title="Convert it to C64 graphics (a .gfx.json next to it)">▦ Make C64 graphics</button>
+        <span class="ml-auto text-night-400">@(image is null ? error : $"{image.Width}x{image.Height}, {bytes.Length} bytes")</span>
+    </div>
+
+    @if (view == "Bytes")
+    {
+        <div class="relative min-h-0 flex-1"><HexViewer Project="Project" Path="@Path" Visible="true" /></div>
+    }
+    else if (view == "Structure")
+    {
+        <div class="min-h-0 flex-1 overflow-auto p-3">
+            <table class="text-left font-mono text-xs">
+                <thead class="text-night-400"><tr><th class="pr-6 font-normal">Chunk</th><th class="pr-6 font-normal">Offset</th><th class="pr-6 font-normal">Length</th><th class="pr-6 font-normal">CRC</th><th class="font-normal">Content</th></tr></thead>
+                <tbody class="text-night-100">
+                    @foreach (var chunk in chunks)
+                    {
+                        <tr class="border-t border-night-800">
+                            <td class="py-1 pr-6 text-chip-300">@chunk.Type</td>
+                            <td class="pr-6">$@chunk.Offset.ToString("X")</td>
+                            <td class="pr-6">@chunk.Length</td>
+                            <td class="pr-6 text-night-400">@chunk.Crc.ToString("X8")</td>
+                            <td class="font-sans">@chunk.Content</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p class="mt-3 max-w-3xl font-sans text-xs text-night-400">
+                A PNG is an 8-byte signature and chunks: length, type, data, CRC. IHDR describes the image, PLTE and tRNS hold
+                the palette and its transparency, IDAT the rows compressed with zlib (each row starts with a filter byte),
+                IEND closes the file. Lower-case first letters mark the chunks a reader may ignore.
+            </p>
+        </div>
+    }
+    else if (image is not null)
+    {
+        <div class="flex min-h-0 flex-1">
+            <div class="min-w-0 flex-1 overflow-auto p-3">
+                <div class="checker relative inline-block" style="width: @(image.Width * zoom)px; height: @(image.Height * zoom)px">
+                    <img src="@Url" alt="" draggable="false" class="pixelated absolute inset-0 h-full w-full cursor-crosshair" @onclick="Pick" />
+                </div>
+            </div>
+            @if (picked is { } p)
+            {
+                uint pixel = image[p.X, p.Y];
+                var c64 = Nearest(pixel);
+                <aside class="w-56 shrink-0 border-l border-night-800 bg-night-950 p-3 font-mono text-xs leading-6 text-night-200">
+                    <div class="mb-1 font-sans text-[11px] font-semibold tracking-wider text-night-300 uppercase">Pixel</div>
+                    <div>x, y   <span class="text-white">@p.X, @p.Y</span></div>
+                    <div class="my-1 h-8 w-full rounded border border-night-700" style="background: #@((pixel & 0xFFFFFF).ToString("X6")); opacity: @((pixel >> 24) / 255.0)"></div>
+                    <div>RGB    <span class="text-white">#@((pixel & 0xFFFFFF).ToString("X6"))</span></div>
+                    <div>alpha  <span class="text-white">@(pixel >> 24)</span></div>
+                    <div class="mt-2 font-sans text-night-300">Nearest C64 color</div>
+                    <div class="flex items-center gap-2">
+                        <span class="h-4 w-4 rounded-sm border border-night-700" style="background: #@C65Palette.Pepto.Rgb[c64].ToString("X6")"></span>
+                        <span class="text-white">@c64 @C65Palette.Names[c64]</span>
+                    </div>
+                </aside>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Project Project { get; set; } = default!;
+    [Parameter, EditorRequired] public string Path { get; set; } = "";
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback OnMakeGraphics { get; set; }
+
+    static readonly string[] Views = ["Picture", "Structure", "Bytes"];
+    sealed record Chunk(string Type, int Offset, int Length, uint Crc, string Content);
+
+    string view = "Picture";
+    int zoom = 2;
+    byte[] bytes = [];
+    RgbImage? image;
+    readonly List<Chunk> chunks = [];
+    (int X, int Y)? picked;
+    string? error;
+    string stamp = "";
+
+    string Url => $"project-files/{Uri.EscapeDataString(Project.Name)}/{Path}?v={stamp}";
+
+    protected override void OnInitialized() => Load();
+
+    public void Load()
+    {
+        try
+        {
+            bytes = Project.ReadBytes(Path);
+            stamp = File.GetLastWriteTimeUtc(Project.FullPath(Path)).Ticks.ToString();
+            bool first = image is null;
+            image = Png.Read(bytes);
+            if (first) zoom = new[] { 8, 6, 4, 3, 2, 1 }.First(z => z == 1 || Math.Max(image.Width, image.Height) * z <= 640);   // as large as fits
+            ReadChunks();
+            error = null;
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException)
+        {
+            error = e.Message;
+            image = null;
+        }
+    }
+
+    void ReadChunks()
+    {
+        chunks.Clear();
+        for (int at = 8; at + 12 <= bytes.Length;)
+        {
+            int length = BinaryPrimitives.ReadInt32BigEndian(bytes.AsSpan(at));
+            if (length < 0 || at + 12 + length > bytes.Length) break;
+            string type = System.Text.Encoding.ASCII.GetString(bytes, at + 4, 4);
+            var data = bytes.AsSpan(at + 8, length);
+            uint crc = BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(at + 8 + length));
+            chunks.Add(new Chunk(type, at, length, crc, Describe(type, data)));
+            at += 12 + length;
+        }
+    }
+
+    static string Describe(string type, ReadOnlySpan<byte> data) => type switch
+    {
+        "IHDR" when data.Length >= 13 =>
+            $"{BinaryPrimitives.ReadInt32BigEndian(data)}x{BinaryPrimitives.ReadInt32BigEndian(data[4..])}, {data[8]} bits per sample, " +
+            (data[9] switch { 0 => "grey", 2 => "RGB", 3 => "palette", 4 => "grey + alpha", 6 => "RGBA", var t => $"color type {t}" }) +
+            (data[12] == 1 ? ", interlaced" : ""),
+        "PLTE" => $"{data.Length / 3} colors",
+        "tRNS" => $"{data.Length} transparency values",
+        "IDAT" => "compressed rows",
+        "IEND" => "end of the image",
+        "tEXt" or "iTXt" => System.Text.Encoding.Latin1.GetString(data).Replace('\0', '='),
+        "pHYs" when data.Length >= 9 => $"{BinaryPrimitives.ReadInt32BigEndian(data)}x{BinaryPrimitives.ReadInt32BigEndian(data[4..])} pixels per {(data[8] == 1 ? "meter" : "unit")}",
+        "sRGB" => "sRGB color space",
+        "gAMA" when data.Length >= 4 => $"gamma {BinaryPrimitives.ReadInt32BigEndian(data) / 100000.0}",
+        _ => "",
+    };
+
+    void Pick(MouseEventArgs e)
+    {
+        int x = (int)(e.OffsetX / zoom), y = (int)(e.OffsetY / zoom);
+        if (image is not null && x >= 0 && y >= 0 && x < image.Width && y < image.Height) picked = (x, y);
+    }
+
+    static int Nearest(uint pixel)
+    {
+        var color = Color.FromRgb(pixel);
+        return Enumerable.Range(0, 16).MinBy(c => C65Palette.Distance(color, C65Palette.Pepto[c]));
+    }
+}

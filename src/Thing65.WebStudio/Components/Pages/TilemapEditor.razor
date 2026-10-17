@@ -1,0 +1,245 @@
+@using Thing65.Graphics
+@using Thing65.WebStudio.CodeBehind
+@implements IRegionEditor
+
+@* The editor of a ;@ tilemap region: the tiles on the left (drawn with the program's charmap and colors), the map on
+   the right. Left button paints with the tool, right button picks the tile under the mouse. Saving rewrites only
+   the .byte lines of the region *@
+<div class="absolute inset-0 flex flex-col overflow-hidden @(Visible ? null : "invisible")">
+    <div class="flex flex-wrap items-center gap-2 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
+        <span class="mr-2 font-mono text-chip-300">@File · @(region?.Label ?? "tilemap")</span>
+        @foreach (var (tool, label, hint) in Tools)
+        {
+            <button class="@(this.tool == tool ? "border-chip-400 bg-night-700 text-white" : "border-night-600") rounded border px-2 py-1" title="@hint"
+                    @onclick="() => this.tool = tool">@label</button>
+        }
+        <button class="rounded border border-night-600 px-2 py-1 disabled:opacity-40" disabled="@(undo.Count == 0)" @onclick="Undo" title="Undo the last change">↶ Undo</button>
+        <label class="ml-2 flex items-center gap-1"><input type="checkbox" @bind="grid" /> grid</label>
+        <label class="flex items-center gap-1">zoom
+            <select class="field py-0.5" @bind="zoom">
+                <option value="2">2x</option><option value="3">3x</option><option value="4">4x</option>
+            </select>
+        </label>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Load" title="Read the file and the program again">⟳ Reload</button>
+        <span class="ml-auto text-night-300">@status</span>
+    </div>
+
+    @if (error is not null)
+    {
+        <p class="m-3 rounded border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">@error</p>
+    }
+    @if (tilemap is not null)
+    {
+        <div class="flex min-h-0 flex-1">
+            <div class="w-56 shrink-0 overflow-y-auto border-r border-night-800 bg-night-950 p-2">
+                @for (int t = 0; t < tilemap.Count; t++)
+                {
+                    int tile = t;
+                    <button class="@(selectedTile == tile ? "bg-night-700 ring-1 ring-chip-400" : "hover:bg-night-800") mb-1 flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs"
+                            @onclick="() => selectedTile = tile">
+                        <img src="@tileImages[tile]" alt="" class="pixelated h-8 w-8 shrink-0 border border-night-700" />
+                        <span class="w-7 font-mono text-night-400">@tile</span>
+                        <span class="truncate text-night-100">@tilemap.Names[tile]</span>
+                    </button>
+                }
+            </div>
+            <div class="min-w-0 flex-1 overflow-auto p-3">
+                <div class="relative inline-block select-none" style="width: @(tilemap.Width * 8 * zoom)px; height: @(tilemap.Height * 8 * zoom)px"
+                     @onmousedown="Down" @onmousemove="Move" @onmouseup="Up" @onmouseleave="Up" @oncontextmenu:preventDefault>
+                    <img src="@mapImage" alt="" draggable="false" class="pixelated pointer-events-none absolute inset-0 h-full w-full" />
+                    @if (grid)
+                    {
+                        <div class="pointer-events-none absolute inset-0"
+                             style="background-image: linear-gradient(to right, rgba(124,138,247,.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(124,138,247,.25) 1px, transparent 1px); background-size: @(8 * zoom)px @(8 * zoom)px"></div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Project Project { get; set; } = default!;
+    [Parameter, EditorRequired] public string File { get; set; } = "";
+    [Parameter, EditorRequired] public int Index { get; set; }
+    [Parameter, EditorRequired] public IRegionHost Host { get; set; } = default!;
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> OnDirty { get; set; }
+
+    enum Tool { Pencil, Rectangle, Fill }
+    static readonly (Tool, string, string)[] Tools =
+    [
+        (Tool.Pencil, "✎ Pencil", "Paint tile by tile"),
+        (Tool.Rectangle, "▭ Rectangle", "Drag to fill a rectangle"),
+        (Tool.Fill, "◩ Fill", "Fill the area of the same tile"),
+    ];
+
+    AsmRegion? region;
+    Tilemap? tilemap;
+    int[] map = [];
+    string[] tileImages = [];
+    string? mapImage;
+    string? error;
+    string status = "";
+    bool dirty;
+    Tool tool = Tool.Pencil;
+    int selectedTile = 1;
+    bool grid = true;
+    int zoom = 3;
+    readonly Stack<int[]> undo = new();
+    int[]? dragStart;       // the map when a rectangle drag began
+    int dragCell = -1;
+    bool painting;
+
+    protected override void OnInitialized() => Load();
+
+    // The region from the file, the tables and characters from the assembled program
+    public void Load()
+    {
+        try
+        {
+            string[] lines = Project.ReadText(File).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+            region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"There is no region {Index + 1} in {File}");
+            var image = ProgramImage.Assemble(Project);
+            tilemap = new Tilemap(region, image);
+            var values = region.ReadBytes(lines, image);
+            int cells = tilemap.Width * tilemap.Height;
+            status = values.Count == cells ? "" : $"The region has {values.Count} values for {cells} cells: saving makes them {cells}";
+            map = values.Concat(Enumerable.Repeat(0, Math.Max(0, cells - values.Count))).Take(cells).ToArray();
+            tileImages = Enumerable.Range(0, tilemap.Count).Select(t => Url(tilemap.RenderTile(t))).ToArray();
+            selectedTile = Math.Min(selectedTile, tilemap.Count - 1);
+            undo.Clear();
+            SetDirty(false);
+            error = null;
+            Redraw();
+        }
+        catch (Exception e) when (e is FormatException or IOException or InvalidDataException or NotSupportedException or OverflowException)
+        {
+            error = e.Message;
+            tilemap = null;
+        }
+    }
+
+    public async Task<bool> Save()
+    {
+        if (region is null || tilemap is null) return false;
+        if (!await Host.CanWriteAsync(File)) return false;
+        string[] lines = Project.ReadText(File).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+        var current = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"The region {Index + 1} of {File} is gone");
+        string newline = Project.ReadText(File).Contains("\r\n") ? "\r\n" : "\n";
+        Project.WriteText(File, string.Join(newline, current.WriteBytes(lines, map, tilemap.Width)));
+        SetDirty(false);
+        await Host.WrittenAsync(File);
+        return true;
+    }
+
+    void SetDirty(bool value)
+    {
+        if (dirty == value) return;
+        dirty = value;
+        _ = OnDirty.InvokeAsync(value);
+    }
+
+    int CellAt(MouseEventArgs e)
+    {
+        int x = (int)(e.OffsetX / (8 * zoom)), y = (int)(e.OffsetY / (8 * zoom));
+        return x < 0 || y < 0 || x >= tilemap!.Width || y >= tilemap.Height ? -1 : y * tilemap.Width + x;
+    }
+
+    void Down(MouseEventArgs e)
+    {
+        int cell = CellAt(e);
+        if (cell < 0 || tilemap is null) return;
+        if (e.Button == 2)
+        {
+            selectedTile = map[cell];
+            return;
+        }
+        undo.Push((int[])map.Clone());
+        switch (tool)
+        {
+            case Tool.Pencil:
+                painting = true;
+                Paint(cell);
+                break;
+            case Tool.Rectangle:
+                dragStart = (int[])map.Clone();
+                dragCell = cell;
+                Rectangle(cell);
+                break;
+            case Tool.Fill:
+                Fill(cell);
+                break;
+        }
+    }
+
+    void Move(MouseEventArgs e)
+    {
+        int cell = CellAt(e);
+        if (tilemap is null) return;
+        status = cell < 0 ? "" : $"{cell % tilemap.Width},{cell / tilemap.Width}: {tilemap.Names[map[cell]]} ({map[cell]})";
+        if (cell < 0 || (e.Buttons & 1) == 0) return;
+        if (painting) Paint(cell);
+        else if (dragStart is not null) Rectangle(cell);
+    }
+
+    void Up(MouseEventArgs e)
+    {
+        painting = false;
+        dragStart = null;
+    }
+
+    void Paint(int cell)
+    {
+        if (map[cell] == selectedTile) return;
+        map[cell] = selectedTile;
+        Changed();
+    }
+
+    // From the cell where the drag began to this one, on the map as it was then
+    void Rectangle(int cell)
+    {
+        map = (int[])dragStart!.Clone();
+        int w = tilemap!.Width;
+        for (int y = Math.Min(dragCell / w, cell / w); y <= Math.Max(dragCell / w, cell / w); y++)
+            for (int x = Math.Min(dragCell % w, cell % w); x <= Math.Max(dragCell % w, cell % w); x++)
+                map[y * w + x] = selectedTile;
+        Changed();
+    }
+
+    // The area of the same tile around the cell, through its four neighbors
+    void Fill(int cell)
+    {
+        int target = map[cell], w = tilemap!.Width, h = tilemap.Height;
+        if (target == selectedTile) return;
+        var pending = new Stack<int>([cell]);
+        while (pending.Count > 0)
+        {
+            int c = pending.Pop();
+            if (map[c] != target) continue;
+            map[c] = selectedTile;
+            if (c % w > 0) pending.Push(c - 1);
+            if (c % w < w - 1) pending.Push(c + 1);
+            if (c >= w) pending.Push(c - w);
+            if (c < w * (h - 1)) pending.Push(c + w);
+        }
+        Changed();
+    }
+
+    void Undo()
+    {
+        if (undo.Count == 0) return;
+        map = undo.Pop();
+        Changed();
+    }
+
+    void Changed()
+    {
+        SetDirty(true);
+        Redraw();
+    }
+
+    void Redraw() => mapImage = Url(tilemap!.Render(map));
+
+    static string Url(RgbImage image) => "data:image/png;base64," + Convert.ToBase64String(Png.Write(image));
+}

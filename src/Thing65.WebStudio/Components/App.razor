@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="icon" type="image/png" sizes="32x32" href="img/thing65-chip-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="img/thing65-chip-16.png" />
+    <link rel="apple-touch-icon" href="img/thing65-chip-256.png" />
+
+    @* Tailwind, compiled in the browser, with the colors of the logo: night (#05083a, the chip and the lettering)
+       and chip (#7c8af7, the pins and "64") *@
+    <script src="https://cdn.jsdelivr.net/npm/@@tailwindcss/browser@4.1.11"></script>
+    <style type="text/tailwindcss">
+        @@theme {
+            --color-night-50: #f5f6fe;
+            --color-night-100: #e8eaff;
+            --color-night-200: #d5d9fb;
+            --color-night-300: #9aa2e0;
+            --color-night-400: #5a618f;
+            --color-night-500: #3a4290;
+            --color-night-600: #2b3590;
+            --color-night-700: #1a2170;
+            --color-night-800: #0d1257;
+            --color-night-900: #05083a;
+            --color-night-950: #03052a;
+            --color-chip-200: #d0d5fc;
+            --color-chip-300: #a9b3fa;
+            --color-chip-400: #7c8af7;
+            --color-chip-500: #5f6ef0;
+            --color-chip-600: #4a56d6;
+            --font-sans: "Segoe UI", system-ui, sans-serif;
+            --font-mono: "Cascadia Mono", Consolas, monospace;
+        }
+
+        @@layer components {
+            /* The inputs of the graphics editor */
+            .field { @@apply rounded border border-night-600 bg-night-800 px-2 py-1 text-white focus:border-chip-400 focus:outline-none; }
+            /* Pictures: C64 pixels stay square and sharp; transparent parts show a checkerboard */
+            .pixelated { image-rendering: pixelated; }
+            .checker { background: repeating-conic-gradient(#0d1257 0 25%, #05083a 0 50%) 0 0 / 16px 16px; }
+
+            /* RalfAI's answers, from Markdown */
+            .assistant-text p { @@apply my-2; }
+            .assistant-text ul { @@apply my-2 list-disc pl-5; }
+            .assistant-text ol { @@apply my-2 list-decimal pl-5; }
+            .assistant-text h1, .assistant-text h2, .assistant-text h3 { @@apply mt-3 mb-1 font-semibold text-white; }
+            .assistant-text code { @@apply rounded bg-night-800 px-1 font-mono text-xs text-chip-300; }
+            .assistant-text pre { @@apply my-2 overflow-x-auto rounded bg-night-900 p-2; }
+            .assistant-text pre code { @@apply bg-transparent p-0 text-night-100; }
+            .assistant-text a { @@apply text-chip-300 underline; }
+
+            /* The small buttons of the file tree */
+            .tool {
+                @@apply rounded px-1.5 py-0.5 text-xs text-night-300 hover:bg-night-700 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent;
+            }
+        }
+    </style>
+
+    @* Scroll bars: thin, no arrows, in the colors of the logo (Monaco has its own, in the thing65 theme) *@
+    <style>
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: #2b3590 transparent;
+        }
+        *:hover {
+            scrollbar-color: #4a56d6 transparent;
+        }
+    </style>
+
+    @* Monaco (the editor of Visual Studio Code) from the CDN, and the 6502 language of Thing65.Asm *@
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+    <script src="js/asm6502.js"></script>
+    <script src="js/studio.js"></script>
+
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+<body class="h-full bg-night-50 font-sans text-night-900">
+    <Routes @rendermode="InteractiveServer" />
+
+    <div id="blazor-error-ui" class="fixed inset-x-0 bottom-0 z-50 hidden bg-red-700 px-4 py-2 text-white">
+        The connection to the studio was lost or an error occurred.
+        <a href="" class="reload underline">Reload</a>
+        <a class="dismiss float-right cursor-pointer">✕</a>
+    </div>
+    <script src="_framework/blazor.web.js"></script>
+</body>
+</html>

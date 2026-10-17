@@ -1,0 +1,363 @@
+@using Thing65.Graphics
+@using Thing65.WebStudio.CodeBehind
+@implements IRegionEditor
+
+@* The editor of a ;@ screen region: the screen as the C64 shows it, painted with a pen that is a character and a
+   color. Left button paints with the tool, right button picks the pen from the cell under the mouse. Saving writes
+   the screen codes and the colors back in place *@
+<div class="absolute inset-0 flex flex-col overflow-hidden @(Visible ? null : "invisible")">
+    <div class="flex flex-wrap items-center gap-2 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
+        <span class="mr-2 font-mono text-chip-300">@File · @(region?.Label ?? "screen")</span>
+        @foreach (var (tool, label, hint) in Tools)
+        {
+            <button class="@(this.tool == tool ? "border-chip-400 bg-night-700 text-white" : "border-night-600") rounded border px-2 py-1" title="@hint"
+                    @onclick="() => this.tool = tool">@label</button>
+        }
+        <span class="mx-1 h-5 border-l border-night-700"></span>
+        <label class="flex items-center gap-1" title="What the tools paint">paint
+            <select class="field py-0.5" @bind="paint">
+                <option value="both">character + color</option>
+                <option value="character">character only</option>
+                <option value="color">color only</option>
+            </select>
+        </label>
+        <button class="rounded border border-night-600 px-2 py-1 disabled:opacity-40" disabled="@(undo.Count == 0)" @onclick="Undo">↶ Undo</button>
+        <label class="ml-2 flex items-center gap-1"><input type="checkbox" @bind="grid" /> grid</label>
+        <label class="flex items-center gap-1">zoom
+            <select class="field py-0.5" @bind="zoom">
+                <option value="2">2x</option><option value="3">3x</option><option value="4">4x</option>
+            </select>
+        </label>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Load" title="Read the file and the program again">⟳ Reload</button>
+        <span class="ml-auto text-night-300">@status</span>
+    </div>
+
+    @if (error is not null)
+    {
+        <p class="m-3 rounded border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">@error</p>
+    }
+    @if (screen is not null)
+    {
+        <div class="flex min-h-0 flex-1">
+            <div class="w-64 shrink-0 overflow-y-auto border-r border-night-800 bg-night-950 p-3 text-xs text-night-200">
+                <div class="mb-1 text-[11px] font-semibold tracking-wider text-night-300 uppercase">Pen</div>
+                <div class="mb-3 flex items-center gap-3">
+                    <img src="@penImage" alt="" class="pixelated h-12 w-12 border border-night-700" />
+                    <div>
+                        <div>character <span class="font-mono text-white">$@penCode.ToString("X2")</span></div>
+                        <div>color <span class="font-mono text-white">$@screen.CellColor(penCode, penColor).ToString("X2")</span> @(screen.IsMulticolor(screen.CellColor(penCode, penColor)) ? "multicolor" : "hires")</div>
+                    </div>
+                </div>
+
+                <div class="mb-1 text-night-300">color (color RAM)</div>
+                <div class="mb-2 flex flex-wrap gap-1">
+                    @for (int c = 0; c < 16; c++)
+                    {
+                        int color = c;
+                        <button disabled="@(screen.MulticolorMode && color >= 8)"
+                                class="@((penColor & (screen.MulticolorMode ? 7 : 15)) == color ? "ring-2 ring-chip-400" : "") h-5 w-5 rounded-sm border border-night-700 disabled:opacity-20"
+                                title="@color: @C65Palette.Names[color]" style="background: #@screen.Palette.Rgb[color].ToString("X6")"
+                                @onclick="() => SetPenColor(color)"></button>
+                    }
+                </div>
+                @if (screen.ChoosesMulticolor)
+                {
+                    <p class="mb-3 text-night-400" title="The ;@@ charset region says multicolor=1: its characters are multicolor, the ROM's are hires">multicolor: set by the charset</p>
+                }
+                else if (screen.MulticolorMode)
+                {
+                    <label class="mb-3 flex items-center gap-1" title="Bit 3 of the color: the cell shows its character in multicolor">
+                        <input type="checkbox" checked="@screen.IsMulticolor(penColor)" @onchange="ToggleMulticolor" /> multicolor character
+                    </label>
+                }
+
+                <div class="mb-1 flex items-center gap-2 text-night-300">
+                    character
+                    <input class="field w-16 py-0.5 font-mono" value="@($"${penCode:X2}")" @onchange="SetPenCode" title="Any screen code: $20 is the space" />
+                </div>
+                <div class="flex flex-wrap gap-1">
+                    @foreach (int code in Palette())
+                    {
+                        int c = code;
+                        <button class="@(penCode == c ? "ring-2 ring-chip-400" : "hover:ring-1 hover:ring-night-300") flex flex-col items-center rounded p-0.5"
+                                @onclick="() => SetPenCode(c)" title="$@c.ToString("X2")">
+                            <img src="@CellImage(c)" alt="" class="pixelated h-7 w-7 border border-night-700" />
+                            <span class="font-mono text-[10px] text-night-400">@c.ToString("X2")</span>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="min-w-0 flex-1 overflow-auto p-3">
+                <div class="relative inline-block select-none" style="width: @(screen.Width * 8 * zoom)px; height: @(screen.Height * 8 * zoom)px"
+                     @onmousedown="Down" @onmousemove="Move" @onmouseup="Up" @onmouseleave="Up" @oncontextmenu:preventDefault>
+                    <img src="@screenImage" alt="" draggable="false" class="pixelated pointer-events-none absolute inset-0 h-full w-full" />
+                    @if (grid)
+                    {
+                        <div class="pointer-events-none absolute inset-0"
+                             style="background-image: linear-gradient(to right, rgba(124,138,247,.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(124,138,247,.25) 1px, transparent 1px); background-size: @(8 * zoom)px @(8 * zoom)px"></div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Project Project { get; set; } = default!;
+    [Parameter, EditorRequired] public string File { get; set; } = "";
+    [Parameter, EditorRequired] public int Index { get; set; }
+    [Parameter, EditorRequired] public IRegionHost Host { get; set; } = default!;
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> OnDirty { get; set; }
+
+    enum Tool { Pencil, Rectangle, Fill }
+    static readonly (Tool, string, string)[] Tools =
+    [
+        (Tool.Pencil, "✎ Pencil", "Paint cell by cell (right button: pick the pen from a cell)"),
+        (Tool.Rectangle, "▭ Rectangle", "Drag to fill a rectangle"),
+        (Tool.Fill, "◩ Fill", "Fill the area of cells equal to the one clicked"),
+    ];
+
+    AsmRegion? region;
+    ScreenRegion? screen;
+    int[] values = [];
+    string? screenImage, penImage;
+    string? error;
+    string status = "";
+    bool dirty, grid = true, painting;
+    Tool tool = Tool.Pencil;
+    string paint = "both";
+    int zoom = 3;
+    int penCode = 0x20, penColor = 1;
+    readonly Stack<int[]> undo = new();
+    int[]? dragStart;
+    int dragCell = -1;
+    readonly Dictionary<(int, int), string> cellImages = [];
+
+    protected override void OnInitialized() => Load();
+
+    public void Load()
+    {
+        try
+        {
+            string[] lines = Lines();
+            region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"There is no region {Index + 1} in {File}");
+            var image = ProgramImage.Assemble(Project);
+            screen = new ScreenRegion(region, lines, image, CharsetRegion.MulticolorOf(Project, region.Parameters.GetValueOrDefault("charset", ""), image));
+            values = region.ReadBytes(lines, image).ToArray();
+            int needed = Math.Max(screen.ScreenAt, screen.ColorsAt) + screen.Cells;
+            if (values.Length < needed) throw new FormatException($"The region has {values.Length} values: the screen and the colors need {needed}");
+            if (penCode == 0x20 && screen.Characters > 0) penCode = screen.First;
+            cellImages.Clear();
+            undo.Clear();
+            SetDirty(false);
+            error = null;
+            status = "";
+            AlignWithCharset();
+            Redraw();
+        }
+        catch (Exception e) when (e is FormatException or IOException or InvalidDataException or NotSupportedException or OverflowException)
+        {
+            error = e.Message;
+            screen = null;
+        }
+    }
+
+    string[] Lines() => Project.ReadText(File).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+
+    // A multicolor charset decides bit 3 of the colors: the cells that disagree (hires cells with one of its
+    // characters, multicolor cells with a ROM one) take the charset's way, and the screen is marked as changed so
+    // that Save writes it into the file
+    void AlignWithCharset()
+    {
+        if (screen is null || !screen.ChoosesMulticolor) return;
+        int cells = 0;
+        for (int cell = 0; cell < screen.Cells; cell++)
+        {
+            int color = screen.CellColor(values[screen.ScreenAt + cell], values[screen.ColorsAt + cell]);
+            if (values[screen.ColorsAt + cell] == color) continue;
+            values[screen.ColorsAt + cell] = color;
+            cells++;
+        }
+        if (cells == 0) return;
+        SetDirty(true);
+        status = $"The charset is multicolor: {cells} cells changed their color's bit 3 to match it. Save writes them";
+    }
+
+    public async Task<bool> Save()
+    {
+        if (region is null || screen is null) return false;
+        if (!await Host.CanWriteAsync(File)) return false;
+        string[] lines = Lines();
+        var current = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"The region {Index + 1} of {File} is gone");
+        string newline = Project.ReadText(File).Contains("\r\n") ? "\r\n" : "\n";
+        Project.WriteText(File, string.Join(newline, current.WriteBytes(lines, values, screen.Width)));
+        SetDirty(false);
+        await Host.WrittenAsync(File);
+        return true;
+    }
+
+    void SetDirty(bool value)
+    {
+        if (dirty == value) return;
+        dirty = value;
+        _ = OnDirty.InvokeAsync(value);
+    }
+
+    // The characters to pick: the space, then the charset's own
+    IEnumerable<int> Palette() => new[] { 0x20 }.Concat(Enumerable.Range(screen!.First, screen.Characters));
+
+    string CellImage(int code)
+    {
+        var key = (code, penColor);
+        if (!cellImages.TryGetValue(key, out var url)) cellImages[key] = url = Url(screen!.RenderCell(code, penColor));
+        return url;
+    }
+
+    void SetPenCode(int code)
+    {
+        penCode = code & 0xFF;
+        penImage = Url(screen!.RenderCell(penCode, penColor));
+    }
+
+    void SetPenCode(ChangeEventArgs e)
+    {
+        string text = e.Value?.ToString()?.Trim() ?? "";
+        bool ok = text.StartsWith('$') ? int.TryParse(text[1..], System.Globalization.NumberStyles.HexNumber, null, out int code) : int.TryParse(text, out code);
+        if (ok && code is >= 0 and <= 255) SetPenCode(code); else status = $"{text} is not a screen code";
+    }
+
+    void SetPenColor(int color)
+    {
+        bool multicolor = screen!.IsMulticolor(penColor);   // the multicolor bit stays as it is
+        penColor = screen.MulticolorMode ? (color & 7) | (multicolor ? 8 : 0) : color;
+        SetPenCode(penCode);
+    }
+
+    void ToggleMulticolor()
+    {
+        penColor ^= 8;
+        SetPenCode(penCode);
+    }
+
+    int CellAt(MouseEventArgs e)
+    {
+        int x = (int)(e.OffsetX / (8 * zoom)), y = (int)(e.OffsetY / (8 * zoom));
+        return x < 0 || y < 0 || x >= screen!.Width || y >= screen.Height ? -1 : y * screen.Width + x;
+    }
+
+    void Down(MouseEventArgs e)
+    {
+        int cell = CellAt(e);
+        if (cell < 0 || screen is null) return;
+        if (e.Button == 2)
+        {
+            penColor = values[screen.ColorsAt + cell] & 15;
+            SetPenCode(values[screen.ScreenAt + cell]);
+            return;
+        }
+        undo.Push((int[])values.Clone());
+        switch (tool)
+        {
+            case Tool.Pencil:
+                painting = true;
+                Paint(cell);
+                break;
+            case Tool.Rectangle:
+                dragStart = (int[])values.Clone();
+                dragCell = cell;
+                Rectangle(cell);
+                break;
+            case Tool.Fill:
+                Fill(cell);
+                break;
+        }
+    }
+
+    void Move(MouseEventArgs e)
+    {
+        int cell = CellAt(e);
+        if (screen is null) return;
+        status = cell < 0 ? "" : $"{cell % screen.Width},{cell / screen.Width}: ${values[screen.ScreenAt + cell]:X2} color ${values[screen.ColorsAt + cell]:X2}";
+        if (cell < 0 || (e.Buttons & 1) == 0) return;
+        if (painting) Paint(cell);
+        else if (dragStart is not null) Rectangle(cell);
+    }
+
+    void Up(MouseEventArgs e)
+    {
+        painting = false;
+        dragStart = null;
+    }
+
+    // One cell takes the pen: its character, its color, or both. With a multicolor charset the color's bit 3 follows
+    // the cell's character, also when only the character is painted
+    bool Set(int[] target, int cell)
+    {
+        bool changed = false;
+        if (paint != "color" && target[screen!.ScreenAt + cell] != penCode) { target[screen.ScreenAt + cell] = penCode; changed = true; }
+        int code = target[screen!.ScreenAt + cell];
+        int color = screen.CellColor(code, paint == "character" ? target[screen.ColorsAt + cell] : penColor);
+        if (target[screen.ColorsAt + cell] != color) { target[screen.ColorsAt + cell] = color; changed = true; }
+        return changed;
+    }
+
+    void Paint(int cell)
+    {
+        if (Set(values, cell)) Changed();
+    }
+
+    void Rectangle(int cell)
+    {
+        values = (int[])dragStart!.Clone();
+        int w = screen!.Width;
+        for (int y = Math.Min(dragCell / w, cell / w); y <= Math.Max(dragCell / w, cell / w); y++)
+            for (int x = Math.Min(dragCell % w, cell % w); x <= Math.Max(dragCell % w, cell % w); x++)
+                Set(values, y * w + x);
+        Changed();
+    }
+
+    // The cells around equal to the clicked one (as the pen paints: character, color or both), through 4 neighbors
+    void Fill(int cell)
+    {
+        int w = screen!.Width, h = screen.Height;
+        (int, int) Key(int c) => (paint == "color" ? 0 : values[screen.ScreenAt + c], paint == "character" ? 0 : values[screen.ColorsAt + c]);
+        var target = Key(cell);
+        var pending = new Stack<int>([cell]);
+        var seen = new HashSet<int>();
+        bool changed = false;
+        while (pending.Count > 0)
+        {
+            int c = pending.Pop();
+            if (!seen.Add(c) || Key(c) != target) continue;
+            changed |= Set(values, c);
+            if (c % w > 0) pending.Push(c - 1);
+            if (c % w < w - 1) pending.Push(c + 1);
+            if (c >= w) pending.Push(c - w);
+            if (c < w * (h - 1)) pending.Push(c + w);
+        }
+        if (changed) Changed();
+    }
+
+    void Undo()
+    {
+        if (undo.Count == 0) return;
+        values = undo.Pop();
+        Changed();
+    }
+
+    void Changed()
+    {
+        SetDirty(true);
+        Redraw();
+    }
+
+    void Redraw()
+    {
+        screenImage = Url(screen!.Render(values));
+        penImage = Url(screen.RenderCell(penCode, penColor));
+    }
+
+    static string Url(RgbImage image) => "data:image/png;base64," + Convert.ToBase64String(Png.Write(image));
+}
