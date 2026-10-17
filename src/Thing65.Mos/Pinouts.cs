@@ -14,6 +14,17 @@ public interface IBus
     void Write(ushort address, byte value);
 }
 
+// MOS 6502, DIP-40: the CPU of the disk drives (and, with an I/O port added, the C64's 6510)
+public interface I6502Pinout
+{
+    IBus? Bus { get; set; }              // A0-A15, D0-D7, R/W
+    Func<bool> IrqInput { get; set; }    // /IRQ (level triggered)
+    Func<bool> NmiInput { get; set; }    // /NMI (edge triggered)
+    Func<bool> RdyInput { get; set; }    // RDY
+    void Reset();                        // /RES
+    void Tick();                         // one φ2 cycle
+}
+
 // MOS 6510, DIP-40: the C64's CPU (a 6502 with an on-chip I/O port)
 public interface I6510Pinout
 {

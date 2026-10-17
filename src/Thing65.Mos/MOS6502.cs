@@ -2,7 +2,7 @@ namespace Thing65.Mos;
 
 // MOS 6502 NMOS: the CPU core, without on-chip peripherals. The C64's 6510 extends it with the
 // I/O port at $0000/$0001 (see MOS6510)
-public partial class MOS6502
+public partial class MOS6502 : I6502Pinout
 {
     // Pins wired by the board
     public IBus? Bus { get; set; }

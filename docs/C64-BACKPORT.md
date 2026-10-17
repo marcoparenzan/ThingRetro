@@ -28,3 +28,8 @@ such instruction.
 - `Thing65.WebComputer` and `Thing65.WebStudio` still use the C64 `Board` (see [ROADMAP.md](ROADMAP.md)).
 
 (When something is found: file, what is wrong, how it shows, and whether it was fixed here.)
+
+## Changes made for Thing1500 (the disk drives)
+
+- `Pinouts.cs`: new `I6502Pinout` (the 6502 without the port); `MOS6502` implements it. No behavior change: the same
+  change would do in Thing64 if the drives are to share its `Mos` library.
