@@ -4,17 +4,68 @@
   <img src="images/thing65-logo.png" alt="Thing65 logo" width="720">
 </p>
 
-> **Status: work in progress.** Thing65 is the successor of Thing64, aiming at the **Commodore 65** (CSG 4510, VIC-III,
-> DMAgic, F011, two SIDs), using the MEGA65 open ROMs. For now the code is Thing64 renamed: everything below still
-> describes the Commodore 64 core it started from, and the images and logos are still Thing64's. The C65 chips are
-> added step by step: **4510 CPU with its memory mapper (done, `MOS4510`)**, **DMAgic (done, `F018`)**, **VIC-III (done, `CSG4567`: 80 columns, attributes, bitplanes, 256-color palette, DAT)**, **F011 (done)**.
+A **Commodore 65** emulator in C#, written to be read: the code mirrors the real motherboard, with the chips in their
+sockets, the traces that connect them and the cables to the monitor, the speakers and the keyboard. It is the successor of
+Thing64 (the C64 emulator it started from): same style, same organization, same graphics.
 
-The Thing64 core: a Commodore 64 (PAL) emulator in C#, written to be read: the code mirrors the real motherboard, with the MOS
-chips in their sockets, the traces that connect them and the cables to the monitor, the speakers and the keyboard.
-It comes with a studio in the browser to write 6502 assembly (and C) and run it right away.
+It boots the original C65 ROM to the `READY.` prompt of **BASIC 10**, with 80 columns, the DOS and the internal 3.5" drive
+(`.d81` images), and runs programs assembled for the 4510 with the project's own assembler.
 
-![Boot and a line of BASIC](images/thing65-ready.png)
-![A raster interrupt draws a red bar in the border while BASIC keeps working](images/thing65-rasterbars.png)
+![The C65 booting BASIC 10](images/thing65-c65-ready.png)
+
+> **Status.** The C65 works: CPU, VIC-III, DMAgic, floppy controller, two SIDs, keyboard, desktop window and command line.
+> What is still missing is in [Known limits of the C65](#known-limits-of-the-c65) and in [docs/ROADMAP.md](docs/ROADMAP.md).
+> The web part (WebComputer, WebStudio) and the images and logos are still Thing64's, and the sections of this document
+> about the C64 board describe the Thing64 core that is still in the repository (`Board`, `MOS6569`...), with its tests.
+
+## What works (the C65)
+
+- **CSG 4510** (`MOS4510`): a 65CE02 with all 256 opcodes, the Z and B (base page) registers, the 16-bit stack, word
+  branches, and the memory mapper (`MAP`/`EOM`: 1 MB of address space). One bus access per cycle, with the cycle counts
+  of the C65 manual. Tested with Klaus Dormann's 65C02 test and with 109 tests of its own.
+- **VIC-III** (`CSG4567`): VIC-II compatible (C64 mode), plus 80 columns, the 256-color palette, character attributes
+  (blink, reverse, highlight, underline), bitplane mode (up to 8 planes, 320 and 640 pixels, 400 lines) with the DAT, the ROM
+  control bits and the FAST bit. The frame is 806 x 568 dots.
+- **F018 DMAgic**: copy and fill with direction, hold, modulo windows, I/O selection and chaining; lists of 12 bytes (F018B)
+  and 11 (F018A). BASIC 10 uses it for `POKE`, `PEEK` and reading its own program.
+- **F011** disk controller and `.d81` disks: the DOS reads, lists and loads; `D81Writer` makes disks with programs on them.
+- Two **SIDs**, two **CIAs**, the **keyboard** with the nine extra keys, FAST mode (3.5 MHz), joystick and paddles.
+- **Desktop app and command line** (Windows): `thing65 run`, `thing65 asm`; drag a `.prg` or `.d81` on the window.
+- **4510 assembler**: ACME-compatible syntax, the whole 65CE02 set (`ldz`, `(zp),z`, `(d,sp),y`, `neg`, `asr`, `inw`, `phw`,
+  `lbra`, `bbr0`..., `map`, `eom`), `!cpu 4510`.
+
+The C64 core (`Board`, `MOS6502`, `MOS6510`, `MOS6569`...) is still in the repository: the tests of the chips the C65 shares
+(CIA, SID, the VIC-II compatibility) run on it.
+
+## The system ROM
+
+The C65 ROM is protected by copyright and is **not** in the repository. Cloanto's free *C64 Forever Free Express Edition*
+(personal use) includes it: install it, copy `c-65-19910828.rom` from `C:\Users\Public\Documents\CBM Files\Shared\rom` into
+`src/Thing65.Computer/roms`, and build. The tests that need it are *Inconclusive* without it. See
+[docs/reference/mega65/mega65-rom-faq.txt](docs/reference/mega65/mega65-rom-faq.txt) (after downloading the reference
+documentation) for the MEGA65 project's explanation. The C64 ROMs in the same folder (`kernal`, `basic`, `chargen`) are those
+of the old board.
+
+## Reference documentation
+
+`tools/Download-Reference.ps1` downloads into `docs/reference` what Thing65 is implemented from: the chip specifications of the
+C65, its manual, the CPU and C64 chip documents. See [docs/reference/README.md](docs/reference/README.md).
+
+## Known limits of the C65
+
+- The 80-column bad lines do not take the extra cycles from the CPU (the VIC-II's timing is used); HPOS/VPOS and the 1280-pixel
+  mode are stored but not acted on; there is no external sync.
+- F011: sector-level commands only (no free-format track read/write). DMAgic: no MIX, SWAP, XY_MOD, no interrupt yielding.
+- No UART, no RAM expansion controller, no cartridge port, no RESTORE key, no CAPS LOCK.
+- Machine code started from BASIC must live below `$2000`: BASIC 10 maps its ROM over `$2000-$7FFF`.
+- ROM version 910828 (the prototype ROM) is the one tested.
+
+## The Thing64 core (inherited)
+
+The text below this point is Thing64's: the C64 board and the web studio, kept for the code that is still shared.
+
+![Boot and a line of BASIC](images/thing64-ready.png)
+![A raster interrupt draws a red bar in the border while BASIC keeps working](images/thing64-rasterbars.png)
 
 ## What works
 
@@ -54,22 +105,22 @@ Not yet: the 1541 drive and disk/tape images (`.d64`, `.t64`). See [Known limits
 
 | Project | Contents |
 | --- | --- |
-| `src/Thing65.Mos` | The MOS chips as standalone components: `MOS6502` (CPU core), `MOS6510` (CPU with I/O port), `MOS6526` (CIA), `MOS6569` (PAL VIC-II), `MOS6581` (SID). Each chip implements its own **pinout** (`I6510Pinout`, `I6526Pinout`, `I6569Pinout`, `I6581Pinout`) and does not know which computer it is mounted in |
-| `src/Thing65.C65` | The **motherboard**: sockets, PLA, RAM, color RAM, ROMs, keyboard matrix, expansion port, control ports, video and audio outputs |
+| `src/Thing65.Mos` | The chips as standalone components: **`MOS4510`** (the C65's CPU), **`CSG4567`** (VIC-III), **`F018`** (DMAgic), **`F011`** (disk controller), and the C64's: `MOS6502` (CPU core), `MOS6510` (CPU with I/O port), `MOS6526` (CIA), `MOS6569` (PAL VIC-II), `MOS6581` (SID). Each chip implements its own **pinout** (`I6510Pinout`, `I6526Pinout`, `I6569Pinout`, `I6581Pinout`) and does not know which computer it is mounted in |
+| `src/Thing65.C65` | The **motherboards**: `BoardC65` (the C65: sockets, 128 KB RAM, 128 KB ROM, memory map, wiring), `D81Image`/`D81Writer`, `KeyTyper`; and the C64's `Board` |
 | `src/Thing65.Prg` | Loading `.prg` files and writing into the KERNAL keyboard buffer |
 | `src/Thing65.Crt` | The `.crt` format and the cartridge types |
-| `src/Thing65.Asm` | 6502/6510 assembler, ACME-compatible: labels, macros, loops, includes, expressions, errors with their file and line |
+| `src/Thing65.Asm` | 6510 and **4510** assembler (`!cpu`), ACME-compatible: labels, macros, loops, includes, expressions, errors with their file and line |
 | `src/Thing65.Basic` | BASIC V2 tokenizer: a program in text becomes the `.prg` the C64 would have in memory |
 | `src/Thing65.Graphics` | Pictures for the C64: PNG, the palette, the conversion of an image to bitmaps, character sets, tiles and sprites |
 | `src/Thing65.Build` | From sources to C64 files: `.asm` and `.bas` to `.prg`, build manifests (`thing65.json`) with programs and cartridges |
 | `src/Thing65.WinForms` | `C65Monitor` (the screen, a UserControl), `PcKeyboard` (the keyboard cable), `PcSpeakers` (the speakers), joystick and paddle simulators |
-| `src/Thing65.Computer` | The desktop app: one C64 in a window (`ComputerForm`), loading of `.prg`/`.crt`, the ROMs, the settings |
+| `src/Thing65.Computer` | The desktop app: one **C65** in a window (`ComputerForm`), loading of `.prg`/`.d81`, the ROM folder, the settings |
 | `src/Thing65` | The `thing65` command line (Spectre.Console), a .NET global tool: `run`, `asm`, `basic`, `build` |
 | `src/Thing65.WebComputer` | The C64 in the browser: the same board compiled to WebAssembly (Blazor, AOT), on a canvas |
 | `src/Thing65.WebStudio` | The studio in the browser (Blazor Server): projects in a local folder, Monaco, builds, the web computer |
 | `src/Thing65.Tests` | Tests (MSTest) |
 | `samples` | Sample programs ready to load, with the commented BASIC and assembly sources in `samples/src` |
-| `tools` | Helper scripts (download of the CPU test suites) |
+| `tools` | Helper scripts (download of the CPU test suites and of the reference documentation) |
 
 The architecture is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); how the C64 in WebAssembly is built, published
 and served, and what to do when a change does not reach the browser, in [docs/WEBASSEMBLY.md](docs/WEBASSEMBLY.md).
@@ -118,8 +169,8 @@ dotnet build src/Thing65.slnx
 Then, from any folder:
 
 ```powershell
-thing65 run game.prg                # one C64 window running a program (or a .crt, or a source built first)
-thing65 asm main.asm --labels main.labels   # assembles to main.prg; labels in VICE format
+thing65 run program.prg             # one C65 window running a program (or a .d81 disk, or a source built first)
+thing65 asm main.asm --labels main.labels   # assembles for the 4510 to main.prg (--cpu 6510 for the C64); labels in VICE format
 thing65 basic hello.bas             # tokenizes to hello.prg
 thing65 build samples/samples.json  # builds every output of a build manifest
 thing65 --help
