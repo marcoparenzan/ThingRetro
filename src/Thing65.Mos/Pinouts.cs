@@ -47,6 +47,26 @@ public interface I4510Pinout
     void Tick();                         // one φ2 cycle
 }
 
+// Memory as seen by the DMAgic: absolute 20-bit addresses, and the I/O bit that selects the memory mapped I/O space
+// ($D000-$DFFF of the bank) instead of the memory
+public interface IDmaMemory
+{
+    byte Read(int address, bool io);
+    void Write(int address, bool io, byte value);
+}
+
+// CSG F018 DMAgic: the C65's DMA controller (copy, fill, with modulo windows, chaining), four registers at $D700
+public interface IF018Pinout
+{
+    byte Read(int register);             // RS0-RS1, D0-D7, R/W = 1, /CS
+    void Write(int register, byte value);
+    IDmaMemory? Memory { get; set; }     // the system bus, taken over while a job runs
+    Func<bool> BusGrant { get; set; }    // false = someone with a higher priority (the VIC-III) has the bus: wait
+    bool Busy { get; }                   // true = the CPU must be halted (its /DMA pin)
+    void Reset();                        // /RES
+    void Tick();                         // one cycle: one bus access
+}
+
 // MOS 6526 CIA, DIP-40: timers, clock, parallel ports, serial line
 public interface I6526Pinout
 {
