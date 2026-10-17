@@ -72,6 +72,8 @@ public partial class BoardC65
 
             while (!stop.IsCancellationRequested)
             {
+                RunPendingCommands();
+
                 if (resyncClock)
                 {
                     resyncClock = false;
@@ -111,6 +113,7 @@ public partial class BoardC65
 
     void ExecuteCycle()
     {
+        if (typingActive) AdvanceTyping();
         cia1?.Tick();
         cia2?.Tick();
         sidRight?.Tick();

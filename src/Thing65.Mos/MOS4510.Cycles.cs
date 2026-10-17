@@ -120,8 +120,8 @@ public partial class MOS4510
             case Mode.Imm16: // PHW #imm16
                 if (cycle == 1) { operandLow = ReadByte(PC++); Next(); }
                 else if (cycle == 2) { operandHigh = ReadByte(PC++); Next(); }
-                else if (cycle == 3) { Push(operandHigh); Next(); }
-                else { Push(operandLow); Done(); }
+                else if (cycle == 3) { Push(operandLow); Next(); }
+                else { Push(operandHigh); Done(); }
                 return;
         }
 
@@ -224,11 +224,11 @@ public partial class MOS4510
                 else { WriteByte(high, dataHigh); Done(); }
                 return;
 
-            case Op.PHW: // abs: reads the word, then pushes it (high byte first, so that it reads back little-endian)
+            case Op.PHW: // abs: reads the word, then pushes it: low byte first, so the first PLA gives the high byte
                 if (step == 0) { data = ReadByte(address); step = 1; Next(); }
                 else if (step == 1) { dataHigh = ReadByte((ushort)(address + 1)); step = 2; Next(); }
-                else if (step == 2) { Push(dataHigh); step = 3; Next(); }
-                else { Push(data); Done(); }
+                else if (step == 2) { Push(data); step = 3; Next(); }
+                else { Push(dataHigh); Done(); }
                 return;
 
             default:

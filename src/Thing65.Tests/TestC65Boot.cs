@@ -6,10 +6,19 @@ public sealed class C65BootTests
 {
     static readonly string RomFile = Path.Combine(AppContext.BaseDirectory, "roms", "c-65-19910828.rom");
 
+    const int BootCycles = 9_000_000; // about 9 s of the machine: the memory test and the banner take 7
+
     static BoardC65 NewBoard()
     {
         if (!File.Exists(RomFile)) Assert.Inconclusive("C65 ROM missing: copy c-65-19910828.rom into src/Thing65.Computer/roms");
         return new BoardC65(new SystemRom128(File.ReadAllBytes(RomFile)), startClock: false);
+    }
+
+    static BoardC65 BootedBoard()
+    {
+        var board = NewBoard();
+        board.RunCycles(BootCycles);
+        return board;
     }
 
     // The 80x25 text screen of the C65 mode: characters at $0800 as screen codes
@@ -28,13 +37,21 @@ public sealed class C65BootTests
         return text.ToString();
     }
 
+    // Types the text and runs the machine until it has been typed and the ROM has had time to act on it
+    static void Type(BoardC65 board, string text, int settleCycles = 600_000)
+    {
+        board.TypeText(text);
+        while (board.IsTyping) board.RunCycles(1000);
+        board.RunCycles(settleCycles);
+    }
+
+    const string CR = "\r";
+
     [TestMethod]
     [Timeout(120_000)]
     public void Boot_ShouldReachTheReadyPromptOfBasic10()
     {
-        var board = NewBoard();
-
-        board.RunCycles(9_000_000); // about 9 s of the machine: the memory test and the banner take 7
+        var board = BootedBoard();
 
         string screen = Screen(board);
         StringAssert.Contains(screen, "BASIC 10.0");
@@ -46,9 +63,8 @@ public sealed class C65BootTests
     [Timeout(120_000)]
     public void Boot_ShouldKeepRunningAfterReady()
     {
-        var board = NewBoard();
+        var board = BootedBoard();
         var cpu = (MOS4510)board.CpuSocket.Chip!;
-        board.RunCycles(9_000_000);
 
         long before = cpu.InstructionCount;
         board.RunCycles(1_000_000);
@@ -58,16 +74,42 @@ public sealed class C65BootTests
 
     [TestMethod]
     [Timeout(120_000)]
-    public unsafe void Snapshot_ToFile()
+    public void Basic_ShouldPrintInDirectMode()
     {
-        var board = NewBoard();
-        board.RunCycles(9_000_000);
-        var vic = board.VicSocket.Chip!;
-        var bitmap = new System.Drawing.Bitmap(CSG4567.SCREEN_WIDTH, CSG4567.SCREEN_HEIGHT, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-        var data = bitmap.LockBits(new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height), System.Drawing.Imaging.ImageLockMode.WriteOnly, bitmap.PixelFormat);
-        vic.Render((byte*)data.Scan0);
-        bitmap.UnlockBits(data);
-        bitmap.Save(Environment.GetEnvironmentVariable("C65_SNAPSHOT") ?? Path.GetTempFileName() + ".png", System.Drawing.Imaging.ImageFormat.Png);
-        Console.WriteLine($"D011={vic.Read(0x11):X2} D016={vic.Read(0x16):X2} D018={vic.Read(0x18):X2} D030={vic.ControlA:X2} D031={vic.ControlB:X2} newmode={vic.NewMode}");
+        var board = BootedBoard();
+
+        Type(board, "PRINT 2+3" + CR);
+        Type(board, "PRINT\"HELLO\"" + CR);
+
+        string screen = Screen(board);
+        StringAssert.Contains(screen, " 5 ");
+        StringAssert.Contains(screen, "HELLO");
+    }
+
+    [TestMethod]
+    [Timeout(120_000)]
+    public void Basic_ShouldPokeIntoMemory()
+    {
+        var board = BootedBoard();
+        board.Ram(0x1000, 0);
+
+        Type(board, "POKE 4096,65" + CR);
+
+        Assert.AreEqual(65, board.Ram(0x1000));
+    }
+
+    [TestMethod]
+    [Timeout(120_000)]
+    public void Basic_ShouldRunAProgram()
+    {
+        var board = BootedBoard();
+
+        Type(board, "10 FOR I=1 TO 3:PRINT I:NEXT" + CR);
+        Type(board, "RUN" + CR, 1_500_000);
+
+        string screen = Screen(board);
+        StringAssert.Contains(screen, " 1 ");
+        StringAssert.Contains(screen, " 2 ");
+        StringAssert.Contains(screen, " 3 ");
     }
 }

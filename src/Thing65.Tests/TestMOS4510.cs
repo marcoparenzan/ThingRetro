@@ -257,14 +257,14 @@ public sealed class MOS4510Tests
     }
 
     [TestMethod]
-    public void PhwImmediate_ShouldPushTheHighByteFirst()
+    public void PhwImmediate_ShouldPushTheLowByteFirst()
     {
-        var (cpu, bus) = Setup("F4 34 12"); // PHW #$1234
+        var (cpu, bus) = Setup("F4 34 12"); // PHW #$1234: the opposite of JSR, so that the first PLA gives the high byte
 
         Run(cpu, 1);
 
-        Assert.AreEqual(0x12, bus.Memory[0x01FF]);
-        Assert.AreEqual(0x34, bus.Memory[0x01FE]);
+        Assert.AreEqual(0x34, bus.Memory[0x01FF]);
+        Assert.AreEqual(0x12, bus.Memory[0x01FE]);
         Assert.AreEqual(0xFD, cpu.SPL);
     }
 
@@ -277,8 +277,8 @@ public sealed class MOS4510Tests
 
         Run(cpu, 1);
 
-        Assert.AreEqual(0x12, bus.Memory[0x01FF]);
-        Assert.AreEqual(0x34, bus.Memory[0x01FE]);
+        Assert.AreEqual(0x34, bus.Memory[0x01FF]);
+        Assert.AreEqual(0x12, bus.Memory[0x01FE]);
     }
 
     #endregion
