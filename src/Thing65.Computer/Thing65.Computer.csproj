@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Thing65.C65\Thing65.C65.csproj" />
+    <!-- The 1541 drive of the sibling project Thing1500 -->
+    <ProjectReference Include="..\..\..\Thing1500\src\Thing1500.Drive\Thing1500.Drive.csproj" />
     <ProjectReference Include="..\Thing65.Prg\Thing65.Prg.csproj" />
     <ProjectReference Include="..\Thing65.WinForms\Thing65.WinForms.csproj" />
   </ItemGroup>

@@ -27,6 +27,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Thing65.Asm\Thing65.Asm.csproj" />
     <ProjectReference Include="..\Thing65.C65\Thing65.C65.csproj" />
+    <ProjectReference Include="..\Thing65.Computer\Thing65.Computer.csproj" />
     <ProjectReference Include="..\Thing65.Crt\Thing65.Crt.csproj" />
     <ProjectReference Include="..\Thing65.Prg\Thing65.Prg.csproj" />
     <ProjectReference Include="..\Thing65.Basic\Thing65.Basic.csproj" />

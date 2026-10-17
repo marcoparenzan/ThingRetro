@@ -66,6 +66,11 @@ C65, its manual, the CPU and C64 chip documents. See [docs/reference/README.md](
 - Disks written by the C65 are saved to their `.d81` when ejected or replaced, on close and with *Save disk*; a disk made by
   the app for a `.prg` has no file (*Save disk as...*).
 - Keys: PageUp is RESTORE, CAPS LOCK is the C65 one (not a shift).
+- An external **1541** (project Thing1500, sibling folder) can be plugged on the IEC cable from the right click menu
+  (*1541 drive*): device 9, a window with the LED and the track, `.d64` disks that can be inserted, dropped on the screen and
+  saved. It needs `c-drive-1541.rom` in the roms folder. Device 8 stays the C65's own drive; in the C64 mode the C65 ROM
+  sends the BASIC commands (`LOAD`, `SAVE`) to the internal drive before looking at the cable, so the 1541 is reached with
+  the serial routines of the KERNAL (`$ED0C` LISTEN, `$ED09` TALK...) or by programs that use them.
 - Machine code started from BASIC must live below `$2000`: BASIC 10 maps its ROM over `$2000-$7FFF`.
 - ROM version 910828 (the prototype ROM) is the one tested.
 

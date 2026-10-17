@@ -19,6 +19,8 @@ public class ComputerForm : Form
     readonly ControlPortSelector controlPorts;
     readonly AppSettings settings = AppSettings.Current;
     readonly DiskSlot disk = new();
+    Drive1541Host? drive1541;
+    DriveForm? driveForm;
 
     public ComputerForm(SystemRom128 rom, string? startupFile = null)
     {
@@ -69,6 +71,7 @@ public class ComputerForm : Form
         menu.Items.Add(expansion);
         menu.Items.Add(new ToolStripMenuItem("Insert cartridge...", null, (_, _) => InsertCartridge()));
         menu.Items.Add(new ToolStripMenuItem("Remove cartridge", null, (_, _) => board.Enqueue(() => { board.CartridgeSocket.Remove(); board.Reset(); })));
+        menu.Items.Add(new ToolStripMenuItem("1541 drive (device 9)...", null, (_, _) => ShowDrive()));
         menu.Items.Add(new ToolStripMenuItem("Reset", null, (_, _) => Reset()));
         monitor.ContextMenuStrip = menu;
 
@@ -122,6 +125,70 @@ public class ComputerForm : Form
         }
     }
 
+    // The external 1541 on the IEC cable (device 9: 8 is the C65's own drive). It is plugged in the first time it is asked for
+    bool EnsureDrive()
+    {
+        if (drive1541 is not null) return true;
+        string? rom = Drive1541Host.FindRom();
+        if (rom is null)
+        {
+            MessageBox.Show(this,
+                $"The 1541 ROM ({Drive1541Host.RomName}, 16 KB) was not found in {RomFolder.DefaultPath}.\n\n" +
+                "Copy it from the Shared\\rom folder of C64 Forever Free Express Edition and start again.",
+                "Thing65", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return false;
+        }
+        drive1541 = new Drive1541Host(board, File.ReadAllBytes(rom), 9);
+        return true;
+    }
+
+    void ShowDrive()
+    {
+        if (!EnsureDrive()) return;
+        if (driveForm is null || driveForm.IsDisposed)
+        {
+            driveForm = new DriveForm(drive1541!, BrowseD64, SaveD64As) { Owner = this };
+            driveForm.Location = new Point(Right + 8, Top);
+        }
+        driveForm.Show();
+        driveForm.BringToFront();
+    }
+
+    void BrowseD64()
+    {
+        using var dialog = new OpenFileDialog { Filter = "1541 disks (*.d64)|*.d64|All files|*.*" };
+        if (dialog.ShowDialog(this) == DialogResult.OK) OpenD64(dialog.FileName);
+    }
+
+    void OpenD64(string path)
+    {
+        try
+        {
+            var image = new Thing1500.Drive.D64Image(File.ReadAllBytes(path));
+            if (!EnsureDrive()) return;
+            drive1541!.Insert(image, path);
+            ShowDrive();
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, e.Message, $"Thing65 - {Path.GetFileName(path)}", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    void SaveD64As()
+    {
+        using var dialog = new SaveFileDialog { Filter = "1541 disk (*.d64)|*.d64", FileName = "disk.d64" };
+        if (dialog.ShowDialog(this) != DialogResult.OK || drive1541 is null) return;
+        try
+        {
+            drive1541.SaveAs(dialog.FileName);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            MessageBox.Show(this, e.Message, "Thing65", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
     // The disk is copied on the emulation thread, between two cycles, so the DOS is not writing while it is saved
     void SaveDiskAs()
     {
@@ -152,6 +219,11 @@ public class ComputerForm : Form
 
     void LoadFile(string path, Func<string> load)
     {
+        if (MediaLoader.IsD64(path))
+        {
+            OpenD64(path);
+            return;
+        }
         try
         {
             Text = $"C65 - {load()}";
@@ -178,7 +250,11 @@ public class ComputerForm : Form
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         board.Stop();
-        try { disk.Save(); }
+        try
+        {
+            disk.Save();
+            drive1541?.Save();
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             MessageBox.Show(this, $"The disk could not be saved: {ex.Message}", "Thing65", MessageBoxButtons.OK, MessageBoxIcon.Warning);
