@@ -100,7 +100,8 @@ public partial class CSG4567
         byte control2 = registers[REG_CONTROL_2];
         byte controlB = NewMode ? registers[REG_CONTROL_B] : (byte)0;
 
-        int graphicsLine = rasterLine - (FIRST_TEXT_LINE + (control1 & 0x07)); // YSCROLL
+        int vpos = NewMode ? (sbyte)registers[REG_VPOS] : 0;                 // VPOS: the display moves down by that many lines
+        int graphicsLine = rasterLine - (FIRST_TEXT_LINE + (control1 & 0x07) + vpos); // YSCROLL
         bool idle = !badLinesEnabled || graphicsLine < 0 || graphicsLine >= 200;
         if (idle && (controlB & B_BPM) != 0) return; // bitplanes: only the background shows
 
@@ -109,7 +110,7 @@ public partial class CSG4567
         int units = wide ? 1 : 2;              // dots per pixel
         int row = graphicsLine >> 3;
         int charLine = graphicsLine & 0x07;
-        int xStart = DISPLAY_LEFT + 2 * (control2 & 0x07); // XSCROLL
+        int xStart = DISPLAY_LEFT + 2 * (control2 & 0x07) + (NewMode ? (sbyte)registers[REG_HPOS] : 0); // XSCROLL, HPOS (in dots)
 
         if ((controlB & B_BPM) != 0)
         {
@@ -235,6 +236,7 @@ public partial class CSG4567
             {
                 int index = 0;
                 for (int p = 0; p < 8; p++) index |= ((bytes[p] >> (7 - bit)) & 1) << p;
+                if (wide && (registers[REG_CONTROL_B] & B_H1280) != 0) index &= 0x7F; // 1280: bit plane 7 is the pixel clock; the early pixel
                 bool foreground = ((bytes[2] >> (7 - bit)) & 1) != 0;
                 for (int k = 0; k < units; k++)
                 {

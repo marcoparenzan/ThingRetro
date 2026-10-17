@@ -294,6 +294,113 @@ public sealed class CSG4567Tests
 
     #endregion
 
+    #region Position, bus cycles and 1280 pixels
+
+    [TestMethod]
+    public void Hpos_ShouldMoveTheDisplayInDots()
+    {
+        var (vic, memory) = NewVic();
+        Enter(vic);
+        TextOn(vic);
+        memory.Bank0[0x0400] = 1;
+        for (int i = 0; i < 8; i++) memory.Bank0[0x1008 + i] = 0xFF;
+        memory.Color[0] = 1;
+        vic.Write(0x3E, 12);                              // 12 dots to the right
+
+        RunFrames(vic);
+
+        int row = FrameRow(FirstTextLine);
+        Assert.AreEqual(6, vic.PixelAt(DisplayLeft + 10, row), "still the background");
+        Assert.AreEqual(1, vic.PixelAt(DisplayLeft + 12, row));
+    }
+
+    [TestMethod]
+    public void Vpos_ShouldMoveTheDisplayInRasterLines()
+    {
+        var (vic, memory) = NewVic();
+        Enter(vic);
+        TextOn(vic);
+        memory.Bank0[0x0400] = 1;
+        for (int i = 0; i < 8; i++) memory.Bank0[0x1008 + i] = 0xFF;
+        memory.Color[0] = 1;
+        vic.Write(0x3F, 2);                               // 2 lines down
+
+        RunFrames(vic);
+
+        Assert.AreEqual(6, vic.PixelAt(DisplayLeft, FrameRow(FirstTextLine)));
+        Assert.AreEqual(6, vic.PixelAt(DisplayLeft, FrameRow(FirstTextLine + 1)));
+        Assert.AreEqual(1, vic.PixelAt(DisplayLeft, FrameRow(FirstTextLine + 2)));
+    }
+
+    // Cycles of a frame in which the CPU cannot use the bus (BA low)
+    static int StolenCycles(CSG4567 vic)
+    {
+        int stolen = 0;
+        for (int i = 0; i < CyclesPerFrame; i++)
+        {
+            if (!vic.BusAvailable) stolen++;
+            vic.Tick();
+        }
+        return stolen;
+    }
+
+    [TestMethod]
+    public void Text80Columns_ShouldTakeMoreCyclesFromTheCpuThanText40()
+    {
+        var (narrow, _) = NewVic();
+        Enter(narrow);
+        TextOn(narrow);
+        StolenCycles(narrow); // the first frame sets DEN
+        int cycles40 = StolenCycles(narrow);
+
+        var (wide, _) = NewVic();
+        Enter(wide);
+        TextOn(wide);
+        wide.Write(0x31, 0x80);
+        StolenCycles(wide);
+        int cycles80 = StolenCycles(wide);
+
+        Assert.IsTrue(wide.ExtraFetch);
+        Assert.IsFalse(narrow.ExtraFetch);
+        Assert.IsTrue(cycles40 > 500 && cycles40 < 1500, $"40 columns: {cycles40} (25 bad lines)");
+        Assert.IsTrue(cycles80 > 6000, $"80 columns: {cycles80} (the 200 display lines)");
+    }
+
+    [TestMethod]
+    public void Bitplanes_ShouldCostMoreOnlyBeyondTheViciiFetch()
+    {
+        var (vic, _) = NewVic();
+        Enter(vic);
+        vic.Write(0x31, 0x10);                            // BPM, 320 pixels
+        vic.Write(0x32, 0x0F);                            // 4 planes: as many as the VIC-II fetches
+        Assert.IsFalse(vic.ExtraFetch);
+        vic.Write(0x32, 0xFF);                            // 8 planes
+        Assert.IsTrue(vic.ExtraFetch);
+        vic.Write(0x31, 0x90);                            // 640 pixels: only 4 planes exist, 2 are free
+        vic.Write(0x32, 0x03);
+        Assert.IsFalse(vic.ExtraFetch);
+        vic.Write(0x32, 0x07);
+        Assert.IsTrue(vic.ExtraFetch);
+    }
+
+    [TestMethod]
+    public void Mode1280_ShouldForceBitplane7Low()
+    {
+        var (vic, _) = NewVic();
+        Enter(vic);
+        TextOn(vic);
+        vic.Write(0x31, 0x90);                            // BPM + H640
+        vic.Write(0x3B, 0x80);                            // plane 7 complemented: it would give $80
+        RunFrames(vic);
+        Assert.AreEqual(0x80, vic.PixelAt(DisplayLeft + 4, FrameRow(FirstTextLine)));
+
+        vic.Write(0x31, 0x94);                            // + H1280
+        RunFrames(vic);
+        Assert.AreEqual(0x00, vic.PixelAt(DisplayLeft + 4, FrameRow(FirstTextLine)));
+    }
+
+    #endregion
+
     #region Palette
 
     static unsafe uint[] RenderFrame(CSG4567 vic)

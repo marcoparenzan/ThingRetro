@@ -8,8 +8,10 @@ namespace Thing65.Mos;
 //   - the DAT (display address translator) and the FAST bit.
 // The picture is made of "dots" of half a VIC-II pixel horizontally, and every raster line gives two lines of the
 // frame (a top and a bottom one: they differ only in 400-line bitplane mode): see CSG4567.Graphics.cs.
-// Not implemented: HPOS/VPOS display offsets, 1280 pixel multiplexing, external sync, the cycles that the fetch of 80
-// columns takes from the CPU (the bus timing is that of the VIC-II).
+// The fetch of 80 columns (or of many bitplanes) takes 40 more cycles from the CPU on every display line, as the manual's
+// table of cycles per line says. HPOS and VPOS ($D03E/$D03F, signed) move the display relative to the borders, in dots
+// and in raster lines. In 1280-pixel mode (H1280 with H640) the second half of every pixel is not drawn: only the "early"
+// pixel is (bit plane 7 forced low). Not implemented: external sync.
 // Reference: "C65 Specifications", chapter 2.4
 public partial class CSG4567 : I4567Pinout
 {
@@ -40,7 +42,7 @@ public partial class CSG4567 : I4567Pinout
 
     // VIC-III registers
     const int REG_KEY = 0x2F, REG_CONTROL_A = 0x30, REG_CONTROL_B = 0x31, REG_BITPLANE_ENABLE = 0x32, REG_BITPLANE_ADDRESS = 0x33,
-        REG_BITPLANE_COMPLEMENT = 0x3B, REG_BITPLANE_X = 0x3C, REG_BITPLANE_Y = 0x3D, REG_DAT = 0x40;
+        REG_BITPLANE_COMPLEMENT = 0x3B, REG_BITPLANE_X = 0x3C, REG_BITPLANE_Y = 0x3D, REG_HPOS = 0x3E, REG_VPOS = 0x3F, REG_DAT = 0x40;
 
     // Control register B
     const int B_H640 = 0x80, B_FAST = 0x40, B_ATTR = 0x20, B_BPM = 0x10, B_V400 = 0x08, B_H1280 = 0x04, B_MONO = 0x02, B_INT = 0x01;
@@ -104,9 +106,37 @@ public partial class CSG4567 : I4567Pinout
         rasterLine >= 0x30 && rasterLine <= 0xF7 &&
         (rasterLine & 0x07) == (registers[REG_CONTROL_1] & 0x07);
 
-    // On bad lines the chip reads the character codes and keeps the bus: see MOS6569 (the timing is the same here)
-    public bool BusAvailable => !(IsBadLine && currentCycle >= 11 && currentCycle <= 53) && SpriteDmaCycles(SpriteBaWindow) == 0;
-    public bool AddressEnable => !(IsBadLine && currentCycle >= 14 && currentCycle <= 53) && SpriteDmaCycles(SpriteAecWindow) == 0;
+    // A line where the chip fetches more than the VIC-II does: 80 columns, or more bitplanes than fit in the
+    // VIC-II's fetch (4 in 320 mode, 2 in 640 mode). It costs the CPU one more block of 40 cycles on all the 200 display lines
+    internal bool ExtraFetch
+    {
+        get
+        {
+            if (!NewMode) return false;
+            byte b = registers[REG_CONTROL_B];
+            bool wide = (b & B_H640) != 0;
+            if ((b & B_BPM) == 0) return wide;
+            int planes = int.PopCount(registers[REG_BITPLANE_ENABLE] & (wide ? 0x0F : 0xFF));
+            return planes > (wide ? 2 : 4) || (registers[REG_BITPLANE_ENABLE] & (wide ? 0x0C : 0xF0)) != 0;
+        }
+    }
+
+    // A raster line of the 200 of the display (the display is on and the line is inside it)
+    bool IsDisplayLine
+    {
+        get
+        {
+            if (!badLinesEnabled) return false;
+            int line = rasterLine - (FIRST_TEXT_LINE + (registers[REG_CONTROL_1] & 0x07) + (NewMode ? (sbyte)registers[REG_VPOS] : 0));
+            return line is >= 0 and < 200;
+        }
+    }
+
+    // On bad lines the chip reads the character codes and keeps the bus (BA low 3 cycles before AEC), and so it does on every
+    // display line when it fetches more
+    bool StealsBus => IsBadLine || (ExtraFetch && IsDisplayLine);
+    public bool BusAvailable => !(StealsBus && currentCycle >= 11 && currentCycle <= 53) && SpriteDmaCycles(SpriteBaWindow) == 0;
+    public bool AddressEnable => !(StealsBus && currentCycle >= 14 && currentCycle <= 53) && SpriteDmaCycles(SpriteAecWindow) == 0;
 
     void EndLine()
     {
