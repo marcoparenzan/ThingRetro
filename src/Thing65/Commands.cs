@@ -33,7 +33,7 @@ sealed class RunCommand : Command<RunCommand.Settings>
     }
 }
 
-// thing65 asm SOURCE [-o OUTPUT] [--labels FILE] [--plain]
+// thing65 asm SOURCE [-o OUTPUT] [--cpu 4510|6510] [--labels FILE] [--plain]
 sealed class AsmCommand : Command<AsmCommand.Settings>
 {
     public sealed class Settings : CommandSettings
@@ -50,6 +50,10 @@ sealed class AsmCommand : Command<AsmCommand.Settings>
         [Description("Also writes the labels in VICE format (load them in the VICE monitor with ll)")]
         public string? Labels { get; init; }
 
+        [CommandOption("--cpu <NAME>")]
+        [Description("The processor: 4510 (the C65, the default) or 6510 (the C64)")]
+        public string Cpu { get; init; } = "4510";
+
         [CommandOption("--plain")]
         [Description("No load address in front of the bytes (for ROM images)")]
         public bool Plain { get; init; }
@@ -60,14 +64,14 @@ sealed class AsmCommand : Command<AsmCommand.Settings>
         Assembler.Result result;
         try
         {
-            result = ProgramBuilder.Assemble(settings.Source);
+            result = ProgramBuilder.Assemble(settings.Source, cpu: Assembler.ParseCpu(settings.Cpu));
         }
         catch (AssemblerException e)
         {
             Commands.ReportError(e);
             return 1;
         }
-        catch (IOException e)
+        catch (Exception e) when (e is IOException or FormatException)
         {
             AnsiConsole.MarkupLineInterpolated($"[red]{e.Message}[/]");
             return 1;

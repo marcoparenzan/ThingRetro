@@ -14,6 +14,7 @@ public partial class MOS4510
         string op = instruction.Op.ToString();
         if (instruction.Op is Op.RMB or Op.SMB or Op.BBR or Op.BBS) op += (opcode >> 4) & 7;
         if (instruction.Op == Op.NOP) op = "EOM";
+        if (instruction.Mode == Mode.Rel16 && instruction.Op != Op.BSR) op = "L" + op; // LBPL... as the assembler writes them
         ushort word = (ushort)(high << 8 | low);
         return instruction.Mode switch
         {

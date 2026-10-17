@@ -18,17 +18,19 @@ namespace Thing65.Asm;
 // ACME pseudo opcodes (same meaning as in ACME 0.97):
 //   !byte !by !8 !08, !word !wo !16 !le16 !be16 !24 !32 ..., !hex, !fill !fi, !skip, !align, !text !tx, !raw, !pet,
 //   !scr, !scrxor, !convtab !ct, !source !src, !binary !bin, !zone !zn, !if/else, !ifdef, !ifndef, !for, !set,
-//   !macro and +calls, !initmem, !error, !warn, !info; !to, !cpu and !sl are accepted and ignored
+//   !macro and +calls, !initmem, !error, !warn, !info; !cpu selects the processor (6510 or 4510); !to and !sl are accepted and ignored
 //
 // Numbers: $hex, 0x hex, %binary (also with . and #), 0b binary, &octal, decimal, floats (3.14), 'c'.
 // Operators with ACME's priorities: functions (sin cos tan arcsin arccos arctan int float), !/NOT, ^ (power),
 // unary -, * / DIV % MOD, + -, << >> >>> (ASL LSL ASR LSR), unary < > ^ (low, high, bank byte), comparisons,
 // &/AND, XOR, |/OR. Floats follow ACME's rules (see AllPOs/Floats in the ACME docs).
 // Zero page is chosen automatically. Symbols are case-sensitive, mnemonics are not.
-// All 6510 opcodes, the undocumented ones included
+// All 6510 opcodes, the undocumented ones included; with Cpu.Csg4510 (or "!cpu 4510") the instruction set of the C65's 65CE02
 public static partial class Assembler
 {
-    enum Mode { Imp, Acc, Imm, Zp, ZpX, ZpY, Abs, AbsX, AbsY, IndX, IndY, Rel, Ind }
+    // Zp is the zero page of the 6510 and the base page of the 4510
+    enum Mode { Imp, Acc, Imm, Zp, ZpX, ZpY, Abs, AbsX, AbsY, IndX, IndY, Rel, Ind,
+                IndZ, StackY, Rel16, BpRel, Imm16, IndAbsX } // the last ones are the 4510's
 
     static readonly string[] OpcodeTable =
     [
@@ -84,11 +86,10 @@ public static partial class Assembler
     static int Size(Mode mode) => mode switch
     {
         Mode.Imp or Mode.Acc => 1,
-        Mode.Abs or Mode.AbsX or Mode.AbsY or Mode.Ind => 3,
+        Mode.Abs or Mode.AbsX or Mode.AbsY or Mode.Ind or Mode.Rel16 or Mode.Imm16 or Mode.IndAbsX or Mode.BpRel => 3,
         _ => 2,
     };
 
-    static bool IsMnemonic(string word) => word.Length == 3 && MnemonicSet.Contains(word.ToUpperInvariant());
 
     // Known instructions and directives (also used by the editor for syntax highlighting)
     public static IReadOnlyList<string> Mnemonics { get; } = OpcodeTable.Select(entry => entry[..3]).Distinct().Order().ToArray();
@@ -112,7 +113,7 @@ public static partial class Assembler
     // Assembles a source. name is used in error messages; directory (usually the folder of the source file) is
     // where !source and !binary look for their files, and must be given for sources that include other files.
     // Errors are thrown as AssemblerException (a FormatException) with file and line
-    public static Result Assemble(string source, string name = "source", string? directory = null)
+    public static Result Assemble(string source, string name = "source", string? directory = null, Cpu cpu = Cpu.Mos6510)
     {
         var files = new SourceFiles(directory);
         var root = files.Parse(source, name, directory is null ? null : Path.Combine(directory, name));
@@ -122,14 +123,14 @@ public static partial class Assembler
         // sizes, and so the label addresses, until they settle
         for (int pass = 0; pass < 20; pass++)
         {
-            var state = new Pass(files, previous, final: false);
+            var state = new Pass(files, previous, final: false, cpu);
             state.Run(root);
             bool stable = state.State.SameAs(previous);
             previous = state.State;
             if (stable && pass > 0) break;
         }
 
-        var last = new Pass(files, previous, final: true);
+        var last = new Pass(files, previous, final: true, cpu);
         last.Run(root);
         return last.Result(name);
     }

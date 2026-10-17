@@ -1,10 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- 6502/6510 assembler: source text -> bytes and .prg file. Used by the samples and by the app's editor -->
+  <!-- 6510 and 4510 (C65) assembler: source text -> bytes and .prg file. Used by the samples and by the app's editor -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Thing65.Tests" />
+  </ItemGroup>
 
 </Project>

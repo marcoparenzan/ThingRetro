@@ -6,7 +6,8 @@ namespace Thing65.Computer;
 // Opening the files the app supports: .d81 disk images and .prg programs. The board (Thing65.C65) knows neither
 // format: the file is read here and the result is handed to the board. A program reaches the C65 the way the
 // C65 expects: on a disk. The app makes a disk with the program on it, puts it in the internal drive and types the
-// DLOAD (BASIC programs) or BLOAD and SYS (machine code) on the keyboard
+// DLOAD (BASIC programs) or BLOAD ...,B0 and SYS (machine code) on the keyboard. Machine code must be below $2000: in C65
+// mode the BASIC ROM is mapped over $2000-$7FFF
 public static class MediaLoader
 {
     // Time left to the ROM to reach READY. before the program is loaded
@@ -53,7 +54,7 @@ public static class MediaLoader
         var (start, end) = PrgFile.GetRange(content);
         string name = DiskName(path);
         var disk = D81Writer.Create(name, content);
-        string load = start == BasicStart ? $"DLOAD\"{name}\"\r" : $"BLOAD\"{name}\"\r";
+        string load = start == BasicStart ? $"DLOAD\"{name}\"\r" : $"BLOAD\"{name}\",B0\r"; // B0: into the RAM of bank 0
         string go = start == BasicStart ? "RUN\r" : $"SYS {start}\r";
 
         board.Enqueue(() =>

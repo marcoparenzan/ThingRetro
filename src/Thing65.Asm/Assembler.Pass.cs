@@ -22,8 +22,14 @@ public static partial class Assembler
 
     enum Conversion { Raw, Petscii, Screen }
 
-    sealed partial class Pass(SourceFiles files, PassState previous, bool final)
+    sealed partial class Pass(SourceFiles files, PassState previous, bool final, Cpu startCpu)
     {
+        Cpu cpu = startCpu;
+        CpuTable table => TableFor(cpu);
+
+        // The mnemonics are 3 letters (4 for the 4510's LBRA, BBR0...)
+        bool IsMnemonic(string word) => word.Length is 3 or 4 && table.MnemonicSet.Contains(word.ToUpperInvariant());
+
         public readonly PassState State = new();
         readonly HashSet<string> redefinable = new(StringComparer.Ordinal);
         readonly Dictionary<string, Macro> macros = new(StringComparer.Ordinal);
@@ -130,7 +136,7 @@ public static partial class Assembler
             Statement(rest, nodes, ref index);
         }
 
-        static bool StartsStatement(string text)
+        bool StartsStatement(string text)
         {
             if (text[0] is '!' or '.' or '+' or '-' or '*') return true;
             int space = 0;
@@ -142,7 +148,7 @@ public static partial class Assembler
         private static partial Regex AssignmentPattern();
 
         static readonly HashSet<string> DotDirectives =
-            [".byte", ".word", ".text", ".screen", ".fill", ".basic", ".initmem", ".source", ".include", ".binary"];
+            [".byte", ".word", ".text", ".screen", ".fill", ".basic", ".initmem", ".source", ".include", ".binary", ".cpu"];
 
         static bool IsDotDirective(string word) => DotDirectives.Contains(word);
 
@@ -376,7 +382,11 @@ public static partial class Assembler
                     }
                 case "macro": DefineMacro(arguments, node); break;
                 case "error" or "serious": throw Error(Message(arguments));
-                case "warn" or "info" or "to" or "cpu" or "sl" or "symbollist": break;
+                case "cpu":
+                    try { cpu = ParseCpu(arguments); }
+                    catch (FormatException e) { throw Error(e.Message); }
+                    break;
+                case "warn" or "info" or "to" or "sl" or "symbollist": break;
                 default: throw Error($"unknown directive: {word}");
             }
         }
@@ -553,13 +563,43 @@ public static partial class Assembler
 
         void Instruction(string mnemonic, string operand)
         {
-            if (Aliases.TryGetValue(mnemonic, out var real)) mnemonic = real;
+            if (table.Aliases.TryGetValue(mnemonic, out var real)) mnemonic = real;
+
+            // RMB0-7, SMB0-7, BBR0-7, BBS0-7: the bit is part of the opcode (4510)
+            int bit = -1;
+            if (cpu == Cpu.Csg4510 && mnemonic.Length == 4 && char.IsAsciiDigit(mnemonic[3]) &&
+                mnemonic[..3] is "RMB" or "SMB" or "BBR" or "BBS")
+            {
+                bit = mnemonic[3] - '0';
+                mnemonic = mnemonic[..3];
+            }
+
             var (mode, expression) = ParseOperand(mnemonic, operand);
+
+            // The word branches are LBPL... (and BSR): the table has them as BPL... with the 16-bit mode
+            if (mode == Mode.Rel16 && mnemonic.Length == 4 && mnemonic[0] == 'L') mnemonic = mnemonic[1..];
+
+            if (mode == Mode.BpRel)
+            {
+                // BBRn zp,target: opcode, base page byte, then the offset from the next instruction
+                var parts = SplitArguments(expression ?? "");
+                if (parts.Count != 2) throw Error($"{mnemonic}{bit} needs an address and a branch target: {mnemonic}{bit} address,target");
+                Emit(table.Opcodes[(mnemonic, Mode.BpRel)] + bit * 16);
+                long bp = Evaluate(parts[0])?.AsInt ?? (final ? throw Error($"undefined value: {parts[0]}") : 0);
+                if (final && (bp < 0 || bp > 0xFF)) throw Error($"value does not fit in a byte: {parts[0]}");
+                Emit((int)(bp & 0xFF));
+                long branchTarget = Evaluate(parts[1])?.AsInt ?? (final ? throw Error($"undefined branch target: {parts[1]}") : pc + 1);
+                long branchOffset = branchTarget - (pc + 1);
+                if (final && (branchOffset < -128 || branchOffset > 127)) throw Error($"branch out of range ({branchOffset} bytes)");
+                Emit((int)(branchOffset & 0xFF));
+                return;
+            }
+
             Num? value = expression is null ? null : Evaluate(expression);
 
             if (mode == Mode.Rel)
             {
-                Emit(Opcodes[(mnemonic, Mode.Rel)]);
+                Emit(table.Opcodes[(mnemonic, Mode.Rel)]);
                 long target = value?.AsInt ?? (final ? throw Error($"undefined branch target: {expression}") : pc + 1);
                 long offset = target - (pc + 1);
                 if (final && (offset < -128 || offset > 127)) throw Error($"branch out of range ({offset} bytes)");
@@ -567,14 +607,28 @@ public static partial class Assembler
                 return;
             }
 
+            if (mode == Mode.Rel16)
+            {
+                // Relative to the opcode + 2, like the 8-bit ones
+                Emit(table.Opcodes[(mnemonic, Mode.Rel16)]);
+                long target = value?.AsInt ?? (final ? throw Error($"undefined branch target: {expression}") : pc + 1);
+                long offset = target - (pc + 1);
+                if (final && (offset < -32768 || offset > 32767)) throw Error($"branch out of range ({offset} bytes)");
+                Emit((int)(offset & 0xFF));
+                Emit((int)(offset >> 8 & 0xFF));
+                return;
+            }
+
             // Zero page when the value is known, fits in a byte and the mode exists for the instruction
             if (value is Num known && known.AsInt is >= 0 and < 0x100)
             {
                 var zeroPage = mode switch { Mode.Abs => Mode.Zp, Mode.AbsX => Mode.ZpX, Mode.AbsY => Mode.ZpY, _ => mode };
-                if (zeroPage != mode && Opcodes.ContainsKey((mnemonic, zeroPage))) mode = zeroPage;
+                if (zeroPage != mode && table.Opcodes.ContainsKey((mnemonic, zeroPage))) mode = zeroPage;
             }
-            if (!Opcodes.TryGetValue((mnemonic, mode), out byte opcode))
+            // PHW with an absolute address takes the word at that address
+            if (!table.Opcodes.TryGetValue((mnemonic, mode), out byte opcode))
                 throw Error($"{mnemonic} has no {mode} addressing mode");
+            if (bit >= 0) opcode = (byte)(opcode + bit * 16);
 
             Emit(opcode);
             if (Size(mode) == 1) return;
@@ -592,25 +646,39 @@ public static partial class Assembler
             }
         }
 
-        static readonly HashSet<string> Branches = ["BPL", "BMI", "BVC", "BVS", "BCC", "BCS", "BNE", "BEQ"];
-        static readonly HashSet<string> Shifts = ["ASL", "LSR", "ROL", "ROR"];
-
         [GeneratedRegex(@"^\((.*),\s*[xX]\s*\)$")] private static partial Regex IndexedIndirect();
         [GeneratedRegex(@"^\((.*)\)\s*,\s*[yY]$")] private static partial Regex IndirectIndexed();
+        [GeneratedRegex(@"^\((.*)\)\s*,\s*[zZ]$")] private static partial Regex IndirectZ();
+        [GeneratedRegex(@"^\((.*),\s*[sS][pP]\s*\)\s*,\s*[yY]$")] private static partial Regex StackRelative();
         [GeneratedRegex(@"^(.*),\s*[xX]$")] private static partial Regex IndexedX();
         [GeneratedRegex(@"^(.*),\s*[yY]$")] private static partial Regex IndexedY();
 
         (Mode Mode, string? Expression) ParseOperand(string mnemonic, string operand)
         {
-            if (operand.Length == 0) return (Shifts.Contains(mnemonic) ? Mode.Acc : Mode.Imp, null);
-            if (operand.StartsWith('#')) return (Mode.Imm, operand[1..]);
-            if (Branches.Contains(mnemonic)) return (Mode.Rel, operand);
-            if (operand is "A" or "a" && Shifts.Contains(mnemonic)) return (Mode.Acc, null);
+            bool c65 = cpu == Cpu.Csg4510;
+            string name = mnemonic;
+            // LBPL... are the word branches (4510): the table knows them as the 8-bit names
+            if (c65 && table.WordBranches.Contains(mnemonic) && operand.Length > 0)
+                return (Mode.Rel16, operand);
+            if (operand.Length == 0) return (table.Accumulator.Contains(name) ? Mode.Acc : Mode.Imp, null);
+            if (operand.StartsWith('#')) return (c65 && mnemonic == "PHW" ? Mode.Imm16 : Mode.Imm, operand[1..]);
+            if (c65 && mnemonic is "BBR" or "BBS") return (Mode.BpRel, operand);
+            if (table.Branches.Contains(mnemonic)) return (Mode.Rel, operand);
+            if (operand is "A" or "a" && table.Accumulator.Contains(name)) return (Mode.Acc, null);
+
+            if (c65)
+            {
+                if (StackRelative().Match(operand) is { Success: true } sp) return (Mode.StackY, sp.Groups[1].Value);
+                if (IndirectZ().Match(operand) is { Success: true } iz) return (Mode.IndZ, iz.Groups[1].Value);
+                // JMP and JSR: (address) and (address,X)
+                if (mnemonic is "JMP" or "JSR" && IndexedIndirect().Match(operand) is { Success: true } ax)
+                    return (Mode.IndAbsX, ax.Groups[1].Value);
+            }
 
             if (IndexedIndirect().Match(operand) is { Success: true } ix) return (Mode.IndX, ix.Groups[1].Value);
             if (IndirectIndexed().Match(operand) is { Success: true } iy) return (Mode.IndY, iy.Groups[1].Value);
-            // "(expression)" is indirect only for JMP: for the other instructions the parentheses are just grouping
-            if (mnemonic == "JMP" && operand.StartsWith('(') && operand.EndsWith(')') && Balanced(operand[1..^1]))
+            // "(expression)" is indirect only for JMP (and JSR on the 4510): for the other instructions the parentheses are just grouping
+            if ((mnemonic == "JMP" || (c65 && mnemonic == "JSR")) && operand.StartsWith('(') && operand.EndsWith(')') && Balanced(operand[1..^1]))
                 return (Mode.Ind, operand[1..^1]);
             if (IndexedX().Match(operand) is { Success: true } x) return (Mode.AbsX, x.Groups[1].Value);
             if (IndexedY().Match(operand) is { Success: true } y) return (Mode.AbsY, y.Groups[1].Value);

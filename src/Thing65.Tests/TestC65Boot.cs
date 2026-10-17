@@ -144,4 +144,46 @@ public sealed class C65BootTests
         var lines = Screen(board).Split(Environment.NewLine);
         Assert.IsTrue(lines.Any(line => line.TrimStart().StartsWith("HI")), Screen(board));
     }
+
+    // The first program assembled for the 4510 runs on the C65: from source to screen
+    [TestMethod]
+    [Timeout(120_000)]
+    public void Assembler_ShouldMakeAProgramThatRunsOnTheC65()
+    {
+        string source = Path.Combine(TestHelpers.SamplesFolder, "c65", "hello65.asm");
+        var program = Thing65.Build.ProgramBuilder.Assemble(source).Prg;
+        Assert.AreEqual(0x00, program[0]); // load address $1800
+        Assert.AreEqual(0x18, program[1]);
+
+        var board = BootedBoard();
+        board.Disk = D81Writer.Create("HELLO65", program);
+        Type(board, "BLOAD\"HELLO65\",B0" + CR, 3_000_000);
+        Type(board, "SYS 6144" + CR, 1_000_000);
+
+        string screen = Screen(board);
+        StringAssert.Contains(screen, "HELLO FROM THE 4510! INW COUNTED 3");
+    }
+
+    sealed class TracingCpu : I4510Pinout
+    {
+        public readonly MOS4510 Inner = new();
+        public readonly List<string> Log = [];
+        public bool Enabled;
+        long last;
+        public IMappedBus? Bus { get => Inner.Bus; set => Inner.Bus = value; }
+        public Func<bool> IrqInput { get => Inner.IrqInput; set => Inner.IrqInput = value; }
+        public Func<bool> NmiInput { get => Inner.NmiInput; set => Inner.NmiInput = value; }
+        public Func<bool> AecInput { get => Inner.AecInput; set => Inner.AecInput = value; }
+        public Func<bool> DmaInput { get => Inner.DmaInput; set => Inner.DmaInput = value; }
+        public void Reset() => Inner.Reset();
+        public void Tick()
+        {
+            Inner.Tick();
+            if (Enabled && Inner.IsInstructionBoundary && Inner.InstructionCount != last)
+            {
+                last = Inner.InstructionCount;
+                Log.Add(Inner.DebugInfo.Item2);
+            }
+        }
+    }
 }
