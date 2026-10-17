@@ -8,20 +8,20 @@ using Spectre.Console.Cli;
 
 namespace Thing65.Cli;
 
-// thing65 run FILE: one C64 in a window, running a program or a cartridge; sources are built first
+// thing65 run FILE: one C65 in a window, running a program or a disk; sources are built first
 sealed class RunCommand : Command<RunCommand.Settings>
 {
     public sealed class Settings : CommandSettings
     {
         [CommandArgument(0, "[FILE]")]
-        [Description("A .prg or .crt to run, or a .asm/.bas source to build and run; nothing for a plain C64")]
+        [Description("A .prg or .d81 to run, or a .asm/.bas source to build and run; nothing for a plain C65")]
         public string? File { get; init; }
     }
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         string? file = settings.File is null ? null : Path.GetFullPath(settings.File);
-        if (file is not null && Path.GetExtension(file).ToLowerInvariant() is not (".prg" or ".crt"))
+        if (file is not null && Path.GetExtension(file).ToLowerInvariant() is not (".prg" or ".d81"))
         {
             // A source: built into a temporary .prg
             var program = Commands.TryBuild(file);

@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace Thing65.Cli;
 
-// The desktop app (Thing65.Computer.exe: a C64 in a window), started as a separate process so that the terminal
+// The desktop app (Thing65.Computer.exe: a C65 in a window), started as a separate process so that the terminal
 // is free again. In the tool package it is in the "desktop" folder; while developing, in the build output of
 // src/Thing65.Computer next to this project's
 static class Desktop

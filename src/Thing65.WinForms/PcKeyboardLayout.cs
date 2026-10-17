@@ -23,7 +23,21 @@ public static class PcKeyboardLayout
         map[Keys.Space] = new(C65Key.Space);
         map[Keys.Enter] = new(C65Key.Return);
         map[Keys.Back] = new(C65Key.Delete);
-        map[Keys.Escape] = new(C65Key.RunStop);
+        // C65 keyboard: ESC is a key of its own, RUN/STOP is Pause (or End), TAB, ALT, HELP and NO SCROLL are the extra keys
+        map[Keys.Escape] = new(C65Key.Escape);
+        map[Keys.Pause] = new(C65Key.RunStop);
+        map[Keys.End] = new(C65Key.RunStop);
+        map[Keys.Tab] = new(C65Key.Tab);
+        map[Keys.Insert] = new(C65Key.Help);
+        map[Keys.Scroll] = new(C65Key.NoScroll);
+        map[Keys.ControlKey] = new(C65Key.Control);
+        map[Keys.Menu] = new(C65Key.Alt);
+        map[Keys.LWin] = new(C65Key.Commodore);
+        map[Keys.RWin] = new(C65Key.Commodore);
+        map[Keys.Home] = new(C65Key.Home);
+        map[Keys.Delete] = new(C65Key.Delete, Shift: true); // INST: shifted INST/DEL
+        map[Keys.PageUp] = new(C65Key.F13);
+        map[Keys.PageDown] = new(C65Key.F13, Shift: true);
 
         // Cursor keys: the C64 has only CRSR right and CRSR down, left and up are obtained with Shift
         map[Keys.Right] = new(C65Key.CursorRight);
@@ -40,6 +54,10 @@ public static class PcKeyboardLayout
         map[Keys.F6] = new(C65Key.F5, Shift: true);
         map[Keys.F7] = new(C65Key.F7);
         map[Keys.F8] = new(C65Key.F7, Shift: true);
+        map[Keys.F9] = new(C65Key.F9);
+        map[Keys.F10] = new(C65Key.F9, Shift: true);
+        map[Keys.F11] = new(C65Key.F11);
+        map[Keys.F12] = new(C65Key.F11, Shift: true);
 
         map[Keys.OemPeriod] = new(C65Key.Period);
         map[Keys.Oemcomma] = new(C65Key.Comma);

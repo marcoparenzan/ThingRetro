@@ -1,68 +1,79 @@
-using Thing65.Crt;
-using Thing65.Prg;
 using Thing65.C65;
+using Thing65.Prg;
 
 namespace Thing65.Computer;
 
-// Opening the files the app supports: .prg (Thing65.Prg) and .crt (Thing65.Crt). The board (Thing65.C65)
-// knows neither format: the file is read here and the result is handed to the Board
+// Opening the files the app supports: .d81 disk images and .prg programs. The board (Thing65.C65) knows neither
+// format: the file is read here and the result is handed to the board. A program reaches the C65 the way the
+// C65 expects: on a disk. The app makes a disk with the program on it, puts it in the internal drive and types the
+// DLOAD (BASIC programs) or BLOAD and SYS (machine code) on the keyboard
 public static class MediaLoader
 {
-    // Time left to the KERNAL to reach READY. before a .prg is loaded
-    public static readonly TimeSpan BootTime = TimeSpan.FromSeconds(3);
+    // Time left to the ROM to reach READY. before the program is loaded
+    public static readonly TimeSpan BootTime = TimeSpan.FromSeconds(9);
 
-    public static bool IsCartridge(string path) => HasExtension(path, ".crt");
+    // The load address of BASIC 10 programs (the text starts at $2001 in bank 0)
+    public const int BasicStart = 0x2001;
+
+    public static bool IsDisk(string path) => HasExtension(path, ".d81");
     public static bool IsProgram(string path) => HasExtension(path, ".prg");
-    public static bool IsSupported(string path) => IsCartridge(path) || IsProgram(path);
+    public static bool IsSupported(string path) => IsDisk(path) || IsProgram(path);
 
     static bool HasExtension(string path, string extension) =>
         string.Equals(Path.GetExtension(path), extension, StringComparison.OrdinalIgnoreCase);
 
-    // Loads the file into a running machine and returns a description for the title. A BASIC program is RUN.
-    // Invalid files throw (IOException, InvalidDataException, NotSupportedException, ArgumentException)
-    public static string Open(Board board, string path)
+    // Puts a disk image in the drive of a running machine and returns a description for the title.
+    // A program is started from scratch (see Run). Invalid files throw (IOException, InvalidDataException, ArgumentException)
+    public static string Open(BoardC65 board, string path)
     {
-        var content = File.ReadAllBytes(path);
-        var fileName = Path.GetFileName(path);
+        if (!IsDisk(path)) return Run(board, path);
 
-        if (IsCartridge(path))
-        {
-            var cartridge = CrtFile.Load(content);
-            board.Enqueue(() => board.InsertCartridge(cartridge));
-            var name = string.IsNullOrEmpty(cartridge.Name) ? fileName : cartridge.Name;
-            return $"{name} ({cartridge.TypeName})";
-        }
-
-        // Loading writes RAM: it must happen on the emulation thread. The file is checked first,
-        // so that errors reach whoever opened it
-        var (start, end) = PrgFile.GetRange(content);
-
-        // Reading the two bytes of the BASIC start pointer from this thread is harmless: BASIC does not change it
-        bool basic = board.IsBasicProgram(start);
-        board.Enqueue(() =>
-        {
-            board.LoadPrg(content);
-            if (basic) board.TypeText("RUN\r");
-        });
-        return basic ? $"{fileName} (BASIC)" : $"{fileName} ${start:X4}-${end - 1:X4}: SYS {start}";
+        var image = new D81Image(File.ReadAllBytes(path));
+        board.Enqueue(() => board.Disk = image);
+        return $"{Path.GetFileName(path)} (disk)";
     }
 
-    // Starts a program from scratch: reset, KERNAL boot at full speed, load, then RUN (BASIC, or machine code with
-    // a BASIC stub at $0801) or SYS to its first byte. A cartridge is simply inserted, which resets the machine
-    public static string Run(Board board, string path)
+    // Starts a program or a disk from scratch: reset, boot at full speed, then (program) a disk with it is inserted
+    // and loaded, and RUN or SYS typed
+    public static string Run(BoardC65 board, string path)
     {
-        if (IsCartridge(path)) return Open(board, path);
+        if (IsDisk(path))
+        {
+            var image = new D81Image(File.ReadAllBytes(path));
+            board.Enqueue(() =>
+            {
+                board.Disk = image;
+                board.Reset();
+                board.FastForward(BootTime);
+            });
+            return $"{Path.GetFileName(path)} (disk)";
+        }
 
         var content = File.ReadAllBytes(path);
         var (start, end) = PrgFile.GetRange(content);
+        string name = DiskName(path);
+        var disk = D81Writer.Create(name, content);
+        string load = start == BasicStart ? $"DLOAD\"{name}\"\r" : $"BLOAD\"{name}\"\r";
+        string go = start == BasicStart ? "RUN\r" : $"SYS {start}\r";
+
         board.Enqueue(() =>
         {
-            board.RemoveCartridge();
+            board.Disk = null;
             board.Reset();
             board.FastForward(BootTime);
-            board.LoadPrg(content);
-            board.TypeText(board.IsBasicProgram(start) ? "RUN\r" : $"SYS{start}\r");
+            board.Disk = disk;
+            board.TypeText(load);
+            while (board.IsTyping) board.RunCycles(1000);
+            board.RunCycles(3_000_000); // the DOS reads the file
+            board.TypeText(go);
         });
-        return $"{Path.GetFileName(path)} ${start:X4}-${end - 1:X4}";
+        return start == BasicStart ? $"{Path.GetFileName(path)} (BASIC)" : $"{Path.GetFileName(path)} ${start:X4}-${end - 1:X4}";
+    }
+
+    // The name on the disk: the file name in capitals, at most 16 characters, letters and digits
+    internal static string DiskName(string path)
+    {
+        var name = new string(Path.GetFileNameWithoutExtension(path).ToUpperInvariant().Where(char.IsAsciiLetterOrDigit).Take(16).ToArray());
+        return name.Length == 0 ? "PROGRAM" : name;
     }
 }

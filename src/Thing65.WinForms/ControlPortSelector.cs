@@ -23,7 +23,7 @@ public readonly record struct ControlPortChoice(ControlPortSource Source, int Us
 // AddMenuItems puts the choices into a menu (usually the monitor's context menu)
 public sealed class ControlPortSelector : IDisposable
 {
-    readonly Board board;
+    readonly ControlPort port1, port2;
     readonly Control input;
     readonly Connection[] ports = [new(), new()];
 
@@ -34,9 +34,18 @@ public sealed class ControlPortSelector : IDisposable
     }
 
     // input: the control that receives keyboard and mouse (usually the C65Monitor)
-    public ControlPortSelector(Board board, Control input)
+    public ControlPortSelector(BoardC65 board, Control input) : this(board.ControlPort1, board.ControlPort2, input)
     {
-        this.board = board;
+    }
+
+    public ControlPortSelector(Board board, Control input) : this(board.ControlPort1, board.ControlPort2, input)
+    {
+    }
+
+    public ControlPortSelector(ControlPort port1, ControlPort port2, Control input)
+    {
+        this.port1 = port1;
+        this.port2 = port2;
         this.input = input;
     }
 
@@ -69,7 +78,7 @@ public sealed class ControlPortSelector : IDisposable
 
     Connection Port(int port) => port is 1 or 2 ? ports[port - 1] : throw new ArgumentOutOfRangeException(nameof(port));
 
-    ControlPort Socket(int port) => port == 1 ? board.ControlPort1 : board.ControlPort2;
+    ControlPort Socket(int port) => port == 1 ? port1 : port2;
 
     void Connect(int port, ControlPortChoice choice)
     {

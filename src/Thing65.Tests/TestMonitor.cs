@@ -83,7 +83,7 @@ public sealed class MonitorTests
     public void C65Monitor_ShouldShowBootScreen()
     {
         var board = NewBoard();
-        using var monitor = new C65Monitor();
+        using var monitor = new C65Monitor(MOS6569.SCREEN_WIDTH, MOS6569.SCREEN_HEIGHT); // the C64 board's VIC-II frame
         using var cable = new MonitorCable(board.VideoOut, monitor);
 
         board.RunCycles(3 * 985248);
@@ -98,13 +98,13 @@ public sealed class MonitorTests
     [TestMethod]
     public void C65Monitor_ShouldKeepAspectRatioInsideLargerArea()
     {
-        using var monitor = new C65Monitor { Size = new Size(1000, 284) };
+        using var monitor = new C65Monitor { Size = new Size(1400, 568) };
 
         var bounds = monitor.ImageBounds;
 
-        Assert.AreEqual(284, bounds.Height);
-        Assert.AreEqual(403, bounds.Width);
-        Assert.AreEqual((1000 - 403) / 2, bounds.X);
+        Assert.AreEqual(568, bounds.Height);
+        Assert.AreEqual(806, bounds.Width);
+        Assert.AreEqual((1400 - 806) / 2, bounds.X);
 
         monitor.KeepAspectRatio = false;
         Assert.AreEqual(monitor.ClientRectangle, monitor.ImageBounds);

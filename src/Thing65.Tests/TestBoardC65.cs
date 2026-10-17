@@ -341,6 +341,26 @@ public sealed class BoardC65Tests
 
     #endregion
 
+    #region Video output
+
+    [TestMethod]
+    public void Monitor_ShouldReceiveTheVic3Frame()
+    {
+        var board = NewBoard(withCpu: false);
+        using var monitor = new Thing65.WinForms.C65Monitor();
+        using var cable = new MonitorCable(board.VideoOut, monitor);
+
+        board.RunCycles(3 * 312 * 63);
+
+        Assert.AreEqual(3, monitor.FramesReceived);
+        using var frame = monitor.CaptureFrame();
+        Assert.AreEqual(CSG4567.SCREEN_WIDTH, frame.Width);
+        Assert.AreEqual(CSG4567.SCREEN_HEIGHT, frame.Height);
+        Assert.AreEqual(System.Drawing.Color.FromArgb(0xFF, 0x99, 0x99, 0xFF), frame.GetPixel(10, 10)); // light blue border: color 14 of the palette ROM
+    }
+
+    #endregion
+
     #region DMAgic on the board
 
     [TestMethod]

@@ -89,8 +89,18 @@ public sealed class KeyboardTests
     [TestMethod]
     public void UnmappedPcKeys_ShouldBeIgnored()
     {
-        Assert.IsFalse(PcKeyboardLayout.IsMapped(Keys.Tab));
-        Assert.AreEqual(0, PcKeyboardLayout.ToC65Keys([Keys.Tab, Keys.F12]).Count);
+        Assert.IsFalse(PcKeyboardLayout.IsMapped(Keys.F24));
+        Assert.AreEqual(0, PcKeyboardLayout.ToC65Keys([Keys.F24, Keys.Apps]).Count);
+    }
+
+    [TestMethod]
+    public void C65ExtraKeys_ShouldBeMapped()
+    {
+        CollectionAssert.AreEquivalent(new[] { C65Key.Escape }, PcKeyboardLayout.ToC65Keys([Keys.Escape]).ToList());
+        CollectionAssert.AreEquivalent(new[] { C65Key.RunStop }, PcKeyboardLayout.ToC65Keys([Keys.Pause]).ToList());
+        CollectionAssert.AreEquivalent(new[] { C65Key.Tab }, PcKeyboardLayout.ToC65Keys([Keys.Tab]).ToList());
+        CollectionAssert.AreEquivalent(new[] { C65Key.F9 }, PcKeyboardLayout.ToC65Keys([Keys.F9]).ToList());
+        CollectionAssert.AreEquivalent(new[] { C65Key.F11, C65Key.LeftShift }, PcKeyboardLayout.ToC65Keys([Keys.F12]).ToList());
     }
 
     #endregion

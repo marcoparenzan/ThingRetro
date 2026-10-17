@@ -2,8 +2,8 @@ using Thing65.C65;
 
 namespace Thing65.Computer;
 
-// The desktop app: one C64 in a window. Usually started by the thing65 command line ("thing65 run")
-//   Thing65.Computer.exe [file.prg|file.crt]
+// The desktop app: one C65 in a window. Usually started by the thing65 command line ("thing65 run")
+//   Thing65.Computer.exe [file.prg|file.d81]
 static class Program
 {
     [STAThread]
@@ -13,19 +13,18 @@ static class Program
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
-        SystemRoms roms;
+        SystemRom128 rom;
         try
         {
-            roms = RomFolder.Load();
+            rom = RomFolder.Load();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            MessageBox.Show($"Cannot read the C64 ROMs from {RomFolder.DefaultPath}:\n{e.Message}",
-                "Thing65", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(e.Message, "Thing65", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 1;
         }
 
-        Application.Run(new ComputerForm(roms, args.FirstOrDefault()) { Text = "Thing65" });
+        Application.Run(new ComputerForm(rom, args.FirstOrDefault()) { Text = "Thing65" });
         return 0;
     }
 }

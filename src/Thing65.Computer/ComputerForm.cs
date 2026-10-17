@@ -3,13 +3,13 @@ using Thing65.C65;
 
 namespace Thing65.Computer;
 
-// A C64: a window hosting a C65Monitor and wiring the pieces together. It works on its own or inside another
-// form (MDI child). The same wiring (Board, monitor, MonitorCable, PcKeyboard, PcSpeakers with AudioCable,
+// A C65: a window hosting a C65Monitor and wiring the pieces together. It works on its own or inside another
+// form (MDI child). The same wiring (BoardC65, monitor, MonitorCable, PcKeyboard, PcSpeakers with AudioCable,
 // ControlPortSelector) works in any form, next to other controls too.
-// Right click on the monitor: control ports, port swap, audio, reset
+// Right click on the monitor: control ports, audio, disk, reset
 public class ComputerForm : Form
 {
-    readonly Board board;
+    readonly BoardC65 board;
     readonly C65Monitor monitor = new() { Dock = DockStyle.Fill };
     readonly MonitorCable monitorCable;
     readonly PcKeyboard keyboardCable;
@@ -18,16 +18,16 @@ public class ComputerForm : Form
     readonly ControlPortSelector controlPorts;
     readonly AppSettings settings = AppSettings.Current;
 
-    public ComputerForm(SystemRoms roms, string? startupFile = null)
+    public ComputerForm(SystemRom128 rom, string? startupFile = null)
     {
-        board = new Board(roms);
-        Text = "C64";
+        board = new BoardC65(rom);
+        Text = "C65";
         Icon = AppIcon.Value;
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = monitor.Size;
         Controls.Add(monitor);
 
-        // The explicit connections: video output -> monitor, PC keyboard (on the monitor) -> C64 keyboard
+        // The explicit connections: video output -> monitor, PC keyboard (on the monitor) -> C65 keyboard
         monitorCable = new MonitorCable(board.VideoOut, monitor);
         keyboardCable = new PcKeyboard(monitor, board.Keyboard);
 
@@ -40,7 +40,7 @@ public class ComputerForm : Form
         catch (InvalidOperationException) { }
 
         // Control ports: joystick from the keyboard or USB, paddles from the mouse; the joystick keys
-        // do not reach the C64 keyboard
+        // do not reach the C65 keyboard
         controlPorts = new ControlPortSelector(board, monitor);
         controlPorts.Select(1, settings.Port1);
         controlPorts.Select(2, settings.Port2);
@@ -58,6 +58,8 @@ public class ComputerForm : Form
             settings.Save();
         };
         menu.Items.Add(audio);
+        menu.Items.Add(new ToolStripMenuItem("Insert disk or run program...", null, (_, _) => Browse()));
+        menu.Items.Add(new ToolStripMenuItem("Eject disk", null, (_, _) => board.Enqueue(() => board.Disk = null)));
         menu.Items.Add(new ToolStripMenuItem("Reset", null, (_, _) => Reset()));
         monitor.ContextMenuStrip = menu;
 
@@ -77,23 +79,29 @@ public class ComputerForm : Form
             if (startupFile is not null) Run(startupFile);
         };
 
-        // As a tab: whenever the tab comes to the front the keyboard goes to the C64
+        // As a tab: whenever the tab comes to the front the keyboard goes to the C65
         Activated += (_, _) => monitor.Focus();
     }
 
     public void Reset() => board.Enqueue(board.Reset);
 
-    // Restarts the machine and runs a .prg (or inserts a .crt)
+    void Browse()
+    {
+        using var dialog = new OpenFileDialog { Filter = "C65 disks and programs (*.d81;*.prg)|*.d81;*.prg|All files|*.*" };
+        if (dialog.ShowDialog(this) == DialogResult.OK) Open(dialog.FileName);
+    }
+
+    // Restarts the machine and runs a .prg (or boots a .d81)
     public void Run(string path) => LoadFile(path, () => MediaLoader.Run(board, path));
 
-    // Loads a file into the running machine, as when it is dropped on the monitor
+    // Puts a disk in the running machine, or starts a program, as when it is dropped on the monitor
     public void Open(string path) => LoadFile(path, () => MediaLoader.Open(board, path));
 
     void LoadFile(string path, Func<string> load)
     {
         try
         {
-            Text = $"C64 - {load()}";
+            Text = $"C65 - {load()}";
         }
         catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException or ArgumentException)
         {

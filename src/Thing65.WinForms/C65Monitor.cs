@@ -11,21 +11,31 @@ namespace Thing65.WinForms;
 // It can go into any form; the picture is scaled keeping its proportions
 public class C65Monitor : UserControl, IScreen
 {
-    // The bitmap always has the size of the VIC-II frame: Render writes contiguous rows of
-    // SCREEN_WIDTH pixels, so it must not depend on the size (or the DPI) of the control
-    readonly Bitmap frame = new(MOS6569.SCREEN_WIDTH, MOS6569.SCREEN_HEIGHT, PixelFormat.Format32bppArgb);
+    // The bitmap always has the size of the video chip's frame: Render writes contiguous rows of
+    // "width" pixels, so it must not depend on the size (or the DPI) of the control
+    readonly int width, height;
+    readonly Bitmap frame;
     readonly object frameLock = new();
     BitmapData? frameData;
     long framesReceived;
 
-    public C65Monitor()
+    // The monitor of the C65: the frame of the VIC-III (806 x 568 dots)
+    public C65Monitor() : this(CSG4567.SCREEN_WIDTH, CSG4567.SCREEN_HEIGHT)
     {
+    }
+
+    // A monitor for a frame of another size (for example the VIC-II's 403 x 284 of the C64 board)
+    public C65Monitor(int frameWidth, int frameHeight)
+    {
+        width = frameWidth;
+        height = frameHeight;
+        frame = new Bitmap(width, height, PixelFormat.Format32bppArgb);
         DoubleBuffered = true;
         ResizeRedraw = true;
         SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.Selectable, true);
         BackColor = Color.Black;
         TabStop = true;
-        Size = new Size(MOS6569.SCREEN_WIDTH * 2, MOS6569.SCREEN_HEIGHT * 2);
+        Size = width > 500 ? new Size(width, height) : new Size(width * 2, height * 2); // the VIC-III frame at 1:1
     }
 
     // If false the picture fills the whole control, even if distorted
@@ -72,10 +82,10 @@ public class C65Monitor : UserControl, IScreen
             var area = ClientRectangle;
             if (!KeepAspectRatio || area.Width == 0 || area.Height == 0) return area;
 
-            float scale = Math.Min((float)area.Width / MOS6569.SCREEN_WIDTH, (float)area.Height / MOS6569.SCREEN_HEIGHT);
-            int width = (int)(MOS6569.SCREEN_WIDTH * scale);
-            int height = (int)(MOS6569.SCREEN_HEIGHT * scale);
-            return new Rectangle(area.X + (area.Width - width) / 2, area.Y + (area.Height - height) / 2, width, height);
+            float scale = Math.Min((float)area.Width / this.width, (float)area.Height / this.height);
+            int scaledWidth = (int)(this.width * scale);
+            int scaledHeight = (int)(this.height * scale);
+            return new Rectangle(area.X + (area.Width - scaledWidth) / 2, area.Y + (area.Height - scaledHeight) / 2, scaledWidth, scaledHeight);
         }
     }
 
