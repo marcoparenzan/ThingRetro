@@ -92,6 +92,7 @@ public partial class BoardC65
     {
         chip.Memory = dmaBus;
         chip.BusGrant = () => vic?.BusAvailable ?? true;
+        chip.InterruptRequest = () => irqLine.IsLow || nmiLine.IsLow;
         dma = chip;
     }
 

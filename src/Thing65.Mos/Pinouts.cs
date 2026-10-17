@@ -62,6 +62,7 @@ public interface IF018Pinout
     void Write(int register, byte value);
     IDmaMemory? Memory { get; set; }     // the system bus, taken over while a job runs
     Func<bool> BusGrant { get; set; }    // false = someone with a higher priority (the VIC-III) has the bus: wait
+    Func<bool> InterruptRequest { get; set; } // IRQ or NMI is asserted: a job with the INT bit stops until the status is read
     bool Busy { get; }                   // true = the CPU must be halted (its /DMA pin)
     void Reset();                        // /RES
     void Tick();                         // one cycle: one bus access

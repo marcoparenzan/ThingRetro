@@ -292,15 +292,109 @@ public sealed class F018Tests
     }
 
     [TestMethod]
-    public void MixAndSwap_AreNotImplemented_AndEndAfterTheList()
+    [DataRow(0x80, 0xCC, 0xAA, 0x88, DisplayName = "AND")]
+    [DataRow(0xE0, 0xCC, 0xAA, 0xEE, DisplayName = "OR")]
+    [DataRow(0x60, 0xCC, 0xAA, 0x66, DisplayName = "XOR")]
+    [DataRow(0x20, 0xCC, 0xAA, 0x22, DisplayName = "NOT source AND destination")]
+    public void Mix_ShouldApplyTheMinterms(int command, int source, int destination, int expected)
     {
         var (dma, memory) = Setup();
-        memory.Ram[0x1000] = 9;
-        List(memory, ListAddress, command: 2, count: 1, source: 0x1000, sourceBank: 0, destination: 0x2000, destinationBank: 0);
+        memory.Ram[0x1000] = (byte)source;
+        memory.Ram[0x2000] = (byte)destination;
+        List(memory, ListAddress, command: command | 1, count: 1, source: 0x1000, sourceBank: 0, destination: 0x2000, destinationBank: 0);
 
         int ticks = Run(dma);
 
-        Assert.AreEqual(12, ticks);
-        Assert.AreEqual(0, memory.Ram[0x2000]);
+        Assert.AreEqual(expected, memory.Ram[0x2000]);
+        Assert.AreEqual(12 + 3, ticks); // two reads and a write
+        Assert.AreEqual(source, memory.Ram[0x1000]);
+    }
+
+    [TestMethod]
+    public void Swap_ShouldExchangeTwoBlocks()
+    {
+        var (dma, memory) = Setup();
+        byte[] a = [1, 2, 3], b = [9, 8, 7];
+        a.CopyTo(memory.Ram, 0x1000);
+        b.CopyTo(memory.Ram, 0x2000);
+        List(memory, ListAddress, command: 2, count: 3, source: 0x1000, sourceBank: 0, destination: 0x2000, destinationBank: 0);
+
+        int ticks = Run(dma);
+
+        CollectionAssert.AreEqual(b, memory.Ram[0x1000..0x1003]);
+        CollectionAssert.AreEqual(a, memory.Ram[0x2000..0x2003]);
+        Assert.AreEqual(12 + 4 * 3, ticks);
+    }
+
+    // XY_MOD: a box of a 320x200 one-bitplane screen at $2000. X is in bytes, Y in lines; the modulo is 128 - width + 1
+    [TestMethod]
+    public void XyMod_ShouldFillABoxOfABitplane()
+    {
+        var (dma, memory) = Setup();
+        int destination = 3 * 128 + 5;                    // line 3, byte 5
+        List(memory, ListAddress, command: 3, count: 4 * 256 + 2, source: 0x00FF, sourceBank: 0,   // fill $FF, 2 bytes x 4 rows
+             destination: destination, destinationBank: 0, subCommand: 0x0C, modulo: (128 - 2 + 1) | (0x20 << 8)); // XY_MOD; screen at $2000 (misc bits 4-6 = 2)
+
+        Run(dma);
+
+        int Cell(int x, int y) => 0x4000 + (y >> 3) * 40 * 8 + x * 8 + (y & 7); // screen location 2 << 13 = $4000
+        for (int y = 3; y < 7; y++)
+            for (int x = 5; x < 7; x++)
+                Assert.AreEqual(0xFF, memory.Ram[Cell(x, y)], $"x={x} y={y}");
+        Assert.AreEqual(0, memory.Ram[Cell(7, 3)]);
+        Assert.AreEqual(0, memory.Ram[Cell(5, 7)]);
+        Assert.AreEqual(0, memory.Ram[Cell(4, 3)]);
+    }
+
+    [TestMethod]
+    public void XyMod_BarrelShifter_ShouldCarryBitsIntoTheNextByte()
+    {
+        var (dma, memory) = Setup();
+        // Copy 2 bytes of a row, linear source, XY destination, shifting right by 4 bits
+        memory.Ram[0x1000] = 0b10101111;
+        memory.Ram[0x1001] = 0b00000000;
+        List(memory, ListAddress, command: 0, count: 1 * 256 + 2, source: 0x1000, sourceBank: 0,
+             destination: 0, destinationBank: 0, subCommand: 0x0C, modulo: 0 | (0x20 << 8 | 0x04 << 8)); // misc: screen at $4000, shift 4
+
+        Run(dma);
+
+        // First byte: zeros come in on the left; the next one gets the bits that fell out of the first
+        Assert.AreEqual(0b00001010, memory.Ram[0x4000]);
+        Assert.AreEqual(0b11110000, memory.Ram[0x4000 + 8]);
+    }
+
+    [TestMethod]
+    public void IntBit_ShouldStopTheJobWhileAnInterruptIsPendingAndResumeOnStatusRead()
+    {
+        var (dma, memory) = Setup();
+        bool interrupt = false;
+        dma.InterruptRequest = () => interrupt;
+        List(memory, ListAddress, command: 0x0B, count: 10, source: 0x0007, sourceBank: 0, destination: 0x2000, destinationBank: 0); // fill, INT
+        Trigger(dma, ListAddress);
+        for (int i = 0; i < 12 + 3; i++) dma.Tick();
+        Assert.AreEqual(3, memory.Ram[0x2000..0x200A].Count(b => b == 7));
+
+        interrupt = true;
+        for (int i = 0; i < 20; i++) dma.Tick();
+        Assert.IsFalse(dma.Busy, "the CPU gets the bus back to serve the interrupt");
+        Assert.AreEqual(3, memory.Ram[0x2000..0x200A].Count(b => b == 7), "no progress while stopped");
+
+        interrupt = false;
+        Assert.AreNotEqual(0, dma.Read(3) & 0x80, "the status still says busy");
+        Assert.IsTrue(dma.Busy);
+        while (dma.Busy) dma.Tick();
+        Assert.IsTrue(memory.Ram[0x2000..0x200A].All(b => b == 7));
+    }
+
+    [TestMethod]
+    public void IntBit_Clear_ShouldIgnoreInterrupts()
+    {
+        var (dma, memory) = Setup();
+        dma.InterruptRequest = () => true;
+        List(memory, ListAddress, command: 3, count: 5, source: 0x0009, sourceBank: 0, destination: 0x2000, destinationBank: 0);
+
+        Run(dma);
+
+        Assert.IsTrue(memory.Ram[0x2000..0x2005].All(b => b == 9));
     }
 }
