@@ -371,3 +371,7 @@ artifacts/
 
 # C65 system ROM (Cloanto, personal use licence): each user installs their own
 src/Thing65.Computer/roms/*.rom
+
+# Reference documentation: downloaded by tools/Download-Reference.ps1, owned by its authors
+docs/reference/*
+!docs/reference/README.md
