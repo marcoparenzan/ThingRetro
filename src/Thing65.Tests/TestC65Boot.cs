@@ -10,7 +10,7 @@ public sealed class C65BootTests
 
     static BoardC65 NewBoard()
     {
-        if (!File.Exists(RomFile)) Assert.Inconclusive("C65 ROM missing: copy c-65-19910828.rom into src/Thing65.Computer/roms");
+        if (!File.Exists(RomFile)) Assert.Inconclusive("C65 ROM missing: copy c-65-19910828.rom into roms");
         return new BoardC65(new SystemRom128(File.ReadAllBytes(RomFile)), startClock: false);
     }
 

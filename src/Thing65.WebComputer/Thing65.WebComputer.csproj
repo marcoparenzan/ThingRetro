@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
 
-  <!-- The C64 in the browser: the same board and chips, compiled to WebAssembly. The page drives the board one
+  <!-- The C65 in the browser: the same board and chips, compiled to WebAssembly. The page drives the board one
        frame at a time (requestAnimationFrame) and paints the frames on a canvas -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <!-- Release: compiled ahead of time to WebAssembly (needs the wasm-tools workload); the interpreter is far too
-       slow for a cycle-exact C64 -->
+       slow for a cycle-exact C65 -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <RunAOTCompilation>true</RunAOTCompilation>
   </PropertyGroup>
@@ -32,10 +32,10 @@
              Link="wwwroot\img\%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <!-- The C64 ROMs are copyrighted and are not published with the site: the user loads them once from disk.
+  <!-- The C65 ROMs are copyrighted and are not published with the site: the user loads them once from disk.
        Only Debug builds embed them, for local development -->
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">
-    <EmbeddedResource Include="..\Thing65.Computer\roms\*" LogicalName="roms/%(Filename)" />
+    <EmbeddedResource Include="../../roms/*" LogicalName="roms/%(Filename)" />
   </ItemGroup>
 
 </Project>

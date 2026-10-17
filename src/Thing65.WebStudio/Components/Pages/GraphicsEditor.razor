@@ -1,7 +1,7 @@
 @using System.Text.Json
 @using Thing65.Graphics
 
-@* A graphics asset (.gfx.json): the picture on the left, how the C64 will show it on the right, and the settings of
+@* A graphics asset (.gfx.json): the picture on the left, how the C65 will show it on the right, and the settings of
    the conversion between them. Every change converts again (on the server, in a fraction of a second); Ctrl+S saves
    the .gfx.json, and the build writes the data files and the include *@
 <div class="absolute inset-0 flex flex-col overflow-hidden @(Visible ? null : "invisible")">
@@ -89,7 +89,7 @@
                 </div>
             </figure>
             <figure>
-                <figcaption class="mb-1 text-xs text-night-300">On the C64: @conversion?.Summary</figcaption>
+                <figcaption class="mb-1 text-xs text-night-300">On the C65: @conversion?.Summary</figcaption>
                 <div class="checker flex aspect-[8/5] items-center justify-center rounded border border-night-800">
                     @if (previewUrl is not null)
                     {

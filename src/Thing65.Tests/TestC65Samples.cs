@@ -32,7 +32,7 @@ public sealed class C65SamplesTests
     // Boots, puts the program on a disk, loads it into bank 0 and starts it
     static BoardC65 Run(string name)
     {
-        if (!File.Exists(RomFile)) Assert.Inconclusive("C65 ROM missing: copy c-65-19910828.rom into src/Thing65.Computer/roms");
+        if (!File.Exists(RomFile)) Assert.Inconclusive("C65 ROM missing: copy c-65-19910828.rom into roms");
         var board = new BoardC65(new SystemRom128(File.ReadAllBytes(RomFile)), startClock: false);
         board.RunCycles(9_000_000);
 

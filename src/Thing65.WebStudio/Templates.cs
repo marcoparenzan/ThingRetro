@@ -1,4 +1,4 @@
-namespace Thing65.WebStudio;
+﻿namespace Thing65.WebStudio;
 
 // The files of a new project
 static class Templates
@@ -18,8 +18,8 @@ static class Templates
         ; ----------------------------------------------------------------------------------------------------------
         ; {{name}}
         ;
-        ; A BASIC line, 10 SYS 2061, starts the machine language that follows it: the program is loaded and
-        ; started with RUN like a BASIC program.
+        ; Machine language for the 4510, in C65 mode: below $2000, since BASIC 10 and its ROM take $2000-$7FFF.
+        ; Start it with SYS 6144.
         ; ----------------------------------------------------------------------------------------------------------
 
         BORDER      = $D020
@@ -27,13 +27,8 @@ static class Templates
         CHROUT      = $FFD2
         RASTER      = $D012
 
-                    * = $0801
-
-                    .word basicEnd, 10          ; next line, line number 10
-                    .byte $9E                   ; SYS
-                    .text "2061"
-                    .byte 0
-        basicEnd:   .word 0                     ; end of the BASIC program
+                    !cpu 4510
+                    * = $1800
 
         start:      LDA #6
                     STA BACKGROUND              ; blue
@@ -83,7 +78,7 @@ static class Templates
 
         ## Data and conventions
 
-        - Comments are in English and explain the C64 side of what the code does.
+        - Comments are in English and explain the C65 side of what the code does.
         - Data tables are explicit `.byte` rows.
 
         ## Regions with an editor

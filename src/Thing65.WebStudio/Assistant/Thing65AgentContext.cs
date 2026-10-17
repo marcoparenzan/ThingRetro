@@ -6,23 +6,23 @@ using Thing65.Asm;
 
 namespace Thing65.WebStudio.Assistant;
 
-// What the studio does when the assistant asks: run a program in the C64, and know which files changed
+// What the studio does when the assistant asks: run a program in the C65, and know which files changed
 public interface IStudioHost
 {
     Task RunAsync(string path);
     Task FilesChangedAsync(IReadOnlyCollection<string> paths);
 }
 
-// RalfAI in the studio: a C64 programmer that works on one project. Its tools are the studio's own: the files of the
+// RalfAI in the studio: a C65 programmer that works on one project. Its tools are the studio's own: the files of the
 // project (always through Project, so never outside the folder), the build with errors by file and line, the
-// assembler's reference, and the C64 to run the result
+// assembler's reference, and the C65 to run the result
 public sealed class Thing65AgentContext(Project project, IStudioHost host, IChatClient vision) : IAgentContext
 {
     public string Name => "thing65";
-    public string Description => "Commodore 64 programming in a Thing65 project: 6502 assembly (ACME syntax), BASIC V2, builds and runs";
+    public string Description => "Commodore 65 programming in a Thing65 project: 6502 assembly (ACME syntax), BASIC V2, builds and runs";
 
     public string BuildSystemPrompt(string targetFolder) => $"""
-        You are RalfAI, working inside Thing65 Studio with the user on a Commodore 64 (PAL) project: "{project.Name}".
+        You are RalfAI, working inside Thing65 Studio with the user on a Commodore 65 (PAL) project: "{project.Name}".
         The project is a folder; every path is relative to it, with '/' as separator.
 
         ## The machine
@@ -56,7 +56,7 @@ public sealed class Thing65AgentContext(Project project, IStudioHost host, IChat
         - ";@ screen width=40 height=25 screen=<label> colors=<label> charset=<charset label> first=<screen code
           of its first character> background=<color> multicolor=1 multicolor1=<color> multicolor2=<color>" around
           two labels with .byte rows: the screen codes (what goes to $0400) and the colors (what goes to $D800; with
-          multicolor=1, bit 3 makes a cell's character multicolor and the color is 0-7). A screen is what the C64
+          multicolor=1, bit 3 makes a cell's character multicolor and the color is 0-7). A screen is what the C65
           shows: no tile tables.
         - ";@ charset first=<screen code> multicolor=1" around the bitmaps of characters (8 .byte values each, one
           character per line with its "; $70 name" comment) under the charset's label, ending with an end label.
@@ -72,7 +72,7 @@ public sealed class Thing65AgentContext(Project project, IStudioHost host, IChat
           know (for example: "describe the sprite: size, colors, where the transparent background is").
 
         ## How to work
-        - Read the files you are about to change, and keep their style: comments explain the C64, in English.
+        - Read the files you are about to change, and keep their style: comments explain the C65, in English.
         - After changing sources, call Project_Build. If it fails, read the errors (file(line): reason), fix them and
           build again, until it succeeds. Then say what you changed.
         - Call Project_Run when the user wants to see the result, or when running it is the natural next step.
@@ -140,7 +140,7 @@ public sealed class Thing65AgentContext(Project project, IStudioHost host, IChat
             + string.Join(Environment.NewLine, report.Messages.Select(m => m.Text));
     }
 
-    [Description("Builds the project and runs its first output in the C64 of the studio, which the user sees.")]
+    [Description("Builds the project and runs its first output in the C65 of the studio, which the user sees.")]
     async Task<string> Run()
     {
         var report = project.Build(activeFile: null);
@@ -148,7 +148,7 @@ public sealed class Thing65AgentContext(Project project, IStudioHost host, IChat
         if (!report.Succeeded || report.Run is null)
             return "Build failed" + Environment.NewLine + string.Join(Environment.NewLine, report.Messages.Select(m => m.Text));
         await host.RunAsync(report.Run);
-        return $"Running {report.Run} in the C64";
+        return $"Running {report.Run} in the C65";
     }
 
     [Description("Looks at a picture of the project (PNG, JPEG, GIF, WebP) and answers a question about it.")]

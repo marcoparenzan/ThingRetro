@@ -1,5 +1,5 @@
 // The browser side of a project page (ProjectPage.razor): Monaco with one model per open file, the keys of the
-// studio, and the C64: in the iframe of the C64 tab, or in a window of its own.
+// studio, and the C65: in the iframe of the C65 tab, or in a window of its own.
 //   server -> page: init, open, show, close, text, reload, saved, markers, clearMarkers, reveal, run, focusComputer,
 //                   openComputerWindow, closeComputerWindow, chatInput, scrollToEnd, dispose
 //   page -> server: Command(save | build | run), Changed(path, dirty), ComputerStatus(text), ComputerWindowClosed()
@@ -10,11 +10,11 @@ window.thing65Studio = (() => {
     let editor = null;
     let page = null;                    // DotNetObjectReference of the page
     const models = new Map();           // path -> { model, saved (version id), dirty }
-    const ready = new Set();            // the C64s (windows) that posted 'ready': they can receive programs
-    let pendingRun = null;              // a program for a C64 that is not ready yet
-    let captureTimer = 0;               // waiting for the C64 to answer a capture
+    const ready = new Set();            // the C65s (windows) that posted 'ready': they can receive programs
+    let pendingRun = null;              // a program for a C65 that is not ready yet
+    let captureTimer = 0;               // waiting for the C65 to answer a capture
     let memoryTimer = 0;                // ... or a request for its memory
-    let computerWindow = null;          // the C64 in a window of its own
+    let computerWindow = null;          // the C65 in a window of its own
     let windowWatch = 0;
 
     function loadMonaco() {
@@ -28,7 +28,7 @@ window.thing65Studio = (() => {
         return new Promise((resolve, reject) => require(['vs/editor/editor.main'], resolve, reject));
     }
 
-    // F5, F7 and Ctrl+S anywhere in the page (not in the C64, which has its own document): captured before Monaco
+    // F5, F7 and Ctrl+S anywhere in the page (not in the C65, which has its own document): captured before Monaco
     function keys(e) {
         const command = e.key === 'F5' ? 'run' : e.key === 'F7' ? 'build' : (e.ctrlKey || e.metaKey) && e.key === 's' ? 'save' : null;
         if (!command || !page) return;
@@ -56,14 +56,14 @@ window.thing65Studio = (() => {
         }
     }
 
-    // Where programs go: the window of the C64 while it is open, otherwise the iframe of the tab
+    // Where programs go: the window of the C65 while it is open, otherwise the iframe of the tab
     function computerTarget() {
         if (computerWindow && !computerWindow.closed) return computerWindow;
         return document.getElementById('computer')?.contentWindow ?? null;
     }
 
     // An image of any format the browser can show becomes a PNG here (the converter reads PNG only), no larger than
-    // 1280 pixels: plenty for a C64 screen, and small enough to travel to the server
+    // 1280 pixels: plenty for a C65 screen, and small enough to travel to the server
     async function importImage(e) {
         const file = e.target.files[0];
         e.target.value = '';
@@ -227,26 +227,26 @@ window.thing65Studio = (() => {
             return false;
         },
 
-        // Asks the C64 for the video memory; the answer comes as a 'capture' message. False if there is no C64 to ask
+        // Asks the C65 for the video memory; the answer comes as a 'capture' message. False if there is no C65 to ask
         captureComputer() {
             const target = computerTarget();
             if (!target || !ready.has(target)) return false;
             target.postMessage({ type: 'capture' }, location.origin);
-            // A C64 published before this existed never answers
+            // A C65 published before this existed never answers
             clearTimeout(captureTimer);
             captureTimer = setTimeout(() => page?.invokeMethodAsync('ComputerStatus',
-                'The C64 does not answer the capture: it was published before captures existed. Publish it again: dotnet publish src/Thing65.WebComputer -c Release -o artifacts/web'), 5000);
+                'The C65 does not answer the capture: it was published before captures existed. Publish it again: dotnet publish src/Thing65.WebComputer -c Release -o artifacts/web'), 5000);
             return true;
         },
 
-        // Asks the C64 for all its memory (the answer comes as a 'memory' message). False if there is no C64 to ask
+        // Asks the C65 for all its memory (the answer comes as a 'memory' message). False if there is no C65 to ask
         memoryComputer() {
             const target = computerTarget();
             if (!target || !ready.has(target)) return false;
             target.postMessage({ type: 'memory' }, location.origin);
             clearTimeout(memoryTimer);
             memoryTimer = setTimeout(() => page?.invokeMethodAsync('ComputerStatus',
-                'The C64 does not answer: it was published before the memory viewer existed. Publish it again: dotnet publish src/Thing65.WebComputer -c Release -o artifacts/web'), 5000);
+                'The C65 does not answer: it was published before the memory viewer existed. Publish it again: dotnet publish src/Thing65.WebComputer -c Release -o artifacts/web'), 5000);
             return true;
         },
 
@@ -361,18 +361,18 @@ window.thing65Studio = (() => {
             editor.focus();
         },
 
-        // A program to the C64; it waits for the C64 to be ready, then the C64 has the keyboard
+        // A program to the C65; it waits for the C65 to be ready, then the C65 has the keyboard
         run(name, bytes) {
             const target = computerTarget();
             const message = { type: 'load', name, bytes };
-            // No target yet: the C64 is being turned on, the first one to say 'ready' gets the program
+            // No target yet: the C65 is being turned on, the first one to say 'ready' gets the program
             if (!target) pendingRun = { target: null, message };
             else if (ready.has(target)) target.postMessage(message, location.origin);
             else pendingRun = { target, message };
             thing65Studio.focusComputer();
         },
 
-        // A moment later: the tab of the C64 may become visible only with the next render from the server
+        // A moment later: the tab of the C65 may become visible only with the next render from the server
         focusComputer() {
             setTimeout(() => {
                 const target = computerTarget();
@@ -389,8 +389,8 @@ window.thing65Studio = (() => {
             computerWindow = null;
         },
 
-        // The C64 in a window of its own (the page then removes the iframe); when the window closes, the page
-        // brings the C64 back into the tab
+        // The C65 in a window of its own (the page then removes the iframe); when the window closes, the page
+        // brings the C65 back into the tab
         openComputerWindow() {
             computerWindow = window.open('computer/', 'thing65-computer', 'popup,width=900,height=760');
             if (!computerWindow) return false;

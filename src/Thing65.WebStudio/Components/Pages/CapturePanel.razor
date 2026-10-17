@@ -2,14 +2,14 @@
 @using Thing65.WebStudio.CodeBehind
 @inject IJSRuntime JS
 
-@* The screens taken from the C64: each Capture adds one, with its characters merged into a charset that all the
+@* The screens taken from the C65: each Capture adds one, with its characters merged into a charset that all the
    captures share, and the files of a Thing65 project that come out of it (a ;@ charset file, a ;@ screen file for each
    screen). The files stay here, as text, in memory: copy them where they belong *@
 <aside class="@(Visible ? "flex" : "hidden") w-[27rem] shrink-0 flex-col overflow-hidden rounded-lg border border-night-700 bg-night-950 text-xs text-night-200">
     <div class="flex shrink-0 items-center gap-2 border-b border-night-800 px-3 py-2">
         <span class="text-sm font-semibold text-white">Captures</span>
         <span class="text-night-400">@charset.Screens.Count screens · @charset.Characters.Count characters</span>
-        <button class="tool ml-auto border border-night-700" @onclick="OnCapture" title="Take the screen the C64 shows now">📷 Capture</button>
+        <button class="tool ml-auto border border-night-700" @onclick="OnCapture" title="Take the screen the C65 shows now">📷 Capture</button>
         <button class="tool border border-night-700 disabled:opacity-40" disabled="@(charset.Screens.Count == 0)" @onclick="Clear" title="Forget the captures and start again">Clear</button>
     </div>
 
@@ -200,7 +200,7 @@
 
     void Clear() => Restart();
 
-    // A screen from the C64 (what Board.CaptureVideo handed over)
+    // A screen from the C65 (what Board.CaptureVideo handed over)
     public void Add(byte[] bytes)
     {
         try

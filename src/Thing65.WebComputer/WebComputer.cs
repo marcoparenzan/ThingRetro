@@ -9,7 +9,7 @@ using Thing65.Prg;
 
 namespace Thing65.WebComputer;
 
-// The C64 driven by the page (wwwroot/js/computer.js). The browser has no thread for the emulation: at every
+// The C65 driven by the page (wwwroot/js/computer.js). The browser has no thread for the emulation: at every
 // animation frame the page calls Frame with the elapsed time and the board runs the matching cycles; at the end of
 // each VIC-II frame the picture goes to the page through present(), and every 10 ms of sound through playAudio().
 // Keys arrive as KeyboardEvent.code; the joystick takes its keys (keypad, or arrows + Ctrl) and the gamepad
@@ -60,7 +60,7 @@ public static partial class WebComputer
     }
 
     // Runs the cycles for the elapsed time (at most 100 ms, so that a tab coming back does not freeze the page)
-    // and returns how many times faster than a real C64 the emulation could run in this frame
+    // and returns how many times faster than a real C65 the emulation could run in this frame
     [JSExport]
     public static double Frame(double milliseconds)
     {
@@ -128,7 +128,7 @@ public static partial class WebComputer
     }
 
     // The joystick: plugged into port 1 or 2 (0 = none), moved by the arrows with Ctrl as fire ("arrows", the
-    // default) or by the keypad ("keypad"), and by any gamepad. Its keys do not reach the C64 keyboard
+    // default) or by the keypad ("keypad"), and by any gamepad. Its keys do not reach the C65 keyboard
     const int Up = 0x01, Down = 0x02, Left = 0x04, Right = 0x08, Fire = 0x10;
     static readonly Joystick joystick = new();
     static readonly HashSet<string> joystickCodes = new(StringComparer.Ordinal);
@@ -210,7 +210,7 @@ public static partial class WebComputer
 
     #endregion
 
-    // What the VIC-II shows, for the studio's capture of a screen: Board.CaptureVideo(), or nothing if the C64 is off
+    // What the VIC-II shows, for the studio's capture of a screen: Board.CaptureVideo(), or nothing if the C65 is off
     [JSExport]
     public static byte[] CaptureVideo() => board?.CaptureVideo() ?? [];
 
@@ -232,7 +232,7 @@ public static partial class WebComputer
     [JSExport]
     public static string Load(string name, byte[] content)
     {
-        if (board is null) return "The C64 is not running";
+        if (board is null) return "The C65 is not running";
         try
         {
             if (name.EndsWith(".crt", StringComparison.OrdinalIgnoreCase))

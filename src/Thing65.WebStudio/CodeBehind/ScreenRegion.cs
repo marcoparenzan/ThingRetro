@@ -2,7 +2,7 @@ using Thing65.Graphics;
 
 namespace Thing65.WebStudio.CodeBehind;
 
-// What a ;@ screen region means: a C64 screen as the program keeps it, two labels inside the region:
+// What a ;@ screen region means: a C65 screen as the program keeps it, two labels inside the region:
 //   ;@ screen width=40 height=25 screen=room1__screen colors=room1__colors
 //   ;@        charset=charset1__characters first=$70 background=5 multicolor=1 multicolor1=$0E multicolor2=$01
 //   room1__screen:   .byte ...   width x height screen codes (what goes to $0400)

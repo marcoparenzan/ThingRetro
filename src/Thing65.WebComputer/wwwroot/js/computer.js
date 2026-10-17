@@ -1,4 +1,4 @@
-// The browser side of the C64: the animation loop that drives the board, the canvas that shows its frames,
+// The browser side of the C65: the animation loop that drives the board, the canvas that shows its frames,
 // keyboard, gamepad, sound, drag and drop, and the ROMs kept in localStorage.
 // Talks to WebComputer.cs (JSExport/JSImport).
 // Opened by a page of the same site (the web studio: in an iframe, or in a window it opened), it runs the programs
@@ -19,7 +19,7 @@ let gamepadBits = 0;
 let audio = null;         // AudioContext, created at the first user gesture (browsers require one)
 let speaker = null;       // AudioWorkletNode (audio-worklet.js)
 let audioWanted = localStorage.getItem('thing65.sound') !== 'off';
-let pendingLoad = null;   // a program sent before the C64 was running (ROMs still to choose)
+let pendingLoad = null;   // a program sent before the C65 was running (ROMs still to choose)
 
 const host = window.parent !== window ? window.parent : window.opener;   // the studio, if any
 
@@ -126,7 +126,7 @@ function readGamepads() {
     }
 }
 
-// How many times faster than a real C64 the emulation could run, averaged over about a second
+// How many times faster than a real C65 the emulation could run, averaged over about a second
 function showSpeed(speed) {
     speedSamples.push(speed);
     const now = performance.now();

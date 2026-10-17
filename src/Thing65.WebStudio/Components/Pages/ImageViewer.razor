@@ -1,7 +1,7 @@
 @using System.Buffers.Binary
 @using Thing65.Graphics
 
-@* A PNG in three views: the picture (zoomed, with the pixel under a click: its RGBA and the nearest C64 color), its
+@* A PNG in three views: the picture (zoomed, with the pixel under a click: its RGBA and the nearest C65 color), its
    structure (the chunks of the file, IHDR decoded) and its bytes *@
 <div class="absolute inset-0 flex flex-col overflow-hidden @(Visible ? null : "invisible")">
     <div class="flex flex-wrap items-center gap-2 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
@@ -18,7 +18,7 @@
                 </select>
             </label>
         }
-        <button class="rounded border border-night-600 px-2 py-1" @onclick="OnMakeGraphics" title="Convert it to C64 graphics (a .gfx.json next to it)">▦ Make C64 graphics</button>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="OnMakeGraphics" title="Convert it to C65 graphics (a .gfx.json next to it)">▦ Make C65 graphics</button>
         <span class="ml-auto text-night-400">@(image is null ? error : $"{image.Width}x{image.Height}, {bytes.Length} bytes")</span>
     </div>
 
@@ -62,17 +62,17 @@
             @if (picked is { } p)
             {
                 uint pixel = image[p.X, p.Y];
-                var c64 = Nearest(pixel);
+                var c65 = Nearest(pixel);
                 <aside class="w-56 shrink-0 border-l border-night-800 bg-night-950 p-3 font-mono text-xs leading-6 text-night-200">
                     <div class="mb-1 font-sans text-[11px] font-semibold tracking-wider text-night-300 uppercase">Pixel</div>
                     <div>x, y   <span class="text-white">@p.X, @p.Y</span></div>
                     <div class="my-1 h-8 w-full rounded border border-night-700" style="background: #@((pixel & 0xFFFFFF).ToString("X6")); opacity: @((pixel >> 24) / 255.0)"></div>
                     <div>RGB    <span class="text-white">#@((pixel & 0xFFFFFF).ToString("X6"))</span></div>
                     <div>alpha  <span class="text-white">@(pixel >> 24)</span></div>
-                    <div class="mt-2 font-sans text-night-300">Nearest C64 color</div>
+                    <div class="mt-2 font-sans text-night-300">Nearest C65 color</div>
                     <div class="flex items-center gap-2">
-                        <span class="h-4 w-4 rounded-sm border border-night-700" style="background: #@C65Palette.Pepto.Rgb[c64].ToString("X6")"></span>
-                        <span class="text-white">@c64 @C65Palette.Names[c64]</span>
+                        <span class="h-4 w-4 rounded-sm border border-night-700" style="background: #@C65Palette.Pepto.Rgb[c65].ToString("X6")"></span>
+                        <span class="text-white">@c65 @C65Palette.Names[c65]</span>
                     </div>
                 </aside>
             }

@@ -13,7 +13,7 @@ namespace Thing65.WebStudio.CodeBehind;
 //               .byte $00,$00,...
 //   ;@ end
 // For the assembler they are comments. The parameters are numbers or symbols of the program ($70, TILE_COUNT,
-// charmapChars), resolved by assembling the project: the editor sees the same bytes the C64 will see
+// charmapChars), resolved by assembling the project: the editor sees the same bytes the C65 will see
 public sealed partial class AsmRegion
 {
     public required string Editor { get; init; }

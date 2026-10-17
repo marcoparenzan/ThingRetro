@@ -1,8 +1,8 @@
 @using Microsoft.AspNetCore.Components.Web.Virtualization
 
 @* A binary file in the classic two views: 16 bytes per row in hex, and the same bytes as characters (ASCII, PETSCII
-   or C64 screen codes). For a .prg the addresses are the C64's, from the load address in its first two bytes; for a
-   .crt the header and the CHIP packets are read, so a byte also tells its bank and C64 address. A click on a byte
+   or C65 screen codes). For a .prg the addresses are the C65's, from the load address in its first two bytes; for a
+   .crt the header and the CHIP packets are read, so a byte also tells its bank and C65 address. A click on a byte
    selects it in both views and shows its value in every base, and the word starting there *@
 <div class="absolute inset-0 flex flex-col overflow-hidden @(Visible ? null : "invisible")">
     <div class="flex flex-wrap items-center gap-3 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
@@ -132,10 +132,10 @@
         }
     }
 
-    // Offsets; for a .prg the C64 address of each row (the two bytes of the load address come before it)
+    // Offsets; for a .prg the C65 address of each row (the two bytes of the load address come before it)
     string AddressText(int row) => IsPrg ? $"${(loadAddress + row * 16 - 2) & 0xFFFF:X4}" : $"{row * 16:X6}";
 
-    // A .crt: "C64 CARTRIDGE   ", the header length (big endian), the hardware type, EXROM and GAME, the name;
+    // A .crt: "C65@CARTRIDGE   ", the header length (big endian), the hardware type, EXROM and GAME, the name;
     // then CHIP packets: "CHIP", length, chip type, bank, load address, size, and the data
     sealed record Chip(int Packet, int Data, int Bank, int Load, int Size);
     readonly List<Chip> chips = [];
@@ -147,7 +147,7 @@
     {
         chips.Clear();
         cartridge = null;
-        if (bytes.Length < 0x40 || System.Text.Encoding.ASCII.GetString(bytes, 0, 16) != "C64 CARTRIDGE   ") return;
+        if (bytes.Length < 0x40 || System.Text.Encoding.ASCII.GetString(bytes, 0, 16) != "C65@CARTRIDGE   ") return;
         string name = System.Text.Encoding.ASCII.GetString(bytes, 0x20, 32).TrimEnd('\0', ' ');
         cartridge = $"\"{name}\", type {Big(bytes, 0x16, 2)}, EXROM {bytes[0x18]} GAME {bytes[0x19]}";
         for (int at = Big(bytes, 0x10, 4); at + 16 <= bytes.Length && System.Text.Encoding.ASCII.GetString(bytes, at, 4) == "CHIP";)
@@ -175,7 +175,7 @@
         : bytes[at] == 0 ? "text-night-400"
         : "text-night-100";
 
-    // $hex is a C64 address for a .prg (an offset otherwise), +n or a decimal number an offset
+    // $hex is a C65 address for a .prg (an offset otherwise), +n or a decimal number an offset
     async Task GoTo()
     {
         string text = goTo.Trim();
@@ -193,7 +193,7 @@
         await Show(at);
     }
 
-    // A byte as a character: ASCII; PETSCII (as the C64 prints it in upper case and graphics mode); screen codes
+    // A byte as a character: ASCII; PETSCII (as the C65 prints it in upper case and graphics mode); screen codes
     // (what the screen RAM holds: 0 is @, 1 is A, from $80 the same characters in reverse)
     (string Text, bool Reverse) CharOf(byte value) => charset switch
     {

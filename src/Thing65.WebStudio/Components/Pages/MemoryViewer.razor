@@ -3,7 +3,7 @@
 @using Thing65.Graphics
 @inject IJSRuntime JS
 
-@* The memory of the C64 (a snapshot of the running machine) to look through: as bytes and characters, with the number
+@* The memory of the C65 (a snapshot of the running machine) to look through: as bytes and characters, with the number
    of bytes in a row and the offset as you like, or decoded as a screen of characters, a charset, sprites or a bitmap,
    to find them in the dump. The offset moves a byte at a time (buttons, arrow keys, the wheel, the slider, a click on
    what you see), because what you look for does not start where a row starts *@
@@ -11,7 +11,7 @@
     <div class="flex shrink-0 flex-wrap items-center gap-2 border-b border-night-800 bg-night-950 px-3 py-2">
         <span class="text-sm font-semibold text-white">Memory</span>
         <span class="text-night-400">@(memory is null ? "no snapshot yet" : $"snapshot of {takenAt:HH:mm:ss}")</span>
-        <button class="tool border border-night-700" @onclick="OnSnapshot" title="Take the memory of the running C64 again">📷 Snapshot</button>
+        <button class="tool border border-night-700" @onclick="OnSnapshot" title="Take the memory of the running C65 again">📷 Snapshot</button>
         <span class="mx-1 h-5 border-l border-night-700"></span>
         @foreach (var (key, label) in Views)
         {
@@ -25,13 +25,13 @@
             <button class="rounded border border-night-600 px-2 py-0.5">Go</button>
         </form>
         <span class="ml-auto text-night-300">@status</span>
-        <button class="tool border border-night-700" @onclick="OnClose" title="Back to the C64">✕ Close</button>
+        <button class="tool border border-night-700" @onclick="OnClose" title="Back to the C65">✕ Close</button>
     </div>
 
     @if (memory is null)
     {
         <div class="flex flex-1 flex-col items-center justify-center gap-3 text-night-300">
-            <p>The memory viewer shows the 64 KB of the running C64. Run a program, then take a snapshot.</p>
+            <p>The memory viewer shows the 64 KB of the running C65. Run a program, then take a snapshot.</p>
             <button class="rounded-md border border-night-600 px-3 py-1.5 text-sm hover:border-chip-400" @onclick="OnSnapshot">📷 Snapshot</button>
         </div>
     }
@@ -280,7 +280,7 @@
     int CellWidth => view switch { "charset" => 8, "sprites" => 24, _ => 8 };
     int CellHeight => view switch { "sprites" => 21, _ => 8 };
 
-    // A new snapshot from the studio: what the C64 had when the button was pressed
+    // A new snapshot from the studio: what the C65 had when the button was pressed
     public void SetMemory(byte[] bytes)
     {
         bool first = memory is null;

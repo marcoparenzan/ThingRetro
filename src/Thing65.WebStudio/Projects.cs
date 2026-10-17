@@ -54,7 +54,7 @@ public sealed record ProjectEntry(string Name, string Path, bool IsFolder, IRead
 // One line of the build log; File and Line point to the source of an error, when known
 public sealed record BuildMessage(string Text, bool IsError = false, string? File = null, int Line = 0);
 
-// Run: the file to start in the C64 after a successful build
+// Run: the file to start in the C65 after a successful build
 public sealed record BuildReport(bool Succeeded, IReadOnlyList<BuildMessage> Messages, string? Run);
 
 public sealed class Project(string name, string folder)

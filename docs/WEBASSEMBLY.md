@@ -100,7 +100,7 @@ The capture shows *"The C64 does not answer the capture: it was published before
 not do what the last change says:
 
 1. **Is it published?** The served file must have the change:
-   `curl http://localhost:5180/computer/js/computer.js | findstr capture` (for the capture) must find lines. If not,
+   `curl http://localhost:5065/computer/js/computer.js | findstr capture` (for the capture) must find lines. If not,
    publish again (see above) and restart the studio.
 2. **Is the browser using the old one?** Reload the page with **Ctrl+F5** (or clear the site data of the studio). A
    browser may have kept `computer.js` or the C64 from before the `no-cache` header existed, and only a hard reload

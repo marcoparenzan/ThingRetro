@@ -1,7 +1,7 @@
 @inject NavigationManager Navigation
 @implements IAsyncDisposable
 
-@* The page: the C64 monitor (a canvas), loading of programs and cartridges, reset, and the ROMs the first time *@
+@* The page: the C65 monitor (a canvas), loading of programs and cartridges, reset, and the ROMs the first time *@
 
 @* With ?embedded (the web studio shows it in an iframe) only the screen and its controls *@
 <main class="@(embedded ? "embedded" : null)">
@@ -17,7 +17,7 @@
     {
         <section class="roms">
             <p>
-                The C64 ROMs are copyrighted, so they are not part of this site. Choose the three files from your disk
+                The C65 ROMs are copyrighted, so they are not part of this site. Choose the three files from your disk
                 (<code>kernal</code>, <code>basic</code>, <code>chargen</code>, for example from VICE): the browser
                 keeps them for the next visits.
             </p>
@@ -51,7 +51,7 @@
     </nav>
 
     <p class="hint" hidden="@embedded">
-        Click the screen to type (and to start the sound). Keys are positional as on a C64: Esc is RUN/STOP, Tab CTRL,
+        Click the screen to type (and to start the sound). Keys are positional as on a C65: Esc is RUN/STOP, Tab CTRL,
         left Alt the C= key, F2/F4/F6/F8 are Shift + F1/F3/F5/F7. The joystick moves with the numeric keypad (8 2 4 6,
         diagonals 7 9 1 3, fire 0 or 5) or the arrows with Ctrl as fire, and with any gamepad; almost every game wants
         it in port 2. Programs and cartridges can also be dropped on the screen.

@@ -1,4 +1,4 @@
-// The PC speakers of the browser C64: an AudioWorklet that plays the SID samples sent by computer.js.
+// The PC speakers of the browser C65: an AudioWorklet that plays the SID samples sent by computer.js.
 // The emulation runs on the page's clock, the sound card on its own: the queue starts playing when it holds
 // about 50 ms, and drops the oldest audio when it grows past 150 ms, so the latency stays low
 class Speaker extends AudioWorkletProcessor {

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <!-- The studio in the browser: a Blazor Server app (projects, files, editor, assembler and builds run on the
-       server, over a local folder of projects). The C64 is the WebAssembly web computer (Thing65.WebComputer, the
+       server, over a local folder of projects). The C65 is the WebAssembly web computer (Thing65.WebComputer, the
        AOT build published to artifacts/web), shown in an iframe at /computer/ -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>

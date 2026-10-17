@@ -7,9 +7,9 @@
 @inject IJSRuntime JS
 @using Thing65.Graphics
 
-@* A project: files on the left; tabs with the C64 and the open files (Monaco), the build log below them. F7 builds,
-   F5 builds, runs and shows the C64, Ctrl+S saves. Files and builds live on the server, the editor in the browser
-   (wwwroot/js/studio.js), the C64 in WebAssembly in an iframe, or in a window of its own *@
+@* A project: files on the left; tabs with the C65 and the open files (Monaco), the build log below them. F7 builds,
+   F5 builds, runs and shows the C65, Ctrl+S saves. Files and builds live on the server, the editor in the browser
+   (wwwroot/js/studio.js), the C65 in WebAssembly in an iframe, or in a window of its own *@
 <PageTitle>@Name · Thing65 Studio</PageTitle>
 
 <SectionContent SectionName="header">
@@ -25,7 +25,7 @@
                 class="rounded-md border border-night-200 px-3 py-1.5 text-sm hover:border-chip-400 disabled:opacity-40">Save</button>
         <button @onclick="() => Build(run: false)" title="Build (F7)"
                 class="rounded-md border border-night-200 px-3 py-1.5 text-sm hover:border-chip-400">Build <kbd class="text-night-400">F7</kbd></button>
-        <button @onclick="() => Build(run: true)" title="Build and run in the C64 (F5)"
+        <button @onclick="() => Build(run: true)" title="Build and run in the C65 (F5)"
                 class="rounded-md bg-night-900 px-4 py-1.5 text-sm font-semibold text-chip-400 hover:bg-night-700">▶ Run <kbd class="text-night-300">F5</kbd></button>
     </div>
 </SectionContent>
@@ -43,7 +43,7 @@ else
             <span class="mr-auto pl-1 text-xs font-semibold tracking-wider text-night-300 uppercase">Files</span>
             <button class="tool" title="New file" @onclick='() => StartEdit("file")'>＋📄</button>
             <button class="tool" title="New folder" @onclick='() => StartEdit("folder")'>＋📁</button>
-            <label class="tool cursor-pointer" title="Import an image (any format) as C64 graphics">🖼<input id="import-image" type="file" accept="image/*" hidden /></label>
+            <label class="tool cursor-pointer" title="Import an image (any format) as C65 graphics">🖼<input id="import-image" type="file" accept="image/*" hidden /></label>
             <button class="tool" title="Rename" disabled="@(selected is null)" @onclick='() => StartEdit("rename")'>✎</button>
             <button class="tool" title="Delete" disabled="@(selected is null)" @onclick="DeleteSelected">🗑</button>
             <button class="tool" title="Refresh" @onclick="Refresh">⟳</button>
@@ -64,16 +64,16 @@ else
         </div>
     </aside>
 
-    @* The tabs: the C64 first, then the open files; below them the build log *@
+    @* The tabs: the C65 first, then the open files; below them the build log *@
     <section class="flex min-w-0 flex-1 flex-col bg-night-900">
         <div class="flex shrink-0 overflow-x-auto border-b border-night-800 bg-night-950">
             <div class="@(showComputer ? "border-chip-400 bg-night-900 text-white" : computerOn ? "border-transparent text-chip-400 hover:text-white" : "border-transparent text-night-400 hover:text-chip-400")
                         flex shrink-0 cursor-pointer items-center gap-2 border-t-2 border-r border-r-night-800 px-3 py-1.5 text-sm font-semibold"
-                 @onclick="ShowComputer" title="@(computerOn ? "The C64 (F5 builds, runs and shows it)" : "The C64 is off: click (or F5) to turn it on")">
-                ▶ C64
+                 @onclick="ShowComputer" title="@(computerOn ? "The C65 (F5 builds, runs and shows it)" : "The C65 is off: click (or F5) to turn it on")">
+                ▶ C65
                 @if (computerOn)
                 {
-                    <button class="font-normal text-night-400 hover:text-white" title="Turn the C64 off"
+                    <button class="font-normal text-night-400 hover:text-white" title="Turn the C65 off"
                             @onclick="TurnComputerOff" @onclick:stopPropagation>✕</button>
                 }
             </div>
@@ -90,7 +90,7 @@ else
             }
         </div>
         <div class="relative min-h-0 flex-1">
-            @* The editor and the C64 stay in the page: the hidden one is only hidden, so the C64 keeps running *@
+            @* The editor and the C65 stay in the page: the hidden one is only hidden, so the C65 keeps running *@
             <div id="editor" class="absolute inset-0 @(showComputer || !IsMonaco(active) ? "invisible" : null)"></div>
             @foreach (var tab in tabs.Where(IsBinary))
             {
@@ -150,7 +150,7 @@ else
                 @if (!Computer.Available)
                 {
                     <div class="max-w-2xl rounded-lg border border-night-700 p-4 text-sm text-night-200">
-                        The C64 is the published web computer, and it is not in <code class="font-mono text-chip-300">@Computer.Folder</code>.
+                        The C65 is the published web computer, and it is not in <code class="font-mono text-chip-300">@Computer.Folder</code>.
                         Publish it with
                         <pre class="mt-2 overflow-x-auto rounded bg-night-900 p-2 font-mono text-xs text-chip-300">dotnet publish src/Thing65.WebComputer -c Release -o artifacts/web</pre>
                         and restart the studio.
@@ -160,7 +160,7 @@ else
                 {
                     <div class="flex flex-1 flex-col items-center justify-center gap-3 text-night-300">
                         <img src="img/thing65-chip-256.png" alt="" class="h-24 w-24 opacity-40" />
-                        <p>The C64 is in its own window: programs run there.</p>
+                        <p>The C65 is in its own window: programs run there.</p>
                         <button class="rounded-md border border-night-600 px-3 py-1.5 text-sm hover:border-chip-400" @onclick="FocusComputerWindow">Show the window</button>
                     </div>
                 }
@@ -168,13 +168,13 @@ else
                 {
                     <div class="flex flex-1 flex-col items-center justify-center gap-3 text-night-300">
                         <img src="img/thing65-chip-256.png" alt="" class="h-24 w-24 opacity-40" />
-                        <p>The C64 is off. <kbd class="text-chip-400">F5</kbd> builds the project and runs it.</p>
+                        <p>The C65 is off. <kbd class="text-chip-400">F5</kbd> builds the project and runs it.</p>
                         <button class="rounded-md border border-night-600 px-3 py-1.5 text-sm hover:border-chip-400" @onclick="ShowComputer">Turn it on</button>
                     </div>
                 }
                 else
                 {
-                    <iframe id="computer" src="computer/?embedded" title="C64" allow="autoplay; gamepad" class="min-h-0 w-full flex-1"></iframe>
+                    <iframe id="computer" src="computer/?embedded" title="C65" allow="autoplay; gamepad" class="min-h-0 w-full flex-1"></iframe>
                 }
                 </div>
                 <CapturePanel @ref="capturePanel" Project="project!" Visible="@showCaptures" OnCapture="CaptureScreen" />
@@ -184,16 +184,16 @@ else
                     <span class="ml-auto text-night-400">Click the screen to type · Esc is RUN/STOP · joystick: numeric keypad or gamepad</span>
                     @if (Computer.Available && computerOn)
                     {
-                        <button class="rounded border border-night-600 px-2 py-1 text-night-200 hover:border-chip-400" title="Take the screen the C64 shows: its characters, screen codes and colors, as Thing65 files kept here"
+                        <button class="rounded border border-night-600 px-2 py-1 text-night-200 hover:border-chip-400" title="Take the screen the C65 shows: its characters, screen codes and colors, as Thing65 files kept here"
                                 @onclick="CaptureScreen">📷 Capture</button>
                         <button class="rounded border border-night-600 px-2 py-1 text-night-200 hover:border-chip-400" title="The captures and the files that come out of them"
                                 @onclick="() => showCaptures = !showCaptures">@(showCaptures ? "Hide captures" : "Captures")</button>
-                        <button class="rounded border border-night-600 px-2 py-1 text-night-200 hover:border-chip-400" title="The 64 KB of the C64 to look through: bytes, screens, charsets, sprites, bitmaps"
+                        <button class="rounded border border-night-600 px-2 py-1 text-night-200 hover:border-chip-400" title="The 64 KB of the C65 to look through: bytes, screens, charsets, sprites, bitmaps"
                                 @onclick="OpenMemory">▦ Memory</button>
                     }
                     @if (Computer.Available && computerOn && !computerWindow)
                     {
-                        <button class="rounded border border-night-600 px-2 py-1 text-night-200 hover:border-chip-400" title="Move the C64 to a window of its own"
+                        <button class="rounded border border-night-600 px-2 py-1 text-night-200 hover:border-chip-400" title="Move the C65 to a window of its own"
                                 @onclick="OpenComputerWindow">⧉ Own window</button>
                     }
                 </div>
@@ -241,11 +241,11 @@ else
     string computerStatus = "";
     bool showAssistant = true;
     bool showComputer;
-    bool computerOn;                                // off until the first F5 or click: no WebAssembly until needed                              // the C64 tab is the active one
-    bool computerWindow;                            // the C64 is in a window of its own, not in the tab
-    bool showCaptures;                              // the panel of the screens taken from the C64
+    bool computerOn;                                // off until the first F5 or click: no WebAssembly until needed                              // the C65 tab is the active one
+    bool computerWindow;                            // the C65 is in a window of its own, not in the tab
+    bool showCaptures;                              // the panel of the screens taken from the C65
     CapturePanel? capturePanel;
-    bool showMemory;                                // the viewer of the C64's memory, over the C64
+    bool showMemory;                                // the viewer of the C65's memory, over the C65
     MemoryViewer? memoryViewer;
     DotNetObjectReference<ProjectPage>? self;
     bool editorReady;
@@ -495,7 +495,7 @@ else
         if (!computerWindow) Report("The browser did not open the window: allow pop-ups for the studio");
     }
 
-    // Off: the iframe goes away (no more cycles, no more sound), and so does the window of the C64 if it is open
+    // Off: the iframe goes away (no more cycles, no more sound), and so does the window of the C65 if it is open
     async Task TurnComputerOff()
     {
         if (computerWindow) await JS.InvokeVoidAsync("thing65Studio.closeComputerWindow");
@@ -507,7 +507,7 @@ else
 
     async Task FocusComputerWindow() => await JS.InvokeVoidAsync("thing65Studio.focusComputer");
 
-    // The window of the C64 was closed: the C64 comes back in its tab
+    // The window of the C65 was closed: the C65 comes back in its tab
     [JSInvokable]
     public void ComputerWindowClosed()
     {
@@ -566,14 +566,14 @@ else
         StateHasChanged();
     }
 
-    // The screen the C64 shows now goes into the captures: asked here, answered by ComputerCaptured
+    // The screen the C65 shows now goes into the captures: asked here, answered by ComputerCaptured
     async Task CaptureScreen()
     {
         showCaptures = true;
-        if (!await JS.InvokeAsync<bool>("thing65Studio.captureComputer")) computerStatus = "The C64 is not running yet: there is no screen to capture";
+        if (!await JS.InvokeAsync<bool>("thing65Studio.captureComputer")) computerStatus = "The C65 is not running yet: there is no screen to capture";
     }
 
-    // The viewer of the memory: opened with a snapshot of the running C64 if it has none yet
+    // The viewer of the memory: opened with a snapshot of the running C65 if it has none yet
     async Task OpenMemory()
     {
         showMemory = true;
@@ -583,14 +583,14 @@ else
     async Task SnapshotMemory()
     {
         showMemory = true;
-        if (!await JS.InvokeAsync<bool>("thing65Studio.memoryComputer")) computerStatus = "The C64 is not running yet: there is no memory to look at";
+        if (!await JS.InvokeAsync<bool>("thing65Studio.memoryComputer")) computerStatus = "The C65 is not running yet: there is no memory to look at";
     }
 
     [JSInvokable]
     public void ComputerMemory(byte[] bytes)
     {
         showMemory = true;
-        if (bytes.Length == 0) computerStatus = "The C64 has nothing to show yet";
+        if (bytes.Length == 0) computerStatus = "The C65 has nothing to show yet";
         else memoryViewer?.SetMemory(bytes);
         StateHasChanged();
     }
@@ -599,7 +599,7 @@ else
     public void ComputerCaptured(byte[] bytes)
     {
         showCaptures = true;
-        if (bytes.Length == 0) computerStatus = "The C64 has nothing to capture yet";
+        if (bytes.Length == 0) computerStatus = "The C65 has nothing to capture yet";
         else capturePanel?.Add(bytes);
         StateHasChanged();
     }
@@ -664,7 +664,7 @@ else
 
     async Task RunFile(string path)
     {
-        if (!Computer.Available) { Report("The web computer is not published: see the C64 tab"); return; }
+        if (!Computer.Available) { Report("The web computer is not published: see the C65 tab"); return; }
         computerStatus = $"Running {FileName(path)}";
         showComputer = true;
         computerOn = true;

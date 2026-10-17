@@ -10,7 +10,7 @@ namespace Thing65.WebStudio.CodeBehind;
 //   ;@ end
 // The characters are a part of the 256 of the charset: the ones from screen code "first" on; the others are the ROM's.
 // A character has no color: the screens that use it give it one per cell. With multicolor=1 the whole charset is
-// multicolor (what the C64 decides with bit 3 of each cell's color): the editors draw every character in pairs of
+// multicolor (what the C65 decides with bit 3 of each cell's color): the editors draw every character in pairs of
 // pixels and set that bit by themselves when the screen editor paints one. Without it, the editor shows each
 // character as the screens use it, with their background and multicolors, hires or multicolor cell by cell
 public sealed class CharsetRegion

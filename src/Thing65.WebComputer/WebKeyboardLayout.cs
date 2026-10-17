@@ -2,9 +2,9 @@ using Thing65.C65;
 
 namespace Thing65.WebComputer;
 
-// Mapping between browser keys (KeyboardEvent.code, the physical position) and C64 keys. Positional as in VICE and
-// as in the desktop app (PcKeyboardLayout): the symbols right of the PC's L give those right of the C64's L.
-// Some PC keys map to a C64 key pressed together with the left Shift
+// Mapping between browser keys (KeyboardEvent.code, the physical position) and C65 keys. Positional as in VICE and
+// as in the desktop app (PcKeyboardLayout): the symbols right of the PC's L give those right of the C65's L.
+// Some PC keys map to a C65 key pressed together with the left Shift
 public static class WebKeyboardLayout
 {
     readonly record struct Mapping(C65Key Key, bool Shift = false);
@@ -31,7 +31,7 @@ public static class WebKeyboardLayout
         map["AltLeft"] = new(C65Key.Commodore);
         map["Home"] = new(C65Key.Home);
 
-        // Cursor keys: the C64 has only CRSR right and CRSR down, left and up are obtained with Shift
+        // Cursor keys: the C65 has only CRSR right and CRSR down, left and up are obtained with Shift
         map["ArrowRight"] = new(C65Key.CursorRight);
         map["ArrowLeft"] = new(C65Key.CursorRight, Shift: true);
         map["ArrowDown"] = new(C65Key.CursorDown);
@@ -64,7 +64,7 @@ public static class WebKeyboardLayout
 
     public static bool IsMapped(string code) => Map.ContainsKey(code);
 
-    // C64 keys pressed for a given set of pressed browser keys
+    // C65 keys pressed for a given set of pressed browser keys
     public static IReadOnlyCollection<C65Key> ToC65Keys(IEnumerable<string> codes)
     {
         var keys = new HashSet<C65Key>();

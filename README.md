@@ -41,7 +41,7 @@ The C64 core (`Board`, `MOS6502`, `MOS6510`, `MOS6569`...) is still in the repos
 
 The C65 ROM is protected by copyright and is **not** in the repository. Cloanto's free *C64 Forever Free Express Edition*
 (personal use) includes it: install it, copy `c-65-19910828.rom` from `C:\Users\Public\Documents\CBM Files\Shared\rom` into
-`src/Thing65.Computer/roms`, and build. The tests that need it are *Inconclusive* without it. See
+`roms`, and build. The tests that need it are *Inconclusive* without it. See
 [docs/reference/mega65/mega65-rom-faq.txt](docs/reference/mega65/mega65-rom-faq.txt) (after downloading the reference
 documentation) for the MEGA65 project's explanation. The C64 ROMs in the same folder (`kernal`, `basic`, `chargen`) are those
 of the old board.
@@ -195,7 +195,7 @@ of the solution, so that the desktop app is there).
 
 A .NET tool cannot use Windows Forms, so the command line is `net10.0` and starts the desktop app
 (`Thing65.Computer.exe`, a C64 in a window), which travels inside the tool package in its `desktop` folder. The ROMs are in
-`src/Thing65.Computer/roms` (`kernal`, `basic`, `chargen`) and are copied next to the desktop app. They are the
+`roms` (`kernal`, `basic`, `chargen`) and are copied next to the desktop app. They are the
 original C64 ROMs, protected by copyright: the tool package contains them, so keep it for yourself.
 
 ### The C64 in the browser
@@ -312,7 +312,7 @@ web computer, in WebAssembly, in a tab next to the files (or in a window of its 
 
 ```powershell
 dotnet publish src/Thing65.WebComputer -c Release -o artifacts/web   # the C64, once (and after changing it)
-dotnet run --project src/Thing65.WebStudio                           # http://localhost:5180
+dotnet run --project src/Thing65.WebStudio                           # http://localhost:5065
 ```
 
 The studio serves the published web computer at `/computer/` (`Studio:ComputerFolder`): it must be the AOT build,

@@ -9,7 +9,7 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents()
 builder.Services.AddSingleton<ProjectStore>();
 builder.Services.AddSingleton<Thing65.WebStudio.Assistant.AssistantSettings>();
 
-// The C64: the published web computer (dotnet publish src/Thing65.WebComputer -c Release -o artifacts/web),
+// The C65: the published web computer (dotnet publish src/Thing65.WebComputer -c Release -o artifacts/web),
 // served at /computer/ from the same origin, so that the studio can send it programs (postMessage) and both share
 // the ROMs the browser keeps
 var computer = new WebComputerSite(Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath,
@@ -28,7 +28,7 @@ if (computer.Available)
         FileProvider = files,
         RequestPath = "/computer",
         ContentTypeProvider = types,
-        // computer.js and the boot manifest have no hash in their names: without this a browser keeps the C64 it
+        // computer.js and the boot manifest have no hash in their names: without this a browser keeps the C65 it
         // had, and a newly published one (a new message, a new capture) never reaches it. no-cache still allows a 304
         OnPrepareResponse = context => context.Context.Response.Headers.CacheControl = "no-cache",
     });

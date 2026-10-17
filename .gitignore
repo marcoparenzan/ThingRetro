@@ -370,7 +370,7 @@ samples/src/*.prg
 artifacts/
 
 # C65 system ROM (Cloanto, personal use licence): each user installs their own
-src/Thing65.Computer/roms/*.rom
+roms/*.rom
 
 # Reference documentation: downloaded by tools/Download-Reference.ps1, owned by its authors
 docs/reference/*

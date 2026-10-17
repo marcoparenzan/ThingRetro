@@ -20,10 +20,10 @@
   </ItemGroup>
 
   <!-- ROM files: read from the roms folder next to the executable. The C65 ROM (*.rom) is not in the repository:
-       whoever builds puts their own in src/Thing65.Computer/roms. The C64 ROMs (kernal, basic, chargen) are those of
+       whoever builds puts their own in roms. The C64 ROMs (kernal, basic, chargen) are those of
        the old C64 board, still used by its tests -->
   <ItemGroup>
-    <Content Include="roms\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../roms/*" Link="roms/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- The application icon, for the windows -->
