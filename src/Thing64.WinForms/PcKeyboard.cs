@@ -1,8 +1,8 @@
-using Thing64.C64;
+﻿using Thing64.C64;
 
 namespace Thing64.WinForms;
 
-// The keyboard cable: takes the keys pressed on a WinForms control (usually the C64Monitor) to the
+// The keyboard cable: takes the keys pressed on a WinForms control (usually the MonitorControl) to the
 // C64 keyboard. The keys arrive only while that control has the focus, so the C64 can live in a form
 // with other controls; when the focus is lost all keys are released
 public sealed class PcKeyboard : IDisposable

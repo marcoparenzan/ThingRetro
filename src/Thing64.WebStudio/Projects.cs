@@ -1,5 +1,5 @@
-﻿using ThingRetroEmu.Asm;
-using Thing64.Build;
+﻿using ThingMOS.Asm;
+using ThingCommodore.Build;
 
 namespace Thing64.WebStudio;
 
@@ -175,7 +175,7 @@ public sealed class Project(string name, string folder)
     {
         try
         {
-            var result = Thing64.Graphics.GraphicsBuilder.Build(FullPath(asset));
+            var result = ThingCommodore.Graphics.GraphicsBuilder.Build(FullPath(asset));
             messages.Add(new BuildMessage($"{asset}: {result.Conversion.Summary} -> {string.Join(", ", result.Files)}"));
             return true;
         }

@@ -14,10 +14,35 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
     <Using Include="Thing64.C64" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
+    <Using Include="ThingMOS" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
     <Using Include="ThingRetroEmu.Chips" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
     <Using Include="ThingRetroEmu.Buses" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
     <Using Include="ThingRetroEmu.Media" />
   </ItemGroup>
 
@@ -28,11 +53,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\ThingRetroEmu\src\ThingRetroEmu\ThingRetroEmu.csproj" />
+    <ProjectReference Include="..\..\..\ThingMOS\src\ThingMOS\ThingMOS.csproj" />
     <ProjectReference Include="..\Thing64.C64\Thing64.C64.csproj" />
-    <ProjectReference Include="..\Thing64.Crt\Thing64.Crt.csproj" />
-    <ProjectReference Include="..\Thing64.Prg\Thing64.Prg.csproj" />
-    <ProjectReference Include="..\Thing64.Basic\Thing64.Basic.csproj" />
-    <ProjectReference Include="..\Thing64.Build\Thing64.Build.csproj" />
+    <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore\ThingCommodore.csproj" />
+    <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore.Tools\ThingCommodore.Tools.csproj" />
     <ProjectReference Include="..\Thing64\Thing64.csproj" />
     <ProjectReference Include="..\Thing64.WinForms\Thing64.WinForms.csproj" />
   </ItemGroup>

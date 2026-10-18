@@ -13,11 +13,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Thing64.C64\Thing64.C64.csproj" />
-    <ProjectReference Include="..\Thing64.Crt\Thing64.Crt.csproj" />
-    <ProjectReference Include="..\Thing64.Prg\Thing64.Prg.csproj" />
+    <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore\ThingCommodore.csproj" />
     <ProjectReference Include="..\Thing64.WinForms\Thing64.WinForms.csproj" />
     <!-- The 1541 drive of the sibling project ThingCommodore -->
-    <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore\ThingCommodore.csproj" />
   </ItemGroup>
 
   <!-- C64 ROMs (KERNAL, BASIC, characters): read from the roms folder next to the executable -->
@@ -28,6 +26,13 @@
   <!-- The application icon, for the windows -->
   <ItemGroup>
     <EmbeddedResource Include="..\..\images\thing64.ico" LogicalName="thing64.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
   </ItemGroup>
 
 </Project>

@@ -1,9 +1,9 @@
-using Thing64.Graphics;
+﻿using ThingCommodore.Graphics;
 using static Thing64.Tests.TestHelpers;
 
 namespace Thing64.Tests;
 
-// Thing64.Graphics: the memory of the C64 as pictures (a screen, a charset, sprites, a bitmap), to find them in a dump
+// ThingCommodore.Graphics: the memory of the C64 as pictures (a screen, a charset, sprites, a bitmap), to find them in a dump
 [TestClass]
 public sealed class MemoryViewTests
 {

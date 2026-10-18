@@ -16,6 +16,8 @@
 	<!-- The C64 motherboard: mounts the chips (ThingRetroEmu) in its sockets -->
 	<ItemGroup>
 		<ProjectReference Include="..\..\..\ThingRetroEmu\src\ThingRetroEmu\ThingRetroEmu.csproj" />
+		<ProjectReference Include="..\..\..\ThingMOS\src\ThingMOS\ThingMOS.csproj" />
+		<ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore\ThingCommodore.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -27,5 +29,14 @@
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	</ItemGroup>
+
+  <ItemGroup>
+    <Using Include="ThingCommodore.Cartridges" />
+    <Using Include="ThingCommodore.Software" />
+    <Using Include="ThingRetroEmu.Sockets" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+  </ItemGroup>
 
 </Project>

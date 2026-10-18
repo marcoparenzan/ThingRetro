@@ -1,8 +1,8 @@
 ﻿using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using ThingRetroEmu.Asm;
-using Thing64.Build;
+using ThingMOS.Asm;
+using ThingCommodore.Build;
 
 namespace Thing64.WebStudio.CodeBehind;
 

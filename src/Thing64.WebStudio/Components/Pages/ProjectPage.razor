@@ -5,7 +5,7 @@
 @inject ProjectStore Store
 @inject WebComputerSite Computer
 @inject IJSRuntime JS
-@using Thing64.Graphics
+@using ThingCommodore.Graphics
 
 @* A project: files on the left; tabs with the C64 and the open files (Monaco), the build log below them. F7 builds,
    F5 builds, runs and shows the C64, Ctrl+S saves. Files and builds live on the server, the editor in the browser
@@ -277,9 +277,9 @@ else
             self = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("thing64Studio.init", "editor", self, new
             {
-                mnemonics = ThingRetroEmu.Asm.Assembler.Mnemonics,
-                directives = ThingRetroEmu.Asm.Assembler.Directives,
-                descriptions = ThingRetroEmu.Asm.InstructionSet.Descriptions,
+                mnemonics = ThingMOS.Asm.Assembler.Mnemonics,
+                directives = ThingMOS.Asm.Assembler.Directives,
+                descriptions = ThingMOS.Asm.InstructionSet.Descriptions,
             });
             editorReady = true;
             // The main source opens by itself

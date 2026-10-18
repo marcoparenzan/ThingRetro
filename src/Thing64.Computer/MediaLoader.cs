@@ -1,10 +1,10 @@
-﻿using Thing64.Crt;
-using Thing64.Prg;
+﻿using ThingCommodore.Cartridges;
+using ThingCommodore.Software;
 using Thing64.C64;
 
 namespace Thing64.Computer;
 
-// Opening the files the app supports: .prg (Thing64.Prg) and .crt (Thing64.Crt). The board (Thing64.C64)
+// Opening the files the app supports: .prg (ThingCommodore.Software) and .crt (ThingCommodore.Cartridges). The board (Thing64.C64)
 // knows neither format: the file is read here and the result is handed to the Board
 public static class MediaLoader
 {
@@ -36,7 +36,7 @@ public static class MediaLoader
 
         // Loading writes RAM: it must happen on the emulation thread. The file is checked first,
         // so that errors reach whoever opened it
-        var (start, end) = PrgFile.GetRange(content);
+        var (start, end) = PrgLoader.GetRange(content);
 
         // Reading the two bytes of the BASIC start pointer from this thread is harmless: BASIC does not change it
         bool basic = board.IsBasicProgram(start);
@@ -55,7 +55,7 @@ public static class MediaLoader
         if (IsCartridge(path)) return Open(board, path);
 
         var content = File.ReadAllBytes(path);
-        var (start, end) = PrgFile.GetRange(content);
+        var (start, end) = PrgLoader.GetRange(content);
         board.Enqueue(() =>
         {
             board.RemoveCartridge();

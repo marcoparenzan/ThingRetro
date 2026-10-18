@@ -53,13 +53,13 @@ Not yet: the 1541 drive and disk/tape images (`.d64`, `.t64`). See [Known limits
 | --- | --- |
 | `src/Thing64.Mos` | The MOS chips as standalone components: `MOS6502` (CPU core), `MOS6510` (CPU with I/O port), `MOS6526` (CIA), `MOS6569` (PAL VIC-II), `MOS6581` (SID). Each chip implements its own **pinout** (`I6510Pinout`, `I6526Pinout`, `I6569Pinout`, `I6581Pinout`) and does not know which computer it is mounted in |
 | `src/Thing64.C64` | The **motherboard**: sockets, PLA, RAM, color RAM, ROMs, keyboard matrix, expansion port, control ports, video and audio outputs |
-| `src/Thing64.Prg` | Loading `.prg` files and writing into the KERNAL keyboard buffer |
-| `src/Thing64.Crt` | The `.crt` format and the cartridge types |
+| ThingCommodore `Software` (a library, next to this repository) | Loading `.prg` files and writing into the KERNAL keyboard buffer |
+| ThingCommodore `Cartridges` | The `.crt` format and the cartridge types |
 | `src/Thing64.Asm` | 6502/6510 assembler, ACME-compatible: labels, macros, loops, includes, expressions, errors with their file and line |
-| `src/Thing64.Basic` | BASIC V2 tokenizer: a program in text becomes the `.prg` the C64 would have in memory |
-| `src/Thing64.Graphics` | Pictures for the C64: PNG, the palette, the conversion of an image to bitmaps, character sets, tiles and sprites |
-| `src/Thing64.Build` | From sources to C64 files: `.asm` and `.bas` to `.prg`, build manifests (`thing64.json`) with programs and cartridges |
-| `src/Thing64.WinForms` | `C64Monitor` (the screen, a UserControl), `PcKeyboard` (the keyboard cable), `PcSpeakers` (the speakers), joystick and paddle simulators |
+| ThingCommodore.Tools `Basic` | BASIC V2 tokenizer: a program in text becomes the `.prg` the C64 would have in memory |
+| ThingCommodore.Tools `Graphics` | Pictures for the C64: PNG, the palette, the conversion of an image to bitmaps, character sets, tiles and sprites |
+| ThingCommodore.Tools `Build` | From sources to C64 files: `.asm` and `.bas` to `.prg`, build manifests (`thing64.json`) with programs and cartridges |
+| `src/Thing64.WinForms` | `MonitorControl` (ThingRetroEmu.WinForms) (the screen, a UserControl), `PcKeyboard` (the keyboard cable), `PcSpeakers` (the speakers), joystick and paddle simulators |
 | `src/Thing64.Computer` | The desktop app: one C64 in a window (`ComputerForm`), loading of `.prg`/`.crt`, the ROMs, the settings |
 | `src/Thing64` | The `thing64` command line (Spectre.Console), a .NET global tool: `run`, `asm`, `basic`, `build` |
 | `src/Thing64.WebComputer` | The C64 in the browser: the same board compiled to WebAssembly (Blazor, AOT), on a canvas |
@@ -80,7 +80,7 @@ board.SidSocket.Remove();                          // take the 6581 out...
 board.SidSocket.Insert(new MySid());               // ...and put in anything with the I6581Pinout pinout
 board.Reset();
 
-var monitor = new C64Monitor { Dock = DockStyle.Fill };
+var monitor = new MonitorControl { Dock = DockStyle.Fill };
 form.Controls.Add(monitor);
 var video = new MonitorCable(board.VideoOut, monitor);        // the monitor cable
 var keys  = new PcKeyboard(monitor, board.Keyboard);          // the keyboard cable
@@ -315,13 +315,13 @@ The keys used by the joystick do not reach the C64 keyboard. A source can be in 
 
 ### Using the C64 in another application
 
-`C64Monitor` is a normal UserControl: it can go into any form, together with other controls. The monitor keeps
+`MonitorControl` (ThingRetroEmu.WinForms) is a normal UserControl: it can go into any form, together with other controls. The monitor keeps
 its proportions (`KeepAspectRatio`), receives the keyboard only when it has the focus and offers `CaptureFrame()`
 for a copy of the last frame. To load files from code:
 
 ```csharp
-using Thing64.Crt;
-using Thing64.Prg;
+using ThingCommodore.Cartridges;
+using ThingCommodore.Software;
 
 board.Enqueue(() => board.LoadPrg(File.ReadAllBytes("game.prg")));   // on the emulation thread
 board.Enqueue(() => board.TypeText("RUN\r"));

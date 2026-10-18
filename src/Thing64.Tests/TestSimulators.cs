@@ -61,7 +61,7 @@ public sealed class SimulatorTests
     {
         var board = NewBoard();
         using var source = new InputSource();
-        using var selector = new ControlPortSelector(board, source);
+        using var selector = new ControlPortSelector(board.ControlPort1, board.ControlPort2, source);
         using var keyboard = new PcKeyboard(source, board.Keyboard) { Excluded = selector.UsesKey };
         selector.Select(2, new(ControlPortSource.ArrowsJoystick));
 
@@ -150,7 +150,7 @@ public sealed class SimulatorTests
     {
         var board = NewBoard();
         using var source = new InputSource();
-        using var selector = new ControlPortSelector(board, source);
+        using var selector = new ControlPortSelector(board.ControlPort1, board.ControlPort2, source);
 
         selector.Select(2, new(ControlPortSource.KeypadJoystick));
         selector.Select(1, new(ControlPortSource.MousePaddles));
@@ -169,7 +169,7 @@ public sealed class SimulatorTests
     {
         var board = NewBoard();
         using var source = new InputSource();
-        using var selector = new ControlPortSelector(board, source);
+        using var selector = new ControlPortSelector(board.ControlPort1, board.ControlPort2, source);
         int changes = 0;
         selector.Changed += () => changes++;
 
@@ -187,7 +187,7 @@ public sealed class SimulatorTests
     {
         var board = NewBoard();
         using var source = new InputSource();
-        using var selector = new ControlPortSelector(board, source);
+        using var selector = new ControlPortSelector(board.ControlPort1, board.ControlPort2, source);
         selector.Select(1, new(ControlPortSource.MousePaddles));
         selector.Select(2, new(ControlPortSource.ArrowsJoystick));
 
@@ -204,7 +204,7 @@ public sealed class SimulatorTests
     {
         var board = NewBoard();
         using var source = new InputSource();
-        using var selector = new ControlPortSelector(board, source);
+        using var selector = new ControlPortSelector(board.ControlPort1, board.ControlPort2, source);
         selector.Select(2, new(ControlPortSource.KeypadJoystick));
         using var menu = new ContextMenuStrip();
 

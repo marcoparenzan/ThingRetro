@@ -1,5 +1,5 @@
-using System.Text;
-using Thing64.Prg;
+﻿using System.Text;
+using ThingCommodore.Software;
 
 namespace Thing64.Tests;
 

@@ -139,6 +139,13 @@ function showSpeed(speed) {
     console.log(`thing64 speed ${average.toFixed(2)}`);
 }
 
+// The picture changed size: the canvas and the image that holds a frame follow
+export function setFrameSize(width, height) {
+    canvas.width = width;
+    canvas.height = height;
+    image = context.createImageData(width, height);
+}
+
 // A VIC-II frame (32-bit BGRA, from the WebAssembly memory) to the canvas (RGBA)
 export function present(view) {
     const data = image.data;

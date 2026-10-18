@@ -1,6 +1,6 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Text;
-using Thing64.Crt;
+using ThingCommodore.Cartridges;
 using static Thing64.Tests.TestHelpers;
 
 namespace Thing64.Tests;

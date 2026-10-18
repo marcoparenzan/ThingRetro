@@ -1,4 +1,4 @@
-﻿using ThingRetroEmu.Asm;
+﻿using ThingMOS.Asm;
 
 namespace Thing64.Tests;
 

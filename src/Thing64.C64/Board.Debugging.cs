@@ -1,4 +1,5 @@
-﻿using ThingRetroEmu.Chips;
+﻿using ThingMOS;
+using ThingRetroEmu.Chips;
 using ThingRetroEmu.Buses;
 using System.Globalization;
 using System.Text;

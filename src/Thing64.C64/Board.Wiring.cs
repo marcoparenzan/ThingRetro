@@ -1,4 +1,5 @@
-﻿using ThingRetroEmu.Chips;
+﻿using ThingMOS;
+using ThingRetroEmu.Chips;
 using ThingRetroEmu.Buses;
 
 namespace Thing64.C64;

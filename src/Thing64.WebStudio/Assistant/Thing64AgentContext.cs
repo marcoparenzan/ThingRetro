@@ -2,7 +2,7 @@
 using System.Text;
 using Microsoft.Extensions.AI;
 using RalfAI.Contexts;
-using ThingRetroEmu.Asm;
+using ThingMOS.Asm;
 
 namespace Thing64.WebStudio.Assistant;
 
@@ -32,7 +32,7 @@ public sealed class Thing64AgentContext(Project project, IStudioHost host, IChat
           screen at $0400 by default. KERNAL: CHROUT $FFD2, GETIN $FFE4, PLOT $FFF0; IRQ vector $0314.
         - A program that starts with RUN begins at $0801 with a BASIC line "10 SYS 2061" (or similar) before the code.
 
-        ## The assembler (ThingRetroEmu.Asm, compatible with ACME 0.97)
+        ## The assembler (ThingMOS.Asm, compatible with ACME 0.97)
         - Pseudo-ops with '!' (ACME: !byte !word !text !fill !source !binary !for !if !macro, +macro calls) or with '.'
           (.byte .word .text .fill ...). Labels with or without ':'; local labels .name, cheap @name, anonymous - and +.
         - "* = $0801" sets the address; "NAME = value" defines a constant; ';' starts a comment.

@@ -10,10 +10,10 @@ would know.
 flowchart LR
     Mos[Thing64.Mos<br/>MOS chips]
     C64[Thing64.C64<br/>motherboard]
-    Prg[Thing64.Prg<br/>.prg files]
-    Crt[Thing64.Crt<br/>.crt files]
+    Prg[ThingCommodore.Software<br/>.prg files]
+    Crt[ThingCommodore.Cartridges<br/>.crt files]
     Asm[Thing64.Asm<br/>assembler]
-    Basic[Thing64.Basic<br/>BASIC tokenizer]
+    Basic[ThingCommodore.Basic<br/>BASIC tokenizer]
     WinForms[Thing64.WinForms<br/>monitor, keyboard, speakers]
     Computer[Thing64.Computer<br/>C64 window]
     Cli[Thing64<br/>command line]
@@ -24,7 +24,7 @@ flowchart LR
     Computer --> Prg
     Computer --> Crt
     Computer --> WinForms
-    Build[Thing64.Build<br/>builds, manifests]
+    Build[ThingCommodore.Build<br/>builds, manifests]
     Build --> Asm
     Build --> Basic
     Build --> Crt
@@ -41,7 +41,7 @@ flowchart LR
 - **`Thing64.Mos`** depends on nothing: a `MOS6526` could sit in a 1571 drive, a `MOS6502` in any computer.
   The chips are used only through their pinout.
 - **`Thing64.C64`** knows no file formats, WinForms or `System.Drawing`. It receives the ROMs as bytes
-  (`SystemRoms`), hands the frames to an `IScreen` and the audio samples to an `ISpeaker`.
+  (`SystemRoms`), hands the frames to an `IMonitor` and the audio samples to an `ISpeaker`.
 - **`Thing64.Asm`** depends on nothing either: it turns source text into bytes.
 
 ## Chips and pinouts
@@ -184,7 +184,7 @@ the machine with `Board.Enqueue`, which runs the action between two cycles. `Boa
   (the byte at `$3FFF` of the bank, `$39FF` in extended color), visible only with open borders.
 - **Video output**: at the end of a frame the VIC-II calls `FrameCompleted`; the board passes the picture to
   `VideoPort`, which copies it into the monitor connected with the `MonitorCable`
-  (`IScreen.BeginRender`/`EndRender`, 32-bit BGRA).
+  (`IMonitor.BeginFrame`/`EndFrame`, 32-bit BGRA).
 
 ## The SID
 
@@ -206,19 +206,19 @@ the machine with `Board.Enqueue`, which runs the action between two cycles. `Boa
 
 ## Outside the board
 
-- **`Thing64.Prg`**: `LoadPrg` writes the program straight into RAM (under the ROMs too, through `Board.Ram`) and,
+- **`ThingCommodore.Software`**: `LoadPrg` writes the program straight into RAM (under the ROMs too, through `Board.Ram`) and,
   if the address is the start of BASIC, updates the pointers like `LOAD`; `TypeText` uses the KERNAL keyboard
   buffer.
-- **`Thing64.Crt`**: `CrtFile` reads the header and the `CHIP` packets and creates the right cartridge type
+- **`ThingCommodore.Cartridges`**: `CrtFile` reads the header and the `CHIP` packets and creates the right cartridge type
   (`BankedCartridge` and derived classes). The board knows only the abstract `Cartridge` class: GAME/EXROM lines,
   ROML, ROMH, I/O 1, I/O 2.
 - **`Thing64.Asm`**: `Assembler` is a multi-pass 6502 assembler (labels, constants, expressions with precedence,
   automatic zero page, directives `.byte .word .text .screen .fill .basic`). Errors are `AssemblerException`s with
   the line and the reason, so that the editor can mark them. `Assembler.Mnemonics`, `Assembler.Directives` and
   `InstructionSet.Descriptions` feed the editor's syntax highlighting and hover help.
-- **`Thing64.Basic`**: `BasicTokenizer` turns BASIC V2 text into the C64 in-memory format with the KERNAL rules.
-- **`Thing64.Crt`** also writes `.crt` files (`CrtWriter`), used to build cartridges from assembled banks.
-- **`Thing64.WinForms`**: `C64Monitor` implements `IScreen` with a fixed-size bitmap guarded by a lock (written by
+- **`ThingCommodore.Basic`**: `BasicTokenizer` turns BASIC V2 text into the C64 in-memory format with the KERNAL rules.
+- **`ThingCommodore.Cartridges`** also writes `.crt` files (`CrtWriter`), used to build cartridges from assembled banks.
+- **`Thing64.WinForms`**: `MonitorControl` (ThingRetroEmu.WinForms) implements `IMonitor` with a fixed-size bitmap guarded by a lock (written by
   the emulation thread, painted by the UI thread); `PcKeyboard` translates the PC keys with `PcKeyboardLayout` and
   passes them to `Keyboard.SetPressedKeys`, holding very short taps for at least 40 ms so that the KERNAL sees
   them. `PcSpeakers` implements `ISpeaker` with `waveOut` (`winmm`): it starts when the queue holds ~50 ms of
@@ -248,7 +248,7 @@ A Blazor WebAssembly app with the same `Board`, chips, `.prg` and `.crt` code as
   (`startClock: false`) and `wwwroot/js/computer.js` calls `WebComputer.Frame(elapsed)` at every animation frame;
   the board runs the matching cycles with `Board.RunCycles` (at most 100 ms worth, so that a background tab does
   not freeze the page when it comes back).
-- **Screen**: an `IScreen` whose buffer is unmanaged memory; at the end of each VIC-II frame `present()` receives
+- **Screen**: an `IMonitor` whose buffer is unmanaged memory; at the end of each VIC-II frame `present()` receives
   it as a `MemoryView` (no copy across the boundary), copies it into the canvas `ImageData` and swaps the BGRA bytes
   to RGBA.
 - **Keyboard**: `KeyboardEvent.code` (the physical key) mapped by `WebKeyboardLayout`, positional as in the desktop.
@@ -331,7 +331,7 @@ A Blazor Server app: the server owns the files and the builds, the browser shows
   or opened in a window of its own (then the iframe is removed): the page sends the built program with
   `postMessage` to whichever is open, once it has said `ready`. Same origin also means the same `localStorage`, so the
   ROMs are chosen once.
-- **Captures** (`CapturePanel.razor`, `Thing64.Graphics/VideoCapture.cs` and `CapturedCharset.cs`): the capture button
+- **Captures** (`CapturePanel.razor`, `ThingCommodore.Graphics/VideoCapture.cs` and `CapturedCharset.cs`): the capture button
   asks the C64 for its video memory; `VideoCapture` reads where the screen and the characters are (`$D018`, the
   multicolor and bitmap bits of `$D016`/`$D011`) and renders the picture. `CapturedCharset` is the charset the captures
   share: `Add` gives each distinct character (by its 8 bytes; at the code it had when the charset has the same one
@@ -339,7 +339,7 @@ A Blazor Server app: the server owns the files and the builds, the browser shows
   and remembers how each screen uses the characters to decide `multicolor=1`; `CharsetText` and `ScreenText` write
   the files, which stay in the panel's memory. The files are plain assembler with the `;@` regions the editors read:
   tests assemble them.
-- **Memory viewer** (`MemoryViewer.razor`, `Thing64.Graphics/MemoryCapture.cs` and `MemoryRender.cs`): the page asks the
+- **Memory viewer** (`MemoryViewer.razor`, `ThingCommodore.Graphics/MemoryCapture.cs` and `MemoryRender.cs`): the page asks the
   C64 for its memory (`Board.CaptureMemory`: the 64 KB of RAM, Color RAM, the VIC-II registers, the character ROM, the
   VIC-II bank and the CPU port; 70,722 bytes) and keeps it. `MemoryCapture` knows what the VIC-II is set to show
   (screen, charset, bitmap, colors); `MemoryRender` turns bytes into pictures (a screen of characters through any
@@ -350,7 +350,7 @@ A Blazor Server app: the server owns the files and the builds, the browser shows
   (`#05083a`) and chip (`#7c8af7`). Files from the rest of the repository (logo, icons, `asm6502.js`) are embedded
   in the assembly and served by `Program.cs`.
 
-## Graphics (`Thing64.Graphics`)
+## Graphics (`ThingCommodore.Graphics`)
 
 From a picture to the data the VIC-II reads, with no external libraries.
 
@@ -371,7 +371,7 @@ From a picture to the data the VIC-II reads, with no external libraries.
 
 `thing64` is built with Spectre.Console and packaged as a .NET global tool (`tools/Install-Tool.ps1`).
 
-- **`asm`, `basic`, `build`** run in the command line itself, with `Thing64.Build`: `ProgramBuilder` turns a `.asm` or `.bas` into a
+- **`asm`, `basic`, `build`** run in the command line itself, with `ThingCommodore.Build`: `ProgramBuilder` turns a `.asm` or `.bas` into a
   `.prg`; `BuildManifest` reads a JSON manifest that lists the outputs (programs, and cartridges made of assembled
   banks) with paths relative to it. `samples/samples.json` is the manifest of the samples, and the tests check that
   the files in `samples/` are the ones it builds.

@@ -3,10 +3,11 @@ using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.JavaScript;
 using System.Runtime.Versioning;
 using Thing64.C64;
-using Thing64.Crt;
+using ThingCommodore.Cartridges;
+using ThingMOS;
 using ThingRetroEmu.Chips;
 using ThingRetroEmu.Buses;
-using Thing64.Prg;
+using ThingCommodore.Software;
 
 namespace Thing64.WebComputer;
 
@@ -29,6 +30,9 @@ public static partial class WebComputer
     // A program waits for the KERNAL to reach READY. before it is loaded (the boot runs in real time, a frame at a time)
     static byte[]? pendingProgram;
     static long cycles, loadAtCycle;
+
+    [JSImport("setFrameSize", "computer")]
+    internal static partial void SetFrameSize(int width, int height);
 
     [JSImport("present", "computer")]
     internal static partial void Present([JSMarshalAs<JSType.MemoryView>] Span<byte> pixels);
@@ -268,7 +272,7 @@ public static partial class WebComputer
                 board.InsertCartridge(cartridge);
                 return $"{(string.IsNullOrEmpty(cartridge.Name) ? name : cartridge.Name)} ({cartridge.TypeName})";
             }
-            var (start, end) = PrgFile.GetRange(content);
+            var (start, end) = PrgLoader.GetRange(content);
             board.RemoveCartridge();
             board.Reset();
             pendingProgram = content;
@@ -281,14 +285,27 @@ public static partial class WebComputer
         }
     }
 
-    // The monitor: the VIC-II renders into an unmanaged buffer (32-bit BGRA), which the page copies to the canvas
-    sealed unsafe class CanvasScreen : IScreen
+    // The monitor: the video chip renders into an unmanaged buffer (32-bit BGRA), which the page copies to the canvas. When the chip changes the
+    // size of the picture the buffer is made again and the canvas follows
+    sealed unsafe class CanvasScreen : IMonitor
     {
-        const int Size = MOS6569.SCREEN_WIDTH * MOS6569.SCREEN_HEIGHT * 4;
-        readonly byte* pixels = (byte*)NativeMemory.AllocZeroed(Size);
+        byte* pixels;
+        int size, width, height;
 
-        public byte* BeginRender() => pixels;
+        public byte* BeginFrame(VideoMode mode)
+        {
+            if (pixels is null || mode.Width != width || mode.Height != height)
+            {
+                if (pixels is not null) NativeMemory.Free(pixels);
+                width = mode.Width;
+                height = mode.Height;
+                size = mode.ByteCount;
+                pixels = (byte*)NativeMemory.AllocZeroed((nuint)size);
+                SetFrameSize(width, height);
+            }
+            return pixels;
+        }
 
-        public void EndRender() => Present(new Span<byte>(pixels, Size));
+        public void EndFrame() => Present(new Span<byte>(pixels, size));
     }
 }

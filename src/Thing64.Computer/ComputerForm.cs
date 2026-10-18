@@ -3,14 +3,14 @@ using Thing64.C64;
 
 namespace Thing64.Computer;
 
-// A C64: a window hosting a C64Monitor and wiring the pieces together. It works on its own or inside another
+// A C64: a window hosting a MonitorControl and wiring the pieces together. It works on its own or inside another
 // form (MDI child). The same wiring (Board, monitor, MonitorCable, PcKeyboard, PcSpeakers with AudioCable,
 // ControlPortSelector) works in any form, next to other controls too.
 // Right click on the monitor: control ports, port swap, audio, reset
 public class ComputerForm : Form
 {
     readonly Board board;
-    readonly C64Monitor monitor = new() { Dock = DockStyle.Fill };
+    readonly MonitorControl monitor = new() { Dock = DockStyle.Fill };
     readonly MonitorCable monitorCable;
     readonly PcKeyboard keyboardCable;
     readonly PcSpeakers? speakers;
@@ -43,7 +43,7 @@ public class ComputerForm : Form
 
         // Control ports: joystick from the keyboard or USB, paddles from the mouse; the joystick keys
         // do not reach the C64 keyboard
-        controlPorts = new ControlPortSelector(board, monitor);
+        controlPorts = new ControlPortSelector(board.ControlPort1, board.ControlPort2, monitor);
         controlPorts.Select(1, settings.Port1);
         controlPorts.Select(2, settings.Port2);
         controlPorts.Changed += SaveControlPorts;

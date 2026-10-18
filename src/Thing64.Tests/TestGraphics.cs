@@ -1,9 +1,9 @@
-﻿using ThingRetroEmu.Asm;
-using Thing64.Graphics;
+﻿using ThingMOS.Asm;
+using ThingCommodore.Graphics;
 
 namespace Thing64.Tests;
 
-// Thing64.Graphics: PNG, the conversion of images to the C64's modes with their color limits, and the files a
+// ThingCommodore.Graphics: PNG, the conversion of images to the C64's modes with their color limits, and the files a
 // graphics asset produces
 [TestClass]
 public sealed class GraphicsTests

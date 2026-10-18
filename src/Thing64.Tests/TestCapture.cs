@@ -1,10 +1,10 @@
-﻿using ThingRetroEmu.Asm;
-using Thing64.Graphics;
+﻿using ThingMOS.Asm;
+using ThingCommodore.Graphics;
 using static Thing64.Tests.TestHelpers;
 
 namespace Thing64.Tests;
 
-// Thing64.Graphics: a text screen taken from the C64's video memory, turned into the files of a Thing64 project, with
+// ThingCommodore.Graphics: a text screen taken from the C64's video memory, turned into the files of a Thing64 project, with
 // the characters shared between successive captures
 [TestClass]
 public sealed class CaptureTests

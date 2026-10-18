@@ -7,7 +7,7 @@ when something does not reach the browser.
 ## What it is
 
 A Blazor WebAssembly project (`net10.0`) with the same board and chips as the desktop app (`Thing64.C64`,
-`Thing64.Crt`, `Thing64.Prg`). The browser has no thread for the emulation: at every animation frame
+`ThingCommodore.Cartridges`, `ThingCommodore.Software`). The browser has no thread for the emulation: at every animation frame
 `wwwroot/js/computer.js` calls `WebComputer.Frame` with the elapsed time, the board runs the matching cycles and the
 frame is painted on a canvas; sound goes through an AudioWorklet.
 

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+﻿<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
 
   <!-- The C64 in the browser: the same board and chips, compiled to WebAssembly. The page drives the board one
        frame at a time (requestAnimationFrame) and paints the frames on a canvas -->
@@ -22,10 +22,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Thing64.C64\Thing64.C64.csproj" />
-    <ProjectReference Include="..\Thing64.Crt\Thing64.Crt.csproj" />
-    <ProjectReference Include="..\Thing64.Prg\Thing64.Prg.csproj" />
-    <!-- The 1541 disk drive, the same one as the desktop app: its own repository, next to this one (Thing65.Mos has its 6502) -->
     <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore\ThingCommodore.csproj" />
+    <!-- The 1541 disk drive, the same one as the desktop app: its own repository, next to this one (Thing65.Mos has its 6502) -->
   </ItemGroup>
 
   <!-- Logo and icons from images/ of the repository, served from img/ -->
@@ -38,6 +36,12 @@
        Only Debug builds embed them, for local development -->
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">
     <EmbeddedResource Include="../../roms/*" LogicalName="roms/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
   </ItemGroup>
 
 </Project>

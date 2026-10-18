@@ -1,7 +1,7 @@
-using Thing64.Crt;
-using Thing64.Prg;
-using Thing64.Basic;
-using Thing64.Build;
+﻿using ThingCommodore.Cartridges;
+using ThingCommodore.Software;
+using ThingCommodore.Basic;
+using ThingCommodore.Build;
 using Thing64.Cli;
 using static Thing64.Tests.TestHelpers;
 
