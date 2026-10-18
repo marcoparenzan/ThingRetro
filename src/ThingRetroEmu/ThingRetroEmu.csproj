@@ -9,7 +9,7 @@
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <!-- Code run at every cycle (a million times per second): optimized in Debug too, otherwise it cannot keep up -->
     <Optimize>true</Optimize>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <PackageId>ThingRetroEmu</PackageId>
     <Description>Chips, sockets, buses, cables, media and assembler of the Thing64, Thing65 and Thing1500 emulators</Description>
   </PropertyGroup>

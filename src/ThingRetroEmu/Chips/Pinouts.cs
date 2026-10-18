@@ -225,3 +225,31 @@ public interface IVia6522Pinout
     void Reset();                        // /RES
     void Tick();                         // φ2
 }
+
+// A floppy drive as the controller sees it, through the connector of the drive: the step and direction lines, the sensors and the
+// heads over a disk. The controller does not know whether the disk is 3.5" or 5.25"
+public interface IFloppyDrive
+{
+    bool Ready { get; }                  // /READY: a disk is in and spinning
+    bool Track0 { get; }                 // /TR00: the head is on the outermost track
+    bool WriteProtected { get; }         // /WPRT
+    bool Index { get; }                  // /IP: the index hole passes under the sensor
+    int Cylinder { get; }                // where the head is
+    int Side { get; }                    // the head that is selected (0 or 1)
+    IDiskMedia? Media { get; }
+    void Step(bool towardsCentre);       // STEP with DIRC
+}
+
+// Western Digital WD1770, DIP-28: the floppy disk controller of the 1570, 1571 and 1581. Four registers (command and status, track,
+// sector, data), the interrupt request and the data request, and the drive connector. Sector level: the commands find a sector and
+// move its bytes one by one at the speed of the disk, without the MFM bits
+public interface IWd1770Pinout
+{
+    byte Read(int register);             // A0-A1, D0-D7, R/W = 1, /CS
+    void Write(int register, byte value);
+    bool Intrq { get; }                  // INTRQ: the command ended
+    bool Drq { get; }                    // DRQ: a byte waits in the data register, or is wanted
+    IFloppyDrive? Drive { get; set; }    // STEP, DIRC, /TR00, /IP, /WPRT, READY
+    void Reset();                        // /MR
+    void Tick();                         // one cycle of the clock of the chip's users (the cycle count of the timings is in these)
+}

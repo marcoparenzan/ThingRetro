@@ -2,6 +2,11 @@ namespace ThingRetroEmu.Chips;
 
 public partial class MOS6526 : I6526Pinout
 {
+    // The 8520 (Amiga, 1581) has an event counter in place of the time of day: 24 bits in binary, clocked from its TOD pin
+    // (not at all in the 1581). Its subclass says so
+    protected virtual bool BinaryTod => false;
+    protected virtual bool TodClocked => true;
+
     // PA0-PA7 and PB0-PB7: registers 0/1 (data) and 2/3 (direction)
     public ParallelPort PortA { get; } = new();
     public ParallelPort PortB { get; } = new();
@@ -72,7 +77,7 @@ public partial class MOS6526 : I6526Pinout
 
         // Reset status flags
         timerARunning = timerBRunning = false;
-        todRunning = true; // TOD clock starts running
+        todRunning = TodClocked; // TOD clock starts running
         serialRunning = false;
 
         // Reset cycle-exact tracking
@@ -166,21 +171,21 @@ public partial class MOS6526 : I6526Pinout
                 break;
             case 0x08: // TOD 10ths or Alarm 10ths
                 if ((controlRegB & 0x80) != 0)
-                    todAlarm10thsec = (byte)(value & 0x0F);
+                    todAlarm10thsec = (byte)(value & (BinaryTod ? 0xFF : 0x0F));
                 else
-                    tod10thsec = (byte)(value & 0x0F);
+                    tod10thsec = (byte)(value & (BinaryTod ? 0xFF : 0x0F));
                 break;
             case 0x09: // TOD seconds or Alarm seconds
                 if ((controlRegB & 0x80) != 0)
-                    todAlarmSec = (byte)(value & 0x7F);
+                    todAlarmSec = (byte)(value & (BinaryTod ? 0xFF : 0x7F));
                 else
-                    todSec = (byte)(value & 0x7F);
+                    todSec = (byte)(value & (BinaryTod ? 0xFF : 0x7F));
                 break;
             case 0x0A: // TOD minutes or Alarm minutes
                 if ((controlRegB & 0x80) != 0)
-                    todAlarmMin = (byte)(value & 0x7F);
+                    todAlarmMin = (byte)(value & (BinaryTod ? 0xFF : 0x7F));
                 else
-                    todMin = (byte)(value & 0x7F);
+                    todMin = (byte)(value & (BinaryTod ? 0xFF : 0x7F));
                 break;
             case 0x0B: // TOD hours or Alarm hours
                 if ((controlRegB & 0x80) != 0)
@@ -188,7 +193,7 @@ public partial class MOS6526 : I6526Pinout
                 else
                 {
                     todHr = (byte)(value & 0x9F);
-                    todRunning = true;
+                    todRunning = TodClocked;
                 }
                 break;
             case 0x0C: // Serial port
