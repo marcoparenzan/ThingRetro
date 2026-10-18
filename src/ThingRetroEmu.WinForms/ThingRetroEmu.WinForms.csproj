@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The PC side of the machines in WinForms: the monitor (any picture size), the speakers, the joysticks (keyboard, USB), the mouse as paddles
+       and the selector of what is in the control ports. Not tied to any machine: the same controls serve every emulator that uses
+       ThingRetroEmu's video, audio and control ports -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <Version>0.1.0</Version>
+    <PackageId>ThingRetroEmu.WinForms</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Thing64.Tests" />
+    <InternalsVisibleTo Include="Thing65.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ThingRetroEmu\ThingRetroEmu.csproj" />
+  </ItemGroup>
+
+</Project>

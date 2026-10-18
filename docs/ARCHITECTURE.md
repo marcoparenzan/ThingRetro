@@ -4,9 +4,11 @@
 
 The code mirrors the hardware. A **chip** is an object that knows nothing of the board it is mounted on; a **socket** is the
 place on the board where a chip goes; a **cable** is an object that two connectors plug into. A computer (Thing64, Thing65) or
-a drive (Thing1500) is a *board* that owns sockets, traces and connectors, and it lives in its own repository.
+a drive (ThingCommodore) is a *board* that owns sockets, traces and connectors, and it lives in its own repository.
 
 ## Pinouts: the contract
+
+(The chips and their pinouts are in ThingMOS; what stays here is the generic part: the buses, `ParallelPort`, the media and the floppy drive interface.)
 
 Each chip implements an interface that lists its pins in the datasheet's words (`I6510Pinout`, `I6526Pinout`, `IVia6522Pinout`,
 `I4510Pinout`, ...): the register file on the bus, the ports, the control lines, `/IRQ`, `/RES`, the clock tick. A board
@@ -35,22 +37,27 @@ Thing64, Thing65 and any later device (printer, second drive).
 The **audio and video cables** and the **control ports** (joystick, paddles, mouse) follow the same idea; the computers still
 own the video and audio output cables today (see the roadmap).
 
+## Video, audio and the PC side
+
+The screen is defined by what it shows, not by a machine. A video source (`IVideoSource`, which a video chip implements) says what its picture is (`VideoMode`: width,
+height, frames per second, and the shape of the dots, 2:1 for an Atari 2600) and renders it in BGRA; a monitor (`IMonitor`) hands the source a buffer of that mode at
+the start of every frame. If the source changes its mode (a VIC-III switching resolution) the monitor makes the room for it and the next frame follows. So the same
+`MonitorControl` (WinForms) or the same canvas (the web page) shows a VIC-II, a VIC-III, a TIA or an Apple II. Sound is the same: a machine feeds `AudioPort` one
+level per cycle, the port resamples to the rate the `ISpeaker` declares.
+
+Control ports, speakers, monitors, joysticks and the mouse as paddles are shared by every emulator that is built on these interfaces.
+
 ## Media
 
 `D64Image`/`D81Image` hold the sectors; `GcrTrack` and `D64Writer` turn them into the bit stream a drive head reads and back.
-The disk mechanics (stepper, motor, head) are not here: they are part of the drive (Thing1500).
-
-## Assembler
-
-One assembler, one table of instructions per CPU (`InstructionSet`): ACME-compatible syntax, `!cpu 6510|4510`, forward
-references in two passes, `.prg` output. The editor's Monaco syntax file travels with the package.
+The disk mechanics (stepper, motor, head) are not here: they are part of the drive (ThingCommodore).
 
 ## Repositories around it
 
 | Repo | Role | Uses |
 | --- | --- | --- |
-| ThingRetroEmu | Components | nothing |
+| ThingRetroEmu | Sockets, buses, cables, media, ports, the chips that are not MOS | nothing |
+| ThingMOS | The MOS Technology and CSG chips, and the assembler | ThingRetroEmu |
 | Thing64 | C64 board, desktop app, web studio | ThingRetroEmu |
 | Thing65 | C65 board, desktop app, web studio | ThingRetroEmu |
-| Thing1500 | Disk drives as boards | ThingRetroEmu |
-| ThingCommodore | Cross-project log: status, decisions, map of the configuration folders | documents only |
+| ThingCommodore | Disk drives, cassette recorder and printer as boards; also the cross-project log (`docs/log`) | ThingRetroEmu |

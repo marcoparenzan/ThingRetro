@@ -19,6 +19,8 @@
     <Using Include="ThingRetroEmu.Buses" />
     <Using Include="ThingRetroEmu.Media" />
     <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
   </ItemGroup>
 
   <ItemGroup>

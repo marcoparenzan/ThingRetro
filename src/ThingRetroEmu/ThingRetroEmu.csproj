@@ -1,17 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The retro hardware as components: chips with their pinouts, sockets, buses and cables, disk media, control ports and the
-       assembler. They do not know which computer or drive they are mounted in -->
+  <!-- The retro hardware as components, besides the MOS chips (ThingMOS): sockets, buses and cables, disk and tape media, control ports, and
+       the chips of other makers. They do not know which computer or drive they are mounted in -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <!-- Code run at every cycle (a million times per second): optimized in Debug too, otherwise it cannot keep up -->
     <Optimize>true</Optimize>
-    <Version>0.3.0</Version>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Version>0.5.0</Version>
     <PackageId>ThingRetroEmu</PackageId>
-    <Description>Chips, sockets, buses, cables, media and assembler of the Thing64, Thing65 and Thing1500 emulators</Description>
+    <Description>Sockets, buses, cables, media and the chips of other makers (WD1770) of the Thing emulators; the MOS chips are in ThingMOS</Description>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,14 +20,12 @@
     <Using Include="ThingRetroEmu.Buses" />
     <Using Include="ThingRetroEmu.Media" />
     <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
     <InternalsVisibleTo Include="ThingRetroEmu.Tests" />
     <InternalsVisibleTo Include="Thing64.Tests" />
     <InternalsVisibleTo Include="Thing65.Tests" />
     <InternalsVisibleTo Include="ThingCommodore.Tests" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="Asm\Editor\asm6502.js" Pack="true" PackagePath="content\Asm\" />
   </ItemGroup>
 
 </Project>

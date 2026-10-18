@@ -20,7 +20,7 @@ public sealed class ControlPort
 {
     volatile IControlPortDevice? device;
 
-    internal ControlPort(string name)
+    public ControlPort(string name)
     {
         Name = name;
     }
@@ -45,9 +45,9 @@ public sealed class ControlPort
     }
 
     // Pin levels as seen by the board
-    internal byte DigitalLines => device?.DigitalLines ?? 0xFF;
-    internal byte PotX => device?.PotX ?? 0xFF;
-    internal byte PotY => device?.PotY ?? 0xFF;
+    public byte DigitalLines => device?.DigitalLines ?? 0xFF;
+    public byte PotX => device?.PotX ?? 0xFF;
+    public byte PotY => device?.PotY ?? 0xFF;
 
     public override string ToString() => $"{Name}: {(device is null ? "empty" : device.GetType().Name)}";
 }
