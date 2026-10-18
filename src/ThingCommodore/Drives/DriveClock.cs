@@ -8,17 +8,20 @@ public sealed class DriveClock
 
     readonly Action driveCycle;
     readonly long computerHz;
+    readonly long driveHz;
     long credit;
 
-    public DriveClock(long computerHz, Action driveCycle)
+    // driveHz: the clock of the drive; 1 MHz for the 1541, 2 MHz for the 1581
+    public DriveClock(long computerHz, Action driveCycle, long driveHz = DRIVE_HZ)
     {
         this.computerHz = computerHz;
         this.driveCycle = driveCycle;
+        this.driveHz = driveHz;
     }
 
     public void OnComputerCycle()
     {
-        credit += DRIVE_HZ;
+        credit += driveHz;
         while (credit >= computerHz)
         {
             credit -= computerHz;

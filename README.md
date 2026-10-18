@@ -1,28 +1,46 @@
 # ThingCommodore
 
-The cross-project log of the Commodore family of repositories. It holds no code: it says where everything is, what state it is
-in and what was decided, so that each repository can keep its own independent files.
+The Commodore peripherals as stand-alone machines, written to be read: each one is a **board** with its chips in sockets, its own
+ROM and mechanics, and it is connected to a computer (Thing64, Thing65) only through a **cable** or a **port**. A drive does not
+know which computer is on the other end of the IEC cable. The chips, sockets, buses and media they are made of are in
+[ThingRetroEmu](https://github.com/marcoparenzan/ThingRetroEmu).
 
-| Repository | What | Local folder |
+| Folder | Machine | State |
 | --- | --- | --- |
-| [ThingRetroEmu](../ThingRetroEmu) | Chips, sockets, buses, media and assembler (package) | `D:\Dev\2026\Commodore64\ThingRetroEmu` |
-| [Thing64](https://github.com/marcoparenzan/Thing64) | C64 emulator, desktop app, web studio | `D:\Dev\2026\Commodore64\Thing64` |
-| Thing65 | C65 emulator, desktop app, web studio | `D:\Dev\2026\Commodore64\Thing65` |
-| Thing1500 | Disk drives as stand-alone machines on the IEC cable | `D:\Dev\2026\Commodore64\Thing1500` |
-| Daytona | C64 racing game | `D:\Dev\2026\Commodore64\Daytona` |
-| DemoNatale2026 / XMasDev2026 | XMasDev 2026 demo | see [CONFIGURATIONS.md](CONFIGURATIONS.md) |
-| xmasdev-c64-story | Story for the XMasDev talk | see [CONFIGURATIONS.md](CONFIGURATIONS.md) |
+| `Drives` | **1541** (6502, two VIAs, GCR mechanics) | the original DOS loads, saves, scratches and formats `.d64` disks |
+| `Drives` | **1581** (6502 at 2 MHz, 8520, WD1770) | the original DOS (318045-02) lists, loads, saves and formats `.d81` disks, with the KERNAL of a Thing64 |
+| `Tape` | **C2N** cassette recorder (`Datasette`) | `.tap` tapes: SAVE and LOAD through the KERNAL, PLAY, RECORD, rewind, fast forward |
+| `Printers` | **MPS-803** dot matrix printer | listens on the IEC cable (device 4 or 5), writes dots on paper and gives a PDF |
 
-## Files
+> The code of the drives comes from Thing1500, which is left in place until this repository has been used for a while.
 
-- [STATUS.md](STATUS.md): where each project is. Updated at the end of every working session.
-- [SHARED-CODE.md](SHARED-CODE.md): which code is shared, who depends on whom, and what still has to move.
-- [CONFIGURATIONS.md](CONFIGURATIONS.md): map of `D:\Configurations\Thing64` and `Thing65` (not versioned; their content is never copied here).
-- [DECISIONS.md](DECISIONS.md): decisions with date and reason.
+## The 1581 in a few lines
 
-## Conventions
+```csharp
+var drive = new Board1581(File.ReadAllBytes("roms/c-drive-1581.rom")) { DeviceNumber = 8, Disk = d81 };
+var cable = new IecBus();
+cable.Attach(() => board.Iec.AtnLow(), () => board.Iec.ClkLow(), () => board.Iec.DataLow(),
+             input => board.Iec.ClkInputLow = input, input => board.Iec.DataInputLow = input);
+drive.Plug(cable);
+board.AfterCycle = new DriveClock(985_248, drive.Tick, Board1581.CLOCK_HZ).OnComputerCycle;
+```
 
-- Code, comments, UI and docs of the repositories are in English; the conversation with Claude is in Italian.
-- Every project has README, ARCHITECTURE, ROADMAP/OPEN-POINTS and `tools/*.ps1` scripts.
-- ROMs are never versioned: each repository has `tools/Install-Roms.ps1` that copies them from C64 Forever.
-- No `Co-Authored-By` trailers in commits.
+`LOAD"$",8`, `LOAD"NAME",8`, `SAVE"NAME",8` and `OPEN15,8,15,"N:NAME,ID"` (format) work as on the real machine.
+
+## Build and test
+
+```powershell
+./tools/Install-Roms.ps1                 # the ROMs from C64 Forever (not versioned: copyrighted)
+dotnet test tests/ThingCommodore.Tests
+```
+
+The tests boot a Thing64 (KERNAL, BASIC) and the real drive ROMs: they need the ROMs and `../Thing64`, `../Thing65` and `../ThingRetroEmu`
+next to this repository. Without the ROMs they are *Inconclusive*. A full run takes a couple of minutes: formatting a disk alone is 160
+tracks written and verified.
+
+## Documents
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the boards, the clocks and how a device is plugged in.
+- [docs/OPEN-POINTS.md](docs/OPEN-POINTS.md): what is undecided or known to be wrong.
+- [docs/ROADMAP.md](docs/ROADMAP.md): what comes next.
+- [docs/log/](docs/log/README.md): the log of the whole Commodore family (status, shared code, configuration folders, decisions).
