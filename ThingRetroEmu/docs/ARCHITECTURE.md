@@ -45,6 +45,14 @@ the start of every frame. If the source changes its mode (a VIC-III switching re
 `MonitorControl` (WinForms) or the same canvas (the web page) shows a VIC-II, a VIC-III, a TIA or an Apple II. Sound is the same: a machine feeds `AudioPort` one
 level per cycle, the port resamples to the rate the `ISpeaker` declares.
 
+### Composite video
+
+The video connector of the 8-bit machines is a wire with a voltage on it, not a picture. `CompositeFrame` is that wire for one field: 1135 samples a line in PAL (910 in NTSC), sampled at four times the colour subcarrier, so that a cycle of the carrier is the pattern cos = 1 0 -1 0, sin = 0 1 0 -1 and the demodulation needs no tables. The levels are volts (sync -0.3, blank 0, white 0.7, burst 0.15 peak). `CompositeEncoder.Structure` writes what every machine has (the sync pulses, the long pulses of the vertical sync, the colour burst, PAL's alternating V) and `EncodeLine` modulates a line of dots. A chip that draws dots is encoded on the way by `RgbToCompositeSource`, as the board's encoder does; a chip that makes its own signal (a TIA) implements `ICompositeSource`.
+
+The monitor side is `CompositeDecoder`: it finds the horizontal sync and the vertical sync, measures the phase of the burst on every line (in PAL it also finds out which way V goes), takes the colour out of the luminance with a box filter over one carrier cycle, demodulates, and brings Y, U and V to RGB. A signal whose subcarrier phase is turned still decodes with the right colours, because the monitor locks on the burst, and a signal without burst is black and white. `CompositeTuner` puts a decoder in front of any `IMonitor`, so a window or a canvas needs no change.
+
+On the port, `VideoPort.Plug(ICompositeMonitor)` (through `new MonitorCable(port, new CompositeTuner(screen))`) makes the machine send the signal; `VideoPort.Standard` forces PAL or NTSC, otherwise it follows the frame rate of the source. Encoding and decoding one PAL field take about 3.5 ms on a desktop, against the 20 ms of a field.
+
 Control ports, speakers, monitors, joysticks and the mouse as paddles are shared by every emulator that is built on these interfaces.
 
 ## Media

@@ -257,7 +257,7 @@ web computer, in WebAssembly, in a tab next to the files (or in a window of its 
 
 ```powershell
 dotnet publish src/Thing64.WebComputer -c Release -o artifacts/web   # the C64, once (and after changing it)
-dotnet run --project src/Thing64.WebStudio                           # http://localhost:5180
+dotnet run --project src/Thing64.WebStudio                           # http://localhost:5064
 ```
 
 The studio serves the published web computer at `/computer/` (`Studio:ComputerFolder`): it must be the AOT build,

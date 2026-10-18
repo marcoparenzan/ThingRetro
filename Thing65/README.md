@@ -212,7 +212,7 @@ goes into port 2 (or 1) and moves with the arrows with Ctrl as fire (the default
 gamepad (Gamepad API); in the arrows mode they are not the C64 cursor keys.
 
 ```powershell
-dotnet run --project src/Thing65.WebComputer              # development server on http://localhost:5164
+dotnet run --project src/Thing65.WebComputer              # development server on http://localhost:5165
 dotnet publish src/Thing65.WebComputer -c Release -o out  # static site in out/wwwroot
 ```
 

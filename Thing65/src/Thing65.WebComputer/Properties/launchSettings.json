@@ -3,7 +3,7 @@
     "Thing65.WebComputer": {
       "commandName": "Project",
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:5164",
+      "applicationUrl": "http://localhost:5165",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }

@@ -27,3 +27,4 @@ that each repository can keep its own independent files. (The code of this repos
 - Every project has README, ARCHITECTURE, ROADMAP/OPEN-POINTS and `tools/*.ps1` scripts.
 - ROMs are never versioned: each repository has `tools/Install-Roms.ps1` that copies them from C64 Forever.
 - No `Co-Authored-By` trailers in commits.
+- Development ports: 5064 Studio 64, 5164 Web 64, 5065 Studio 65, 5165 Web 65 (the `launchSettings.json` of each project).
