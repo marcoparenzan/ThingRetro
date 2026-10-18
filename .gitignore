@@ -371,3 +371,8 @@ artifacts/
 
 # 1541 ROM of the drive window (Thing1500)
 roms/c-drive-1541.rom
+
+# System ROMs (copyright Commodore/Cloanto): each user installs their own with tools/Install-Roms.ps1
+roms/*
+!roms/README.md
+src/**/roms/

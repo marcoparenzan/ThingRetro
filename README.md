@@ -102,6 +102,19 @@ board.ControlPort1.Plug(new Paddles { PositionA = 128 });   // Le Mans, REVS...
 // or: board.ControlPort1.Plug(new Mouse1351());            // GEOS
 ```
 
+## The system ROMs
+
+The ROMs are protected by copyright and are **not** in the repository (they are ignored by git). Cloanto's free
+*C64 Forever Free Express Edition* (personal use) installs them: download and install it, then run, from the repository root:
+
+```powershell
+./tools/Install-Roms.ps1
+```
+
+The script copies the ROMs from `C:\Users\Public\Documents\CBM Files\Shared\rom` into `roms` with the names the project
+expects (see [roms/README.md](roms/README.md)). The tests that need a ROM are *Inconclusive* without it.
+
+
 ## Building and running
 
 You need the [.NET 10 SDK](https://dotnet.microsoft.com/) and Windows for the C64 window (the chip, board, format
