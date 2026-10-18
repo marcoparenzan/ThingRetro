@@ -7,9 +7,7 @@
    ones are untested on the 1581.
 4. **`.g64`, `.d71`, `.d82`**: not read. The 1571 and the 1541-II need their boards.
 5. **C2N speed.** Rewind and fast forward are quick, not at the real tape speed; a tape position counter in seconds is shown only while playing.
-6. **MPS-803 codes.** ESC sequences, dot tabs, and the printer's own status channel are not done; CR cancels graphics mode, double width and reverse (to be
+6. **MPS-803 codes.** (It is on the IEC bus, as the real one is.) ESC sequences, dot tabs, and the printer's own status channel are not done; CR cancels graphics mode, double width and reverse (to be
    checked against the manual). The 803 prints the Commodore font; here the font is the computer's character generator at 8 x 8.
-7. **The printer on the C2N mechanism.** If the printer you have in mind shares the cassette mechanism (a 1520 or the old MPS-801 variants), it has to
-   listen on the cassette connector instead of the IEC bus.
-8. **No IEC device number conflicts check** in the host except in the web page (a 1541 and a 1581 on the same number).
-9. **Printer paper in the web page** is kept in memory; a long job can fill it. There is no limit on the number of sheets.
+7. **No IEC device number conflicts check** in the host except in the web page (a 1541 and a 1581 on the same number).
+8. **Printer paper in the web page** is kept in memory; a long job can fill it. There is no limit on the number of sheets.
