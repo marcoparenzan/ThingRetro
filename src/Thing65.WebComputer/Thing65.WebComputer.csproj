@@ -33,7 +33,7 @@
   <!-- The C65 ROMs are copyrighted and are not published with the site: the user loads them once from disk.
        Only Debug builds embed them, for local development -->
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">
-    <EmbeddedResource Include="../../roms/*" LogicalName="roms/%(Filename)" />
+    <EmbeddedResource Include="../../roms/*" LogicalName="roms/%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
