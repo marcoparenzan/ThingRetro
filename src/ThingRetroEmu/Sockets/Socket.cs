@@ -9,7 +9,7 @@ public sealed class Socket<TPinout> where TPinout : class
     readonly Action<TPinout> connect;
     readonly Action<TPinout> disconnect;
 
-    internal Socket(string name, Action<TPinout> connect, Action<TPinout> disconnect)
+    public Socket(string name, Action<TPinout> connect, Action<TPinout> disconnect)
     {
         Name = name;
         this.connect = connect;
