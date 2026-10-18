@@ -11,8 +11,15 @@ know which computer is on the other end of the IEC cable. The chips, sockets, bu
 | `Drives` | **1581** (6502 at 2 MHz, 8520, WD1770) | the original DOS (318045-02) lists, loads, saves and formats `.d81` disks, with the KERNAL of a Thing64 |
 | `Tape` | **C2N** cassette recorder (`Datasette`) | `.tap` tapes: SAVE and LOAD through the KERNAL, PLAY, RECORD, rewind, fast forward |
 | `Printers` | **MPS-803** dot matrix printer | listens on the IEC cable (device 4 or 5), writes dots on paper and gives a PDF |
+| `Cartridges` | The **expansion port cartridges** (Normal, Ocean, System 3, Magic Desk, EasyFlash) and the mapping of the `.crt` format | the five types of the C64 |
+| `Software` | Loading a `.prg` into a C64's RAM (with the BASIC pointers) and writing the KERNAL keyboard buffer: for any machine with a C64 memory map (`IC64Memory`) | Thing64 and Thing65 |
+| `ThingCommodore.Tools` | A second project: the BASIC V2 tokenizer, the conversion of pictures to VIC-II graphics data, and the build manifests (`.asm` and `.bas` to `.prg`, cartridges) | command line and web studio |
 
-> The code of the drives comes from Thing1500, which is left in place until this repository has been used for a while.
+## The 1541 in a few lines
+
+`Board1541` is a 6502, 2 KB of RAM, the 16 KB DOS ROM and two VIAs; the IEC pins are the real ones (inverted, with the ATN gate). `Mechanism1541`,
+`D64Image`, `GcrTrack` and `D64Writer` (in ThingRetroEmu) give it the motor, the stepper and a read/write head over a `.d64` disk: GCR, SYNC, byte ready, speed
+zones. The KERNAL's own LOAD"$",8, LIST, LOAD, RUN, SAVE, SCRATCH, NEW and VALIDATE work through the cable, with a Thing64 or a Thing65.
 
 ## The 1581 in a few lines
 

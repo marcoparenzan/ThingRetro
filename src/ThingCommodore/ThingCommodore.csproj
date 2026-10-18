@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- The Commodore peripherals as stand-alone machines: disk drives (1541, 1581), the C2N cassette recorder and the printers. They sit on
        the IEC cable or on a port, and do not know which computer is on the other side. Chips, sockets, buses and media are in ThingRetroEmu -->
@@ -13,12 +13,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="ThingMOS" />
+    <Using Include="ThingCommodore.Cartridges" />
     <Using Include="ThingRetroEmu.Chips" />
     <Using Include="ThingRetroEmu.Sockets" />
     <Using Include="ThingRetroEmu.Buses" />
     <Using Include="ThingRetroEmu.Media" />
     <InternalsVisibleTo Include="ThingCommodore.Tests" />
     <ProjectReference Include="..\..\..\ThingRetroEmu\src\ThingRetroEmu\ThingRetroEmu.csproj" />
+    <ProjectReference Include="..\..\..\ThingMOS\src\ThingMOS\ThingMOS.csproj" />
   </ItemGroup>
 
 </Project>

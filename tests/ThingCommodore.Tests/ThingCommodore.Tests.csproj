@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -13,6 +13,8 @@
   <ItemGroup>
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
     <Using Include="ThingCommodore.Drives" />
+    <Using Include="ThingMOS" />
+    <Using Include="ThingRetroEmu.Chips" />
     <Using Include="ThingRetroEmu.Buses" />
     <Using Include="ThingRetroEmu.Media" />
   </ItemGroup>
@@ -26,9 +28,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ThingCommodore\ThingCommodore.csproj" />
     <ProjectReference Include="..\..\..\Thing65\src\Thing65.C65\Thing65.C65.csproj" />
-    <ProjectReference Include="..\..\..\Thing65\src\Thing65.Asm\Thing65.Asm.csproj" />
     <ProjectReference Include="..\..\..\Thing64\src\Thing64.C64\Thing64.C64.csproj" />
-    <ProjectReference Include="..\..\..\Thing64\src\Thing64.Prg\Thing64.Prg.csproj" />
   </ItemGroup>
 
 </Project>

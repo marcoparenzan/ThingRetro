@@ -1,7 +1,7 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using System.Text;
 using Thing64.C64;
-using Thing64.Prg;
+using ThingCommodore.Software;
 using ThingCommodore.Drives;
 using ThingCommodore.Printers;
 

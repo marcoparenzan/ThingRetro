@@ -1,5 +1,5 @@
-using Thing64.C64;
-using Thing64.Prg;
+﻿using Thing64.C64;
+using ThingCommodore.Software;
 
 namespace ThingCommodore.Tests;
 

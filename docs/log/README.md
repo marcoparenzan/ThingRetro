@@ -5,11 +5,11 @@ that each repository can keep its own independent files. (The code of this repos
 
 | Repository | What | Local folder |
 | --- | --- | --- |
-| [ThingRetroEmu](https://github.com/marcoparenzan/ThingRetroEmu) | Chips, sockets, buses, media and assembler (package) | `D:\Dev\2026\Commodore64\ThingRetroEmu` |
+| [ThingMOS](https://github.com/marcoparenzan/ThingMOS) | The MOS Technology and CSG chips, and the assembler | `D:\Dev\2026\Commodore64\ThingMOS` |
+| [ThingRetroEmu](https://github.com/marcoparenzan/ThingRetroEmu) | Sockets, buses, media, video and audio outputs, control ports, WinForms controls | `D:\Dev\2026\Commodore64\ThingRetroEmu` |
 | [Thing64](https://github.com/marcoparenzan/Thing64) | C64 emulator, desktop app, web studio | `D:\Dev\2026\Commodore64\Thing64` |
 | Thing65 | C65 emulator, desktop app, web studio | `D:\Dev\2026\Commodore64\Thing65` |
 | ThingCommodore | The peripherals: 1541, 1581, C2N, MPS-803 (this repository) | `D:\Dev\2026\Commodore64\ThingCommodore` |
-| Thing1500 | The old home of the drives; to be deleted | `D:\Dev\2026\Commodore64\Thing1500` |
 | Daytona | C64 racing game | `D:\Dev\2026\Commodore64\Daytona` |
 | DemoNatale2026 / XMasDev2026 | XMasDev 2026 demo | see [CONFIGURATIONS.md](CONFIGURATIONS.md) |
 | xmasdev-c64-story | Story for the XMasDev talk | see [CONFIGURATIONS.md](CONFIGURATIONS.md) |

@@ -194,7 +194,7 @@ public sealed class ComputerWithDriveTests
         }
         source.Append("lda #$AA\nsta $FE\nrts\n");   // the marker RunProgram waits for
         source.Append(SendRoutine);
-        var program = Thing65.Asm.Assembler.Assemble(source.ToString());
+        var program = ThingMOS.Asm.Assembler.Assemble(source.ToString());
         for (int i = 0; i < program.Bytes.Length; i++) computer.Ram(program.Origin + i, program.Bytes[i]);
 
         RunProgram(computer, cycles);
@@ -208,7 +208,7 @@ public sealed class ComputerWithDriveTests
         computer.TypeText("SYS49152" + CR);
         while (computer.IsTyping) computer.RunCycles(1000);
         for (long done = 0; done < cycles && computer.Ram(0xFE) != 0xAA; done += 100_000) computer.RunCycles(100_000);
-        Assert.AreEqual(0xAA, computer.Ram(0xFE), $"the program did not finish: computer at {((Thing65.Mos.MOS4510)computer.CpuSocket.Chip!).DebugInfo.Item1:X4}, ST={computer.Ram(0x90):X2}, lines atn={computer.Iec.AtnLow()} clk={computer.Iec.ClkInputLow()} data={computer.Iec.DataInputLow()}");
+        Assert.AreEqual(0xAA, computer.Ram(0xFE), $"the program did not finish: computer at {((ThingMOS.MOS4510)computer.CpuSocket.Chip!).DebugInfo.Item1:X4}, ST={computer.Ram(0x90):X2}, lines atn={computer.Iec.AtnLow()} clk={computer.Iec.ClkInputLow()} data={computer.Iec.DataInputLow()}");
         computer.RunCycles(300_000);   // back to BASIC
     }
 

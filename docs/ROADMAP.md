@@ -10,11 +10,10 @@
 
 ## Next
 
-1. **Thing1500 can go.** Everything it had is here. Delete the repository when the web page has been used for a while.
-2. **Use the devices in the desktop apps** (Thing64.Computer, Thing65.Computer): windows for the 1581, the recorder and the printer, as the 1541 has.
-3. **1541-II, 1571** (a 1571 is a 1541 with two heads and a WD1770 for the MFM side) and the **1570**.
-4. **`.g64` images** for the 1541 (the real GCR bits, copy protections).
-5. **Fast serial** for the 1581 and the 1571 with a C128.
+1. **Use the devices in the desktop apps** (Thing64.Computer, Thing65.Computer): windows for the 1581, the recorder and the printer, as the 1541 has.
+2. **1541-II, 1571** (a 1571 is a 1541 with two heads and a WD1770 for the MFM side) and the **1570**.
+3. **`.g64` images** for the 1541 (the real GCR bits, copy protections).
+4. **Fast serial** for the 1581 and the 1571 with a C128.
 
 ## Then
 
