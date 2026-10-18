@@ -55,9 +55,12 @@ public static partial class WebComputer
     public static void Start(SystemRoms roms)
     {
         board = new Board(roms, startClock: false);
+        systemRoms = roms;
         drive = null;                                        // a new machine: the page plugs the drive in again
+        driveClock = null;
         monitorCable = new MonitorCable(board.VideoOut, screen);
         cycles = 0;
+        Rewire();                                            // the recorder and the printer go with the new machine
         SetJoystick(joystickPort, joystickKeys);
     }
 
@@ -243,6 +246,11 @@ public static partial class WebComputer
                 InsertDisk(name, content);
                 if (drive is null && (EmbeddedDriveRom() ?? Script.StoredRom(DriveRomName)) is { } rom) AttachDrive(rom, 8);
                 return drive is null ? $"{name} is ready: choose Drive > device 8 (the 1541 ROM is needed)" : $"{name} in drive {drive.DeviceNumber}";
+            }
+            if (name.EndsWith(".tap", StringComparison.OrdinalIgnoreCase))
+            {
+                InsertTape(name, content);
+                return $"{name} is in the recorder: LOAD, then Play";
             }
             if (name.EndsWith(".crt", StringComparison.OrdinalIgnoreCase))
             {

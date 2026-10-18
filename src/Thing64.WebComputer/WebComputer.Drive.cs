@@ -15,6 +15,7 @@ public static partial class WebComputer
     public const string DriveRomName = "drive1541";      // in the browser's storage: thing64.rom.drive1541
 
     static Board1541? drive;
+    static DriveClock? driveClock;
     static D64Image? disk;
     static string? diskName;
 
@@ -51,14 +52,10 @@ public static partial class WebComputer
         if (device is < 8 or > 11) throw new ArgumentException($"{device} is not a device number of a drive (8 to 11)");
         DetachDrive();
         var unit = new Board1541(rom) { DeviceNumber = device };
-        var cable = new IecBus();
-        cable.Attach(() => board.Iec.AtnLow(), () => board.Iec.ClkLow(), () => board.Iec.DataLow(),
-            input => board.Iec.ClkInputLow = input, input => board.Iec.DataInputLow = input);
-        unit.Plug(cable);
-        var clock = new DriveClock(CyclesPerSecond, unit.Tick);
-        board.AfterCycle = clock.OnComputerCycle;
         unit.Disk = disk;
         drive = unit;
+        driveClock = new DriveClock(CyclesPerSecond, unit.Tick);
+        Rewire();
     }
 
     // Takes the drive off the cable; the disk stays in the page (what the drive had written is in it)
@@ -66,8 +63,10 @@ public static partial class WebComputer
     {
         if (drive is null) return;
         drive.Mechanism.Flush();
-        if (board is not null) board.AfterCycle = null;
+        drive.Unplug();
         drive = null;
+        driveClock = null;
+        Rewire();
     }
 
     // A .d64 in the drive (the one that was there goes out, what was written to it kept in its image). The size is

@@ -43,7 +43,7 @@
     <nav>
         <label class="button">
             Load .prg / .crt
-            <InputFile OnChange="LoadProgram" accept=".prg,.crt,.d64" />
+            <InputFile OnChange="LoadProgram" accept=".prg,.crt,.d64,.tap" />
         </label>
         <button @onclick="Reset">Reset</button>
         <button id="sound">Sound: on</button>
@@ -76,6 +76,32 @@
         <span class="drive" id="drive-text">@driveText</span>
         <button id="eject" hidden="@(!hasDisk)" @onclick="EjectDisk" title="Take the disk out of the drive">Eject</button>
         <button id="save-disk" hidden="@(!hasDisk)" @onclick="SaveDisk" title="Keep the disk (with what the program wrote on it) as a .d64 file">Save disk</button>
+        <label class="button" title="A .tap tape image goes into the C2N cassette recorder">
+            Tape .tap
+            <InputFile id="tape" OnChange="LoadTape" accept=".tap" />
+        </label>
+        <button id="new-tape" @onclick="NewTape" title="A blank cassette, to SAVE on">New tape</button>
+        <span class="keys" id="tape-keys" hidden="@(!hasTape)">
+            <button @onclick='() => PressTape("Rewind")' title="Rewind">&#9664;&#9664;</button>
+            <button @onclick='() => PressTape("Play")' title="PLAY: when the KERNAL asks for it, or to run the tape at once">&#9654;</button>
+            <button @onclick='() => PressTape("Record")' title="RECORD and PLAY: before SAVE goes on">&#9679;</button>
+            <button @onclick='() => PressTape("FastForward")' title="Fast forward">&#9654;&#9654;</button>
+            <button @onclick='() => PressTape("Stop")' title="Stop">&#9632;</button>
+        </span>
+        <span class="drive" id="tape-text">@tapeText</span>
+        <button id="eject-tape" hidden="@(!hasTape)" @onclick="EjectTape" title="Take the cassette out">Eject tape</button>
+        <button id="save-tape" hidden="@(!hasTape)" @onclick="SaveTape" title="Keep the tape (with what the program recorded) as a .tap file">Save tape</button>
+        <label>
+            Printer
+            <select id="printer" @onchange="ChangePrinter" value="@printerDevice">
+                <option value="0">none</option>
+                <option value="4">MPS-803 device 4</option>
+                <option value="5">MPS-803 device 5</option>
+            </select>
+        </label>
+        <span class="drive" id="printer-text">@printerText</span>
+        <button id="save-pdf" hidden="@(printerSheets == 0)" @onclick="SavePrinterPdf" title="What was printed, as a PDF">Save PDF</button>
+        <button id="new-paper" hidden="@(printerSheets == 0)" @onclick="NewPaper" title="Throw the paper away and start with a clean sheet">New paper</button>
         <span class="speed" id="speed"></span>
     </nav>
 
@@ -85,7 +111,10 @@
         diagonals 7 9 1 3, fire 0 or 5) or the arrows with Ctrl as fire, and with any gamepad; almost every game wants
         it in port 2. Programs, cartridges and .d64 disks can also be dropped on the screen. With a 1541 plugged in
         (Drive), LOAD"$",8 lists the disk and LOAD"NAME",8 loads from it; SAVE writes to the disk in the page, which
-        Save disk keeps as a file.
+        Save disk keeps as a file. The C2N recorder takes a .tap tape (Tape .tap, or New tape to SAVE on): after LOAD or SAVE the
+        KERNAL asks to press PLAY, or RECORD and PLAY, and the keys next to the tape are those; Save tape keeps
+        what was recorded. The MPS-803 printer (Printer, device 4 or 5) takes OPEN1,4:PRINT#1,"TEXT":CLOSE1 and
+        OPEN1,4:CMD1:LIST, and Save PDF gives what it printed.
     </p>
 </main>
 
@@ -107,6 +136,11 @@
     string? driveError;
     string driveText = "no drive";
     Timer? driveWatch;
+
+    // The C2N recorder and the MPS-803 printer
+    string tapeText = "no tape", printerDevice = "0", printerText = "no printer";
+    bool hasTape;
+    int printerSheets;
 
     protected override void OnInitialized() =>
         embedded = new Uri(Navigation.Uri).Query.Contains("embedded", StringComparison.OrdinalIgnoreCase);
@@ -142,8 +176,10 @@
         status = "READY.";
         // The drive of the last visit, if its ROM is at hand
         if (int.TryParse(Script.Setting("drive"), out int device) && device is >= 8 and <= 11) TryAttachDrive(device);
+        if (int.TryParse(Script.Setting("printer"), out int printer) && printer is 4 or 5) WebComputer.SetPrinter(printer);
+        RefreshPeripherals();
         // Whatever the program writes to the disk shows (changed) a moment later
-        driveWatch ??= new Timer(_ => InvokeAsync(RefreshDrive), null, 1000, 1000);
+        driveWatch ??= new Timer(_ => InvokeAsync(() => { RefreshDrive(); RefreshPeripherals(); }), null, 1000, 1000);
         StateHasChanged();
     }
 
@@ -248,6 +284,81 @@
         Script.Download(name, WebComputer.DiskBytes());
         WebComputer.DiskSaved();
         RefreshDrive();
+        Script.Focus("screen");
+    }
+
+    void RefreshPeripherals()
+    {
+        hasTape = WebComputer.HasTape;
+        string tape = WebComputer.TapeText();
+        printerDevice = WebComputer.PrinterOn ? WebComputer.PrinterDevice.ToString() : "0";
+        printerSheets = WebComputer.PrinterSheets;
+        string printer = !WebComputer.PrinterOn ? "no printer" : printerSheets == 0 ? $"printer {WebComputer.PrinterDevice}" : $"printer {WebComputer.PrinterDevice}: {printerSheets} sheet{(printerSheets == 1 ? "" : "s")}";
+        if (tape == tapeText && printer == printerText) return;
+        tapeText = tape;
+        printerText = printer;
+        StateHasChanged();
+    }
+
+    async Task LoadTape(InputFileChangeEventArgs e)
+    {
+        using var stream = e.File.OpenReadStream(16 * 1024 * 1024);
+        using var copy = new MemoryStream();
+        await stream.CopyToAsync(copy);
+        status = WebComputer.Load(e.File.Name, copy.ToArray());
+        RefreshPeripherals();
+        Script.Focus("screen");
+    }
+
+    void NewTape()
+    {
+        WebComputer.NewTape();
+        RefreshPeripherals();
+        Script.Focus("screen");
+    }
+
+    void EjectTape()
+    {
+        WebComputer.EjectTape();
+        RefreshPeripherals();
+        Script.Focus("screen");
+    }
+
+    void PressTape(string key)
+    {
+        WebComputer.PressTape(key);
+        RefreshPeripherals();
+        Script.Focus("screen");
+    }
+
+    // The tape as it is now: what the program recorded too
+    void SaveTape()
+    {
+        Script.Download(WebComputer.TapeName ?? "tape.tap", WebComputer.TapeBytes());
+        WebComputer.TapeSaved();
+        RefreshPeripherals();
+        Script.Focus("screen");
+    }
+
+    void ChangePrinter(ChangeEventArgs e)
+    {
+        int device = int.TryParse(e.Value?.ToString(), out int value) ? value : 0;
+        WebComputer.SetPrinter(device);
+        Script.SetSetting("printer", device.ToString());
+        RefreshPeripherals();
+        Script.Focus("screen");
+    }
+
+    void SavePrinterPdf()
+    {
+        Script.Download("printout.pdf", WebComputer.PrinterPdf());
+        Script.Focus("screen");
+    }
+
+    void NewPaper()
+    {
+        WebComputer.ClearPrinter();
+        RefreshPeripherals();
         Script.Focus("screen");
     }
 
