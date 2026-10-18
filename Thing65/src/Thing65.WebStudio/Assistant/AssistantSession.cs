@@ -1,0 +1,35 @@
+using RalfAI;
+using RalfAI.Providers;
+
+namespace Thing65.WebStudio.Assistant;
+
+// Where RalfAI's configuration is (Assistant:ConfigPath, the config.json of RalfAI with providers and keys) and which
+// model it uses for the studio (Assistant:ContextKey, looked up in AzureAIFoundry:ContextModels)
+public sealed class AssistantSettings(IConfiguration configuration)
+{
+    public string ConfigPath { get; } = configuration["Assistant:ConfigPath"] ?? "";
+    public string ContextKey { get; } = configuration["Assistant:ContextKey"] ?? "thing65";
+    public bool Available => File.Exists(ConfigPath);
+}
+
+// One conversation with RalfAI about one project. The engine keeps the history in the project folder
+// (.ralfai/session.md, with the costs next to it), so the conversation goes on when the project is opened again
+public sealed class AssistantSession
+{
+    public required AgentEngine Engine { get; init; }
+
+    public static async Task<AssistantSession> StartAsync(AssistantSettings settings, Project project, IStudioHost host, CancellationToken cancel)
+    {
+        // The studio runs on a server: no voice tools (they would speak and listen on the server's devices)
+        var configuration = new ConfigurationBuilder()
+            .AddConfiguration(RalfAIConfig.Load(settings.ConfigPath))
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["AzureSpeech:ApiKey"] = "" })
+            .Build();
+        // A second client of the same model, for the pictures the user attaches (Image_Look): the engine's own
+        // conversation takes text only
+        var (vision, _) = ChatClientFactory.Create(configuration, settings.ContextKey);
+        var engine = await AgentEngine.CreateAsync(configuration, project.Folder, settings.ContextKey,
+            new Thing65AgentContext(project, host, vision), cancel);
+        return new AssistantSession { Engine = engine };
+    }
+}

@@ -1,0 +1,159 @@
+﻿@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+@* The page: the C65 monitor (a canvas), loading of programs and disks, reset, and the ROMs the first time *@
+
+@* With ?embedded (the web studio shows it in an iframe) only the screen and its controls *@
+<main class="@(embedded ? "embedded" : null)">
+    @if (!embedded)
+    {
+        <header>
+            <h1><img src="img/thing65-logo-600x200.png" alt="Thing65" /></h1>
+            <span class="status">@status</span>
+        </header>
+    }
+
+    @if (needRoms)
+    {
+        <section class="roms">
+            <p>
+                The C65 ROM is copyrighted, so it is not part of this site. Choose the 128 KB file of the system ROM
+                from your disk (for example <code>c-65-19910828.rom</code>): the browser keeps it for the next visits.
+            </p>
+            <InputFile OnChange="LoadRoms" />
+            @if (romError is not null) { <p class="error">@romError</p> }
+        </section>
+    }
+
+    <canvas id="screen" width="@MonitorWidth" height="@MonitorHeight" tabindex="0"></canvas>
+
+    <nav>
+        <label class="button">
+            Load .prg / .d81
+            <InputFile OnChange="LoadProgram" accept=".prg,.d81" />
+        </label>
+        <button @onclick="Reset">Reset</button>
+        <button id="sound">Sound: on</button>
+        <label>
+            Joystick
+            <select @onchange="ChangeJoystickPort" value="@joystickPort">
+                <option value="2">port 2</option>
+                <option value="1">port 1</option>
+                <option value="0">none</option>
+            </select>
+            <select @onchange="ChangeJoystickKeys" value="@joystickKeys">
+                <option value="keypad">numeric keypad</option>
+                <option value="arrows">arrows + Ctrl</option>
+            </select>
+        </label>
+        <span class="speed" id="speed"></span>
+    </nav>
+
+    <p class="hint" hidden="@embedded">
+        Click the screen to type (and to start the sound). Keys are positional as on a C65: Esc is RUN/STOP, Tab CTRL,
+        left Alt the C= key, F2/F4/F6/F8 are Shift + F1/F3/F5/F7. The joystick moves with the numeric keypad (8 2 4 6,
+        diagonals 7 9 1 3, fire 0 or 5) or the arrows with Ctrl as fire, and with any gamepad; almost every game wants
+        it in port 2. Programs and disks can also be dropped on the screen.
+    </p>
+</main>
+
+@code {
+    const int MonitorWidth = ThingMOS.CSG4567.SCREEN_WIDTH;
+    const int MonitorHeight = ThingMOS.CSG4567.SCREEN_HEIGHT;
+
+    string status = "Starting...";
+    string joystickPort = "2";
+    string joystickKeys = "arrows";
+    bool needRoms;
+    bool embedded;
+    string? romError;
+
+    protected override void OnInitialized() =>
+        embedded = new Uri(Navigation.Uri).Query.Contains("embedded", StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await JSHost.ImportAsync("computer", new Uri(new Uri(Navigation.BaseUri), "js/computer.js").ToString());
+
+        var roms = WebComputer.EmbeddedRom() ?? StoredRom();
+        if (roms is null)
+        {
+            needRoms = true;
+            status = "Waiting for the ROMs";
+            StateHasChanged();
+            return;
+        }
+        await Start(roms);
+    }
+
+    static SystemRom128? StoredRom()
+    {
+        var rom = Script.StoredRom("c65");
+        return rom is { Length: SystemRom128.SIZE } ? new SystemRom128(rom) : null;
+    }
+
+    async Task Start(SystemRom128 rom)
+    {
+        WebComputer.Start(rom);
+        await Script.Start("screen");
+        status = "READY.";
+        StateHasChanged();
+    }
+
+    // The 128 KB system ROM
+    async Task LoadRoms(InputFileChangeEventArgs e)
+    {
+        using var stream = e.File.OpenReadStream(SystemRom128.SIZE + 1);
+        using var copy = new MemoryStream();
+        await stream.CopyToAsync(copy);
+        try
+        {
+            var rom = new SystemRom128(copy.ToArray());
+            Script.StoreRom("c65", rom.Image);
+            needRoms = false;
+            romError = null;
+            await Start(rom);
+        }
+        catch (ArgumentException error)
+        {
+            romError = error.Message;
+        }
+    }
+
+    async Task LoadProgram(InputFileChangeEventArgs e)
+    {
+        using var stream = e.File.OpenReadStream(1024 * 1024);
+        using var copy = new MemoryStream();
+        await stream.CopyToAsync(copy);
+        status = WebComputer.Load(e.File.Name, copy.ToArray());
+        Script.Focus("screen");
+    }
+
+    void ChangeJoystickPort(ChangeEventArgs e)
+    {
+        joystickPort = e.Value?.ToString() ?? "2";
+        WebComputer.SetJoystick(int.Parse(joystickPort), joystickKeys);
+        Script.Focus("screen");
+    }
+
+    void ChangeJoystickKeys(ChangeEventArgs e)
+    {
+        joystickKeys = e.Value?.ToString() ?? "keypad";
+        WebComputer.SetJoystick(int.Parse(joystickPort), joystickKeys);
+        Script.Focus("screen");
+    }
+
+    void Reset()
+    {
+        WebComputer.Reset();
+        status = "Reset";
+        Script.Focus("screen");
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        if (!needRoms) Script.Stop();
+        return ValueTask.CompletedTask;
+    }
+}

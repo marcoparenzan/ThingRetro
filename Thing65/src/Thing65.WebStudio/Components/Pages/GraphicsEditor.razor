@@ -1,0 +1,316 @@
+﻿@using System.Text.Json
+@using ThingCommodore.Graphics
+
+@* A graphics asset (.gfx.json): the picture on the left, how the C65 will show it on the right, and the settings of
+   the conversion between them. Every change converts again (on the server, in a fraction of a second); Ctrl+S saves
+   the .gfx.json, and the build writes the data files and the include *@
+<div class="absolute inset-0 flex flex-col overflow-hidden @(Visible ? null : "invisible")">
+    <div class="flex flex-wrap items-end gap-3 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
+        <label class="flex flex-col gap-1">Mode
+            <select class="field" value="@Kebab(asset.Mode)" @onchange="e => Update(a => a with { Mode = Parse<GraphicsMode>(e) })">
+                @foreach (var mode in Enum.GetValues<GraphicsMode>()) { <option value="@Kebab(mode)">@Kebab(mode)</option> }
+            </select>
+        </label>
+        <label class="flex flex-col gap-1">Fit
+            <select class="field" value="@Kebab(asset.Fit)" @onchange="e => Update(a => a with { Fit = Parse<Fit>(e) })">
+                @foreach (var fit in Enum.GetValues<Fit>()) { <option value="@Kebab(fit)">@Kebab(fit)</option> }
+            </select>
+        </label>
+        <label class="flex flex-col gap-1">Dither
+            <select class="field" value="@Kebab(asset.Dither)" @onchange="e => Update(a => a with { Dither = Parse<Dither>(e) })">
+                @foreach (var dither in Enum.GetValues<Dither>()) { <option value="@Kebab(dither)">@Kebab(dither)</option> }
+            </select>
+        </label>
+        <label class="flex flex-col gap-1">Palette
+            <select class="field" value="@asset.Palette" @onchange="e => Update(a => a with { Palette = PaletteOf(e) })">
+                <option value="pepto">pepto</option>
+                <option value="colodore">colodore</option>
+            </select>
+        </label>
+        @if (!IsBitmap)
+        {
+            <label class="flex flex-col gap-1">@(IsSprites ? "Sprites across" : "Columns")
+                <input type="number" min="1" max="1024" class="field w-20" value="@asset.Columns" placeholder="@(IsSprites ? 1 : 40)"
+                       @onchange="e => Update(a => a with { Columns = Number(e) })" />
+            </label>
+            <label class="flex flex-col gap-1">@(IsSprites ? "Sprites down" : "Rows")
+                <input type="number" min="1" max="1024" class="field w-20" value="@asset.Rows" placeholder="@(IsSprites ? 1 : 25)"
+                       @onchange="e => Update(a => a with { Rows = Number(e) })" />
+            </label>
+        }
+        @if (IsCharset)
+        {
+            <label class="flex flex-col gap-1">Max characters
+                <input type="number" min="1" max="256" class="field w-20" value="@asset.MaxCharacters"
+                       @onchange="e => Update(a => a with { MaxCharacters = Number(e) ?? 256 })" />
+            </label>
+            <label class="flex flex-col gap-1">Tiles (w x h)
+                <span class="flex gap-1">
+                    <input type="number" min="1" max="8" class="field w-14" value="@asset.Tile?.Width" placeholder="-"
+                           @onchange="e => Update(a => a with { Tile = TileOf(Number(e), a.Tile?.Height) })" />
+                    <input type="number" min="1" max="8" class="field w-14" value="@asset.Tile?.Height" placeholder="-"
+                           @onchange="e => Update(a => a with { Tile = TileOf(a.Tile?.Width, Number(e)) })" />
+                </span>
+            </label>
+        }
+        <label class="flex flex-col gap-1">Name
+            <input class="field w-32 font-mono" value="@asset.Name" placeholder="@GraphicsAsset.NameOf(Path)"
+                   @onchange="e => Update(a => a with { Name = Blank(e.Value?.ToString()) })" />
+        </label>
+        <span class="ml-auto self-center">
+            @if (converting) { <span class="animate-pulse text-chip-300">converting...</span> }
+        </span>
+    </div>
+
+    @* Shared colors: chosen from the picture (auto) unless fixed here *@
+    <div class="flex flex-wrap gap-x-6 gap-y-2 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
+        @if (UsesBackground) { @Swatches("Background", asset.Background, c => asset with { Background = c }, Shared("BACKGROUND")) }
+        @if (UsesMulticolors)
+        {
+            @Swatches("Multicolor 1", asset.Multicolor1, c => asset with { Multicolor1 = c }, Shared("MULTICOLOR1"))
+            @Swatches("Multicolor 2", asset.Multicolor2, c => asset with { Multicolor2 = c }, Shared("MULTICOLOR2"))
+        }
+        @if (!UsesBackground && !UsesMulticolors)
+        {
+            <span class="text-night-400">Every cell chooses its own colors in this mode.</span>
+        }
+    </div>
+
+    <div class="min-h-0 flex-1 overflow-auto p-3">
+        @if (error is not null) { <p class="mb-3 rounded border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">@error</p> }
+        <div class="grid gap-4 lg:grid-cols-2">
+            <figure>
+                <figcaption class="mb-1 text-xs text-night-300">Picture: <span class="font-mono">@asset.Source</span> @(source is null ? "" : $"({source.Width}x{source.Height})")</figcaption>
+                <div class="checker flex aspect-[8/5] items-center justify-center rounded border border-night-800">
+                    @if (asset.Source.Length > 0)
+                    {
+                        <img src="@SourceUrl" alt="" class="max-h-full max-w-full object-contain" />
+                    }
+                </div>
+            </figure>
+            <figure>
+                <figcaption class="mb-1 text-xs text-night-300">On the C65: @conversion?.Summary</figcaption>
+                <div class="checker flex aspect-[8/5] items-center justify-center rounded border border-night-800">
+                    @if (previewUrl is not null)
+                    {
+                        <img src="@previewUrl" alt="" class="pixelated h-full w-full object-contain" />
+                    }
+                </div>
+            </figure>
+        </div>
+
+        @if (charsetUrl is not null)
+        {
+            <figure class="mt-4">
+                <figcaption class="mb-1 text-xs text-night-300">Characters (screen codes from 0, 16 per row)</figcaption>
+                <img src="@charsetUrl" alt="" class="pixelated rounded border border-night-800" style="width: @(charsetWidth * 2)px" />
+            </figure>
+        }
+
+        @if (conversion is not null)
+        {
+            <table class="mt-4 w-full max-w-4xl text-left text-xs">
+                <thead class="text-night-400">
+                    <tr><th class="py-1 font-normal">Label</th><th class="font-normal">Bytes</th><th class="font-normal">Address</th><th class="font-normal">What</th></tr>
+                </thead>
+                <tbody class="text-night-100">
+                    @foreach (var part in conversion.Parts)
+                    {
+                        <tr class="border-t border-night-800">
+                            <td class="py-1 pr-3 font-mono text-chip-300">@(LabelPrefix)_@part.Name</td>
+                            <td class="pr-3 font-mono">@part.Data.Length</td>
+                            <td class="pr-3">
+                                <input class="field w-20 font-mono" value="@(asset.Addresses.GetValueOrDefault(part.Name))" placeholder="any"
+                                       @onchange="e => SetAddress(part.Name, e.Value?.ToString())" />
+                            </td>
+                            <td class="text-night-300">@part.Description</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p class="mt-3 text-xs text-night-400">
+                The build writes these files next to <span class="font-mono">@System.IO.Path.GetFileName(Path)</span>, and
+                <span class="font-mono text-night-200">@(asset.Include ?? (asset.Name ?? GraphicsAsset.NameOf(Path)) + ".inc.asm")</span>
+                with the labels and the constants
+                @foreach (var (key, value) in conversion.Constants) { <span class="mr-2 font-mono text-night-200">@(LabelPrefix.ToUpperInvariant())_@key=@value</span> }
+                : include it with <span class="font-mono text-night-200">!source</span>. Bitmaps want an address aligned to $2000,
+                characters to $0800, sprites to $40, all inside the bank the VIC-II sees.
+            </p>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Project Project { get; set; } = default!;
+    [Parameter, EditorRequired] public string Path { get; set; } = "";
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> OnDirty { get; set; }
+
+    GraphicsAsset asset = new();
+    string savedJson = "";
+    RgbImage? source;
+    string? sourceStamp;
+    Conversion? conversion;
+    string? previewUrl;
+    string? charsetUrl;
+    int charsetWidth;
+    string? error;
+    bool converting;
+    int version;
+
+    bool IsBitmap => asset.Mode is GraphicsMode.HiresBitmap or GraphicsMode.MulticolorBitmap;
+    bool IsCharset => asset.Mode is GraphicsMode.HiresCharset or GraphicsMode.MulticolorCharset;
+    bool IsSprites => asset.Mode is GraphicsMode.HiresSprites or GraphicsMode.MulticolorSprites;
+    bool UsesBackground => asset.Mode is GraphicsMode.MulticolorBitmap or GraphicsMode.HiresCharset or GraphicsMode.MulticolorCharset;
+    bool UsesMulticolors => asset.Mode is GraphicsMode.MulticolorCharset or GraphicsMode.MulticolorSprites;
+    string LabelPrefix => new string((asset.Name ?? GraphicsAsset.NameOf(Path)).Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_').ToArray()).Trim('_').ToLowerInvariant();
+    string SourceUrl => $"project-files/{Uri.EscapeDataString(Project.Name)}/{SourcePath}?v={sourceStamp}";
+    string SourcePath => CombinePath(System.IO.Path.GetDirectoryName(Path)?.Replace('\\', '/') ?? "", asset.Source);
+
+    public bool Dirty => asset.ToJson() != savedJson;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    // From the disk: the .gfx.json and its picture
+    public async Task Load()
+    {
+        try
+        {
+            asset = GraphicsAsset.Parse(Project.ReadText(Path));
+            error = null;
+        }
+        catch (Exception e) when (e is JsonException or IOException or InvalidDataException)
+        {
+            error = $"{System.IO.Path.GetFileName(Path)}: {e.Message}";
+        }
+        savedJson = asset.ToJson();
+        LoadSource();
+        await Convert();
+    }
+
+    void LoadSource()
+    {
+        source = null;
+        if (asset.Source.Length == 0) return;
+        try
+        {
+            source = Png.Read(Project.ReadBytes(SourcePath));
+            sourceStamp = File.GetLastWriteTimeUtc(Project.FullPath(SourcePath)).Ticks.ToString();
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException)
+        {
+            error = $"{asset.Source}: {e.Message}";
+        }
+    }
+
+    public Task<bool> Save()
+    {
+        Project.WriteText(Path, asset.ToJson());
+        savedJson = asset.ToJson();
+        _ = OnDirty.InvokeAsync(false);
+        return Task.FromResult(true);
+    }
+
+    async Task Update(Func<GraphicsAsset, GraphicsAsset> change)
+    {
+        string? oldSource = asset.Source;
+        asset = change(asset);
+        if (asset.Source != oldSource) LoadSource();
+        await OnDirty.InvokeAsync(Dirty);
+        await Convert();
+    }
+
+    async Task SetAddress(string part, string? address)
+    {
+        var addresses = new Dictionary<string, string>(asset.Addresses);
+        if (string.IsNullOrWhiteSpace(address)) addresses.Remove(part); else addresses[part] = address.Trim();
+        await Update(a => a with { Addresses = addresses });
+    }
+
+    // The conversion runs off the circuit's thread; a result older than the last change is dropped
+    async Task Convert()
+    {
+        if (source is null) return;
+        int mine = ++version;
+        converting = true;
+        var settings = asset;
+        var image = source;
+        try
+        {
+            var result = await Task.Run(() => Converter.Convert(image, settings));
+            if (mine != version) return;
+            conversion = result;
+            previewUrl = "data:image/png;base64," + System.Convert.ToBase64String(Png.Write(result.Preview));
+            charsetUrl = CharsetImage(result, settings);
+            error = null;
+        }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException)
+        {
+            if (mine == version) error = e.Message;
+        }
+        finally
+        {
+            if (mine == version) converting = false;
+        }
+    }
+
+    // The characters as a picture, 16 per row: hires bits in white, multicolor codes in their shared colors
+    string? CharsetImage(Conversion result, GraphicsAsset settings)
+    {
+        var charset = result.Parts.FirstOrDefault(p => p.Name == "charset")?.Data;
+        if (charset is null) { charsetWidth = 0; return null; }
+        var palette = C64Palette.Named(settings.Palette);
+        bool multicolor = settings.Mode == GraphicsMode.MulticolorCharset;
+        int count = charset.Length / 8, across = 16, down = (count + across - 1) / across;
+        uint[] colors = multicolor
+            ? [palette.Argb(result.Constants["BACKGROUND"]), palette.Argb(result.Constants["MULTICOLOR1"]), palette.Argb(result.Constants["MULTICOLOR2"]), palette.Argb(15)]
+            : [palette.Argb(result.Constants["BACKGROUND"]), palette.Argb(1)];
+        var image = new RgbImage(across * 9, down * 9);
+        Array.Fill(image.Pixels, 0xFF03052Au);
+        for (int c = 0; c < count; c++)
+            for (int row = 0; row < 8; row++)
+                for (int x = 0; x < 8; x++)
+                {
+                    int bits = charset[c * 8 + row];
+                    int code = multicolor ? bits >> (6 - (x / 2) * 2) & 3 : bits >> (7 - x) & 1;
+                    image[c % across * 9 + x, c / across * 9 + row] = colors[code];
+                }
+        charsetWidth = image.Width;
+        return "data:image/png;base64," + System.Convert.ToBase64String(Png.Write(image));
+    }
+
+    // A row of the 16 colors, and "auto": the color the conversion chose is outlined
+    RenderFragment Swatches(string label, int? value, Func<int?, GraphicsAsset> set, int? chosen) => __builder =>
+    {
+        <div class="flex items-center gap-2">
+            <span class="w-20">@label</span>
+            <button class="@(value is null ? "border-chip-400 text-white" : "border-night-600 text-night-300") rounded border px-1.5 py-0.5"
+                    @onclick="() => Update(_ => set(null))" title="Chosen from the picture">auto</button>
+            @for (int i = 0; i < 16; i++)
+            {
+                int color = i;
+                string ring = value == color ? "ring-2 ring-chip-400" : chosen == color ? "ring-1 ring-night-300" : "";
+                <button class="h-5 w-5 rounded-sm border border-night-700 @ring" title="@color: @C64Palette.Names[color]"
+                        style="background: #@C64Palette.Named(asset.Palette).Rgb[color].ToString("X6")"
+                        @onclick="() => Update(_ => set(color))"></button>
+            }
+        </div>
+    };
+
+    int? Shared(string constant) => conversion?.Constants.TryGetValue(constant, out int c) == true ? c : null;
+
+    static string Kebab<T>(T value) where T : struct, Enum => JsonNamingPolicy.KebabCaseLower.ConvertName(value.ToString());
+
+    static T Parse<T>(ChangeEventArgs e) where T : struct, Enum =>
+        Enum.GetValues<T>().First(v => Kebab(v) == e.Value?.ToString());
+
+    static string PaletteOf(ChangeEventArgs e) => e.Value?.ToString() ?? C64Palette.Pepto.Name;
+
+    static int? Number(ChangeEventArgs e) => int.TryParse(e.Value?.ToString(), out int n) && n > 0 ? n : null;
+
+    static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+
+    static TileSize? TileOf(int? width, int? height) => width is null && height is null ? null : new TileSize(width ?? 1, height ?? 1);
+
+    static string CombinePath(string folder, string file) => folder.Length == 0 ? file : folder + "/" + file;
+}

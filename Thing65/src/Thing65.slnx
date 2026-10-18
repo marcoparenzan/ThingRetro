@@ -1,0 +1,20 @@
+﻿<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/Apps/">
+    <Project Path="Thing65.Computer/Thing65.Computer.csproj" />
+    <Project Path="Thing65.WebComputer/Thing65.WebComputer.csproj" />
+    <Project Path="Thing65.WebStudio/Thing65.WebStudio.csproj" />
+    <Project Path="Thing65/Thing65.csproj" />
+  </Folder>
+  <Folder Name="/Lib/">
+    <Project Path="Thing65.C65/Thing65.C65.csproj" />
+    <Project Path="Thing65.WinForms/Thing65.WinForms.csproj" />
+  </Folder>
+  <Folder Name="/Test/">
+    <Project Path="Thing65.Tests/Thing65.Tests.csproj" />
+  </Folder>
+</Solution>

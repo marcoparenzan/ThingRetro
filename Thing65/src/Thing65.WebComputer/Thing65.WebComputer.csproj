@@ -1,0 +1,45 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <!-- The C65 in the browser: the same board and chips, compiled to WebAssembly. The page drives the board one
+       frame at a time (requestAnimationFrame) and paints the frames on a canvas -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <!-- Release: compiled ahead of time to WebAssembly (needs the wasm-tools workload); the interpreter is far too
+       slow for a cycle-exact C65 -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <RunAOTCompilation>true</RunAOTCompilation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.11" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Thing65.C65\Thing65.C65.csproj" />
+  </ItemGroup>
+
+  <!-- Logo and icons from images/ of the repository, served from img/ -->
+  <ItemGroup>
+    <Content Include="..\..\images\logos\thing65-logo-600x200.png;..\..\images\icons\thing65-chip-16.png;..\..\images\icons\thing65-chip-32.png;..\..\images\icons\thing65-chip-256.png"
+             Link="wwwroot\img\%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- The C65 ROMs are copyrighted and are not published with the site: the user loads them once from disk.
+       Only Debug builds embed them, for local development -->
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <EmbeddedResource Include="../../roms/*" LogicalName="roms/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+  </ItemGroup>
+
+</Project>

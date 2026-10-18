@@ -1,0 +1,40 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The desktop app: one C65 in a window, with board, monitor, keyboard, speakers and control ports wired
+       together, plus loading .prg/.d81 files, the ROM folder and the settings -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <ApplicationIcon>..\..\images\thing65.ico</ApplicationIcon>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Thing65.C65\Thing65.C65.csproj" />
+    <!-- The 1541 drive of the sibling project ThingCommodore -->
+    <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore\ThingCommodore.csproj" />
+    <ProjectReference Include="..\Thing65.WinForms\Thing65.WinForms.csproj" />
+  </ItemGroup>
+
+  <!-- ROM files: read from the roms folder next to the executable. The C65 ROM (*.rom) is not in the repository:
+       whoever builds puts their own in roms. The C64 ROMs (kernal, basic, chargen) are those of
+       the old C64 board, still used by its tests -->
+  <ItemGroup>
+    <Content Include="../../roms/*" Link="roms/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- The application icon, for the windows -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\images\thing65.ico" LogicalName="thing65.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
+  </ItemGroup>
+
+</Project>

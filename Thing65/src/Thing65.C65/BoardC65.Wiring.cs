@@ -1,0 +1,188 @@
+﻿using ThingMOS;
+using ThingRetroEmu.Chips;
+using ThingRetroEmu.Buses;
+
+namespace Thing65.C65;
+
+// The board's wiring: what is connected to which pin of each socket
+public partial class BoardC65
+{
+    public Socket<I4510Pinout> CpuSocket { get; private set; } = null!;      // CSG 4510
+    public Socket<I4567Pinout> VicSocket { get; private set; } = null!;      // CSG 4567 VIC-III
+    public Socket<I6581Pinout> SidRightSocket { get; private set; } = null!; // 6581, right channel ($D400)
+    public Socket<I6581Pinout> SidLeftSocket { get; private set; } = null!;  // 6581, left channel ($D420)
+    public Socket<I6526Pinout> Cia1Socket { get; private set; } = null!;     // 6526 CIA 1 ($DC00)
+    public Socket<I6526Pinout> Cia2Socket { get; private set; } = null!;     // 6526 CIA 2 ($DD00)
+    public Socket<IF018Pinout> DmaSocket { get; private set; } = null!;      // CSG F018 DMAgic ($D700)
+    public Socket<IF011Pinout> FdcSocket { get; private set; } = null!;      // CSG F011 disk controller ($D080)
+    public Socket<IUartPinout> UartSocket { get; private set; } = null!;     // UART ($D600)
+    public Socket<IRamExpansionPinout> RamExpansionSocket { get; private set; } = null!; // RAM expansion card: REC at $D0A0, RAM at $80000
+    public Socket<ICartridgePinout> CartridgeSocket { get; private set; } = null!;       // cartridge port: ROM at $40000
+
+    // Chips currently in the sockets (null = empty socket), read at every cycle
+    I4510Pinout? cpu;
+    I4567Pinout? vic;
+    I6581Pinout? sidRight;
+    I6581Pinout? sidLeft;
+    I6526Pinout? cia1;
+    I6526Pinout? cia2;
+    IF018Pinout? dma;
+    IF011Pinout? fdc;
+    IUartPinout? uart;
+    IRamExpansionPinout? expansion;
+    ICartridgePinout? cartridge;
+
+    // CPU /IRQ: VIC-III, CIA 1, the disk controller and the UART. /NMI: CIA 2, the RESTORE key and the UART
+    OpenCollectorLine irqLine = null!;
+    OpenCollectorLine nmiLine = null!;
+
+    internal bool IrqLine => irqLine.IsLow;
+    internal bool NmiLine => nmiLine.IsLow;
+
+    readonly CpuBus cpuBus;
+    readonly VicBus vicBus;
+    readonly DmaBus dmaBus;
+
+    void CreateSockets()
+    {
+        irqLine = new OpenCollectorLine("/IRQ", () => vic?.Irq == true, () => cia1?.Irq == true, () => fdc?.Irq == true, () => uart?.Irq == true);
+        nmiLine = new OpenCollectorLine("/NMI", () => cia2?.Irq == true, () => keyboard.Restore, () => uart?.Nmi == true);
+
+        CpuSocket = new Socket<I4510Pinout>("CPU", ConnectCpu, DisconnectCpu);
+        VicSocket = new Socket<I4567Pinout>("VIC-III", ConnectVic, DisconnectVic);
+        SidRightSocket = new Socket<I6581Pinout>("SID right", chip => ConnectSid(chip, ref sidRight), _ => DisconnectSid(ref sidRight));
+        SidLeftSocket = new Socket<I6581Pinout>("SID left", chip => ConnectSid(chip, ref sidLeft), _ => DisconnectSid(ref sidLeft));
+        Cia1Socket = new Socket<I6526Pinout>("CIA 1", ConnectCia1, DisconnectCia1);
+        Cia2Socket = new Socket<I6526Pinout>("CIA 2", ConnectCia2, DisconnectCia2);
+        DmaSocket = new Socket<IF018Pinout>("DMAgic", ConnectDma, DisconnectDma);
+        FdcSocket = new Socket<IF011Pinout>("F011", chip => fdc = chip, _ => fdc = null);
+        UartSocket = new Socket<IUartPinout>("UART", chip => uart = chip, _ => uart = null);
+        RamExpansionSocket = new Socket<IRamExpansionPinout>("RAM expansion", chip => expansion = chip, _ => expansion = null);
+        CartridgeSocket = new Socket<ICartridgePinout>("cartridge port", chip => cartridge = chip, _ => cartridge = null);
+
+        // The CPU port has pull-ups on P0-P2: the memory map of the C64 mode
+        cpuPort.External = () => 0xFF;
+        keyPort.External = () => (byte)(keyboard.CapsLock ? 0xFE : 0xFF); // bit 0: CAPS LOCK sense, low = down
+    }
+
+    // CPU: address/data bus (20 bits and MAP/), /IRQ, /NMI, AEC from the VIC-III, /DMA from the DMAgic and from
+    // the VIC-III's BA (simplification: the CPU stops on a low BA even if it could still write for 3 cycles)
+    void ConnectCpu(I4510Pinout chip)
+    {
+        chip.Bus = cpuBus;
+        chip.IrqInput = () => irqLine.IsLow;
+        chip.NmiInput = () => nmiLine.IsLow;
+        chip.AecInput = () => vic?.AddressEnable ?? true;
+        chip.DmaInput = () => (vic?.BusAvailable ?? true) && !(dma?.Busy ?? false);
+        cpu = chip;
+    }
+
+    void DisconnectCpu(I4510Pinout chip)
+    {
+        chip.Bus = null;
+        cpu = null;
+    }
+
+    // VIC-III: video bus (RAM bank 0, Color RAM, character ROM), /IRQ, BA, video output
+    void ConnectVic(I4567Pinout chip)
+    {
+        chip.Memory = vicBus;
+        chip.FrameCompleted = OnFrameCompleted;
+        vic = chip;
+    }
+
+    void DisconnectVic(I4567Pinout chip)
+    {
+        chip.Memory = null;
+        chip.FrameCompleted = null;
+        vic = null;
+    }
+
+    // DMAgic: the system bus, and the VIC-III has priority over it
+    void ConnectDma(IF018Pinout chip)
+    {
+        chip.Memory = dmaBus;
+        chip.BusGrant = () => vic?.BusAvailable ?? true;
+        chip.InterruptRequest = () => irqLine.IsLow || nmiLine.IsLow;
+        dma = chip;
+    }
+
+    void DisconnectDma(IF018Pinout chip)
+    {
+        chip.Memory = null;
+        dma = null;
+    }
+
+    // CIA 1: port A to the keyboard rows and to the contacts of control port 2, port B to the keyboard columns and
+    // to the contacts of control port 1 (the C65 keyboard has the same 8x8 matrix as the C64, plus 9 more keys read elsewhere)
+    void ConnectCia1(I6526Pinout chip)
+    {
+        chip.PortA.External = () => ControlPort2.DigitalLines;
+        chip.PortB.External = () => (byte)(keyboard.GetKeyboardState(chip.PortA.Pins) & ExtendedKeys() & ControlPort1.DigitalLines);
+        cia1 = chip;
+    }
+
+    void DisconnectCia1(I6526Pinout chip)
+    {
+        chip.PortA.External = () => 0xFF;
+        chip.PortB.External = () => 0xFF;
+        cia1 = null;
+    }
+
+    // SIDs: POT X and POT Y come from the control ports through an analog switch driven by PA6/PA7 of CIA 1
+    void ConnectSid(I6581Pinout chip, ref I6581Pinout? field)
+    {
+        chip.PotXInput = () => SelectedPotPort()?.PotX ?? 0xFF;
+        chip.PotYInput = () => SelectedPotPort()?.PotY ?? 0xFF;
+        field = chip;
+    }
+
+    void DisconnectSid(ref I6581Pinout? field)
+    {
+        if (field is null) return;
+        field.PotXInput = () => 0xFF;
+        field.PotYInput = () => 0xFF;
+        field = null;
+    }
+
+    // The ninth keyboard line (C8, the C65's extra keys) is selected by bit 1 of the port at $D607, active low
+    byte ExtendedKeys() => (keyPort.Pins & 0x02) == 0 ? keyboard.GetExtendedKeyboardState() : (byte)0xFF;
+
+    ControlPort? SelectedPotPort()
+    {
+        byte select = cia1?.PortA.Pins ?? 0xFF;
+        if ((select & 0x40) != 0) return ControlPort1;
+        if ((select & 0x80) != 0) return ControlPort2;
+        return null;
+    }
+
+    // CIA 2: PA0-PA1 = VIC bank (inverted), PA2 = user port, PA3-PA5 = ATN/CLK/DATA out on the serial bus,
+    // PA6-PA7 = CLK/DATA in. The drivers invert: a 1 on an output pulls the line down. The lines go to the IEC connector
+    // (Iec): a cable takes them to the drives; without one the outputs are the only ones to drive the lines
+    void ConnectCia2(I6526Pinout chip)
+    {
+        Iec.AtnLow = () => (chip.PortA.Output & 0x08) != 0;
+        Iec.ClkLow = () => (chip.PortA.Output & 0x10) != 0;
+        Iec.DataLow = () => (chip.PortA.Output & 0x20) != 0;
+        chip.PortA.External = () =>
+        {
+            byte pins = 0x3F;
+            if (!Iec.ClkLow() && !Iec.ClkInputLow()) pins |= 0x40;
+            if (!Iec.DataLow() && !Iec.DataInputLow()) pins |= 0x80;
+            return pins;
+        };
+        chip.PortB.External = () => 0xFF;
+        chip.PortA.Changed += UpdateVicBank;
+        cia2 = chip;
+        UpdateVicBank();
+    }
+
+    void DisconnectCia2(I6526Pinout chip)
+    {
+        chip.PortA.Changed -= UpdateVicBank;
+        Iec.AtnLow = Iec.ClkLow = Iec.DataLow = () => false;
+        chip.PortA.External = () => 0xFF;
+        cia2 = null;
+        UpdateVicBank();
+    }
+}

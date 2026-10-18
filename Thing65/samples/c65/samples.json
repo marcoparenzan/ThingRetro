@@ -1,0 +1,11 @@
+// Build manifest of the C65 samples: thing65 build samples/c65/samples.json
+// The sources are for the 4510 ("cpu"); every program is at $1800: BLOAD "NAME",B0 and SYS 6144
+{
+  "cpu": "4510",
+  "outputs": [
+    { "file": "hello65.prg", "source": "hello65.asm", "description": "Prints a line and uses B and INW" },
+    { "file": "dma65.prg", "source": "dma65.asm", "description": "The DMAgic: fill and copy" },
+    { "file": "map65.prg", "source": "map65.asm", "description": "The memory mapper (MAP/EOM)" },
+    { "file": "vic3.prg", "source": "vic3.asm", "description": "VIC-III palette and character attributes" }
+  ]
+}

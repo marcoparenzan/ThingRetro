@@ -1,0 +1,395 @@
+﻿@using System.Globalization
+@using ThingCommodore.Graphics
+@using Thing65.WebStudio.CodeBehind
+@implements IRegionEditor
+@inject IJSRuntime JS
+
+@* The editor of a ;@ charset region: the characters, each shown as the screens that use it show it (their background
+   and multicolors, the color its cells have most often: hires or multicolor). The look can be changed here to draw
+   (it is not saved: the screens decide it). Characters added, duplicated, deleted and dragged renumber the screen
+   codes of the screens that use the charset *@
+<div class="absolute inset-0 flex flex-col overflow-hidden @(Visible ? null : "invisible")">
+    <div class="flex flex-wrap items-center gap-2 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
+        <span class="mr-2 font-mono text-chip-300">@File · @(charset?.Label ?? "charset")</span>
+        <button class="@(fill ? "border-night-600" : "border-chip-400 bg-night-700 text-white") rounded border px-2 py-1" @onclick="() => fill = false">✎ Pencil</button>
+        <button class="@(fill ? "border-chip-400 bg-night-700 text-white" : "border-night-600") rounded border px-2 py-1" @onclick="() => fill = true">◩ Fill</button>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Invert" title="Swap the pixels and the background">◐ Invert</button>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Mirror" title="Mirror left and right">⇋ Mirror</button>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Flip" title="Upside down">⇵ Flip</button>
+        <button class="rounded border border-night-600 px-2 py-1 disabled:opacity-40" disabled="@(Multicolor)" @onclick="Rotate"
+                title="A quarter turn clockwise (hires: a multicolor character is 4x8)">↻ Rotate</button>
+        <span class="flex items-center gap-0.5" title="Slide the pixels; what leaves one side comes back on the other">
+            slide
+            <button class="rounded border border-night-600 px-1.5 py-1" @onclick="() => Slide(-1, 0)">←</button>
+            <button class="rounded border border-night-600 px-1.5 py-1" @onclick="() => Slide(1, 0)">→</button>
+            <button class="rounded border border-night-600 px-1.5 py-1" @onclick="() => Slide(0, -1)">↑</button>
+            <button class="rounded border border-night-600 px-1.5 py-1" @onclick="() => Slide(0, 1)">↓</button>
+        </span>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Clear">⌫ Clear</button>
+        <button class="rounded border border-night-600 px-2 py-1 disabled:opacity-40" disabled="@(undo.Count == 0)" @onclick="Undo">↶ Undo</button>
+        <button class="rounded border border-night-600 px-2 py-1" @onclick="Load" title="Read the file and the program again">⟳ Reload</button>
+        <span class="ml-auto text-night-300">@status</span>
+    </div>
+
+    @if (error is not null)
+    {
+        <p class="m-3 rounded border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">@error</p>
+    }
+    @if (charset is not null)
+    {
+        <div class="min-h-0 flex-1 overflow-auto p-4 text-xs text-night-200">
+            @if (charset.Characters > 0)
+            {
+            <div class="mb-2 flex flex-wrap items-center gap-3">
+                <span class="text-sm text-white">$@((charset.First + selected).ToString("X2")) @descriptions.ElementAtOrDefault(selected)</span>
+                <span class="text-night-400">@Usage</span>
+            </div>
+            <div class="mb-2 flex flex-wrap items-center gap-1">
+                <span class="mr-1 text-night-300" title="How it is shown here: the color its cells have in the screens. Change it to draw; it is not saved">look: color</span>
+                @for (int c = 0; c < 16; c++)
+                {
+                    int color = c;
+                    <button disabled="@(Look.MulticolorMode && color >= 8)"
+                            class="@((Look.Color & (Look.MulticolorMode ? 7 : 15)) == color ? "ring-2 ring-chip-400" : "") h-5 w-5 rounded-sm border border-night-700 disabled:opacity-20"
+                            title="@color: @C64Palette.Names[color]" style="background: #@charset.Palette.Rgb[color].ToString("X6")"
+                            @onclick="() => SetLook(color, Multicolor)"></button>
+                }
+                @if (charset.Multicolor)
+                {
+                    <span class="ml-2 text-night-400" title="multicolor=1 in the ;@@ charset region: every character of the set is multicolor">multicolor charset</span>
+                }
+                else if (Look.MulticolorMode)
+                {
+                    <label class="ml-2 flex items-center gap-1"><input type="checkbox" checked="@Multicolor" @onchange="() => SetLook(Look.Color & 7, !Multicolor)" /> multicolor</label>
+                }
+            </div>
+            <div class="mb-2 flex flex-wrap items-center gap-2">
+                <span class="text-night-300">pencil:</span>
+                @for (int c = 0; c < (Multicolor ? 4 : 2); c++)
+                {
+                    int code = c;
+                    <button class="@(paintCode == code ? "ring-2 ring-chip-400" : "") flex items-center gap-1 rounded border border-night-600 px-2 py-1" @onclick="() => paintCode = code">
+                        <span class="h-4 w-4 rounded-sm border border-night-700" style="background: #@charset.Palette.Rgb[Look.ColorOf(code)].ToString("X6")"></span>
+                        @(Multicolor
+                            ? code switch { 0 => "background ($D021)", 1 => "multicolor 1 ($D022)", 2 => "multicolor 2 ($D023)", _ => "cell color" }
+                            : code == 0 ? "off: background" : "on: cell color")
+                    </button>
+                }
+                <span class="text-night-400">left button: the pencil, right button: background</span>
+            </div>
+            <div class="relative mb-5 inline-block select-none" style="width: @(8 * Zoom)px; height: @(8 * Zoom)px"
+                 @onmousedown="Down" @onmousemove="Move" @onmouseup="Up" @onmouseleave="Up" @oncontextmenu:preventDefault>
+                <img src="@characterImage" alt="" draggable="false" class="pixelated pointer-events-none absolute inset-0 h-full w-full" />
+                <div class="pointer-events-none absolute inset-0"
+                     style="background-image: linear-gradient(to right, rgba(124,138,247,.35) 1px, transparent 1px), linear-gradient(to bottom, rgba(124,138,247,.35) 1px, transparent 1px); background-size: @(Zoom * (Multicolor ? 2 : 1))px @(Zoom)px"></div>
+            </div>
+            }
+
+            <div class="mb-1 flex flex-wrap items-center gap-2">
+                <span class="text-[11px] font-semibold tracking-wider text-night-300 uppercase">Characters $@charset.First.ToString("X2")-$@((charset.First + charset.Characters - 1).ToString("X2"))</span>
+                <button class="tool border border-night-700" @onclick="AddCharacter" title="A new empty character after the last one">＋ Character</button>
+                <button class="tool border border-night-700" @onclick="DuplicateCharacter" title="A copy of the selected character, right after it">⧉ Duplicate</button>
+                <button class="tool border border-night-700" @onclick="DeleteCharacter" title="Delete the selected character (not when a screen uses it)">🗑 Delete</button>
+                <span class="text-night-400">drag a character onto another to move it there</span>
+            </div>
+            <div class="flex max-w-4xl flex-wrap gap-1">
+                @for (int c = 0; c < charset.Characters; c++)
+                {
+                    int character = c;
+                    <button class="@(selected == character ? "ring-2 ring-chip-400" : "hover:ring-1 hover:ring-night-300") @(dropTarget == character ? "bg-chip-400/30" : null) flex flex-col items-center rounded p-0.5"
+                            draggable="true" @ondragstart="() => dragged = character" @ondragend="() => dropTarget = -1"
+                            @ondragenter="() => dropTarget = character" @ondragover:preventDefault @ondrop="() => MoveCharacter(dragged, character)"
+                            @onclick="() => Select(character)" title="@Title(character)">
+                        <img src="@thumbnails[character]" alt="" class="pixelated h-8 w-8 border border-night-700" />
+                        <span class="font-mono text-[10px] text-night-400">@((charset.First + character).ToString("X2"))</span>
+                    </button>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Project Project { get; set; } = default!;
+    [Parameter, EditorRequired] public string File { get; set; } = "";
+    [Parameter, EditorRequired] public int Index { get; set; }
+    [Parameter, EditorRequired] public IRegionHost Host { get; set; } = default!;
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> OnDirty { get; set; }
+
+    const int Zoom = 32;
+
+    CharsetRegion? charset;
+    ProgramImage? image;
+    List<CharsetUsers.Screen> screens = [];
+    Look[] looks = [];
+    List<string> descriptions = [];
+    int[] values = [];
+    string[] thumbnails = [];
+    int selected;
+    int[] codes = [];
+    string? characterImage;
+    string? error;
+    string status = "";
+    bool dirty, fill, painting;
+    int paintCode = 1, dragged = -1, dropTarget = -1;
+    readonly Stack<int[]> undo = new();
+
+    Look Look => looks[selected];
+    bool Multicolor => Look.Multicolor;
+    int Across => Multicolor ? 4 : 8;
+
+    string Usage
+    {
+        get
+        {
+            int code = charset!.First + selected;
+            int cells = screens.Sum(s => Enumerable.Range(0, s.Model.Cells).Count(c => s.Values[s.Model.ScreenAt + c] == code));
+            return screens.Count == 0 ? "no screen uses this charset" : cells == 0 ? "not used in the screens" : $"used in {cells} cells";
+        }
+    }
+
+    string Title(int character) => $"${charset!.First + character:X2} {descriptions.ElementAtOrDefault(character)}".TrimEnd();
+
+    protected override void OnInitialized() => Load();
+
+    public void Load()
+    {
+        try
+        {
+            string[] lines = Lines();
+            var region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"There is no region {Index + 1} in {File}");
+            image = null;
+            try { image = ProgramImage.Assemble(Project); }
+            catch (FormatException) { status = "The program does not assemble: the characters show without the screens' colors"; }
+            values = region.ReadBytes(lines, image).ToArray();
+            charset = new CharsetRegion(region, lines, image, values.Length);
+            descriptions = CharmapFile.Read(lines, region, charset.Label, image).Select(c => c.Description).ToList();
+            screens = image is null ? [] : CharsetUsers.Find(Project, charset.Label, image);
+            looks = CharsetUsers.Looks(screens, charset.First, charset.Characters, charset.Multicolor);
+            selected = Math.Clamp(selected, 0, Math.Max(0, charset.Characters - 1));
+            undo.Clear();
+            SetDirty(false);
+            error = null;
+            if (charset.Characters == 0) status = "The charset has no characters yet: ＋ Character adds one";
+            RenderAll();
+        }
+        catch (Exception e) when (e is FormatException or IOException or OverflowException or KeyNotFoundException)
+        {
+            error = e.Message;
+            charset = null;
+        }
+    }
+
+    string[] Lines() => Project.ReadText(File).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+
+    public async Task<bool> Save()
+    {
+        if (charset is null) return false;
+        if (!await Host.CanWriteAsync(File)) return false;
+        string[] lines = Lines();
+        var region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"The region {Index + 1} of {File} is gone");
+        string newline = Project.ReadText(File).Contains("\r\n") ? "\r\n" : "\n";
+        Project.WriteText(File, string.Join(newline, region.WriteBytes(lines, values, 8)));
+        SetDirty(false);
+        await Host.WrittenAsync(File);
+        return true;
+    }
+
+    void SetDirty(bool value)
+    {
+        if (dirty == value) return;
+        dirty = value;
+        _ = OnDirty.InvokeAsync(value);
+    }
+
+    void Select(int character)
+    {
+        selected = character;
+        Decode();
+    }
+
+    // The look is only how the character is shown here (the screens decide it)
+    void SetLook(int color, bool multicolor)
+    {
+        looks[selected] = Look with { Color = Look.MulticolorMode ? (color & 7) | (multicolor ? 8 : 0) : color };
+        thumbnails[selected] = Url(charset!.Render(values, selected, Look, 1));
+        Decode();
+    }
+
+    void Decode()
+    {
+        if (charset is null || charset.Characters == 0) return;
+        codes = charset.Decode(values, selected, Multicolor);
+        paintCode = Math.Min(paintCode, Multicolor ? 3 : 1);
+        characterImage = Url(charset.Render(values, selected, Look, 1));
+    }
+
+    void RenderAll()
+    {
+        if (charset is null) return;
+        thumbnails = Enumerable.Range(0, charset.Characters).Select(c => Url(charset.Render(values, c, looks[c], 1))).ToArray();
+        Decode();
+    }
+
+    (int X, int Y)? PixelAt(MouseEventArgs e)
+    {
+        int x = (int)(e.OffsetX / (Zoom * (Multicolor ? 2 : 1))), y = (int)(e.OffsetY / Zoom);
+        return x < 0 || y < 0 || x >= Across || y >= 8 ? null : (x, y);
+    }
+
+    void Down(MouseEventArgs e)
+    {
+        if (PixelAt(e) is not { } pixel) return;
+        undo.Push((int[])values.Clone());
+        int code = e.Button == 2 ? 0 : paintCode;
+        if (fill) FloodFill(pixel, code);
+        else
+        {
+            painting = true;
+            Paint(pixel, code);
+        }
+    }
+
+    void Move(MouseEventArgs e)
+    {
+        if (!painting || PixelAt(e) is not { } pixel || (e.Buttons & 3) == 0) return;
+        Paint(pixel, (e.Buttons & 2) != 0 ? 0 : paintCode);
+    }
+
+    void Up(MouseEventArgs e) => painting = false;
+
+    void Paint((int X, int Y) pixel, int code)
+    {
+        int i = pixel.Y * Across + pixel.X;
+        if (codes[i] == code) return;
+        codes[i] = code;
+        Encoded();
+    }
+
+    void FloodFill((int X, int Y) pixel, int code)
+    {
+        int start = pixel.Y * Across + pixel.X, target = codes[start];
+        if (target == code) return;
+        var pending = new Stack<int>([start]);
+        while (pending.Count > 0)
+        {
+            int i = pending.Pop();
+            if (codes[i] != target) continue;
+            codes[i] = code;
+            if (i % Across > 0) pending.Push(i - 1);
+            if (i % Across < Across - 1) pending.Push(i + 1);
+            if (i >= Across) pending.Push(i - Across);
+            if (i < Across * 7) pending.Push(i + Across);
+        }
+        Encoded();
+    }
+
+    void Transform(Func<int, int, int> source)
+    {
+        undo.Push((int[])values.Clone());
+        var old = (int[])codes.Clone();
+        for (int y = 0; y < 8; y++)
+            for (int x = 0; x < Across; x++)
+                codes[y * Across + x] = source(x, y) is int from && from >= 0 ? old[from] : 0;
+        Encoded();
+    }
+
+    void Invert()
+    {
+        undo.Push((int[])values.Clone());
+        int max = Multicolor ? 3 : 1;
+        for (int i = 0; i < codes.Length; i++) codes[i] = max - codes[i];
+        Encoded();
+    }
+
+    void Mirror() => Transform((x, y) => y * Across + Across - 1 - x);
+    void Flip() => Transform((x, y) => (7 - y) * Across + x);
+    void Rotate() => Transform((x, y) => (7 - x) * 8 + y);   // clockwise: the left column becomes the top row
+    void Slide(int dx, int dy) => Transform((x, y) => (y - dy + 8) % 8 * Across + (x - dx + Across) % Across);
+    void Clear() => Transform((x, y) => -1);
+
+    void Undo()
+    {
+        if (undo.Count == 0) return;
+        values = undo.Pop();
+        SetDirty(true);
+        RenderAll();
+    }
+
+    void Encoded()
+    {
+        charset!.Encode(values, selected, Multicolor, codes);
+        SetDirty(true);
+        characterImage = Url(charset.Render(values, selected, Look, 1));
+        thumbnails[selected] = characterImage;
+    }
+
+    // Characters added, duplicated, deleted and moved: (where it was, what it is). The screens that use the charset
+    // follow every character to its new screen code
+    Task AddCharacter() => Rearrange(list => list.Add((-1, new CharmapFile.Character(new int[8], ""))), list => list.Count - 1, "Character added");
+
+    Task DuplicateCharacter()
+    {
+        int at = selected;
+        return Rearrange(list => list.Insert(at + 1, (-1, list[at].Character with { Bytes = [.. list[at].Character.Bytes] })), _ => at + 1, "Character duplicated");
+    }
+
+    async Task DeleteCharacter()
+    {
+        int at = selected, code = charset!.First + at;
+        var users = CharsetUsers.Using(Project, screens, code);
+        if (users.Count > 0) { status = $"${code:X2} is used in {string.Join(", ", users)}: paint those cells with another character first"; return; }
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete the character ${code:X2}? The characters after it move down by one, in the screens too.")) return;
+        await Rearrange(list => list.RemoveAt(at), _ => Math.Max(0, at - 1), "Character deleted");
+    }
+
+    Task MoveCharacter(int from, int to)
+    {
+        dropTarget = -1;
+        if (from < 0 || from == to) return Task.CompletedTask;
+        return Rearrange(list =>
+        {
+            var moving = list[from];
+            list.RemoveAt(from);
+            list.Insert(to, moving);
+        }, _ => to, $"Character moved to ${charset!.First + to:X2}");
+    }
+
+    async Task Rearrange(Action<List<(int Was, CharmapFile.Character Character)>> change, Func<List<(int Was, CharmapFile.Character Character)>, int> select, string done)
+    {
+        try
+        {
+            if (dirty && !await Save()) return;
+            if (!await Host.CanWriteAsync(File)) return;
+            foreach (string path in screens.Select(s => Project.RelativePath(s.File)).Distinct())
+                if (!await Host.CanWriteAsync(path)) return;
+
+            string[] lines = Lines();
+            var region = AsmRegion.Find(lines).ElementAtOrDefault(Index) ?? throw new FormatException($"The region {Index + 1} of {File} is gone");
+            string label = region.Labels.First();
+            var list = CharmapFile.Read(lines, region, label, image).Select((c, i) => (Was: i, Character: c)).ToList();
+            change(list);
+            var moved = new Dictionary<int, int>();
+            for (int i = 0; i < list.Count; i++) if (list[i].Was >= 0) moved[list[i].Was] = i;
+
+            string newline = Project.ReadText(File).Contains("\r\n") ? "\r\n" : "\n";
+            Project.WriteText(File, string.Join(newline, CharmapFile.Write(lines, region, label, list.Select(c => c.Character).ToList(), charset!.First)));
+            CharsetUsers.Renumber(screens, charset.First, moved);
+
+            await Host.WrittenAsync(File);
+            foreach (string path in screens.Select(s => Project.RelativePath(s.File)).Distinct()) await Host.WrittenAsync(path);
+            int selection = select(list);
+            Load();
+            if (charset is not null && charset.Characters > 0) Select(Math.Min(selection, charset.Characters - 1));
+            status = done + (screens.Count > 0 ? " · the screens follow; code that writes these screen codes itself must too" : "");
+        }
+        catch (Exception e) when (e is FormatException or IOException or UnauthorizedAccessException or IndexOutOfRangeException or ArgumentOutOfRangeException or InvalidOperationException)
+        {
+            Load();
+            status = "Not done: " + e.Message;
+        }
+    }
+
+    static string Url(RgbImage image) => "data:image/png;base64," + Convert.ToBase64String(Png.Write(image));
+}

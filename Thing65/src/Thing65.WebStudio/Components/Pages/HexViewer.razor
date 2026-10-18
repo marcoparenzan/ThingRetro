@@ -1,0 +1,222 @@
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+
+@* A binary file in the classic two views: 16 bytes per row in hex, and the same bytes as characters (ASCII, PETSCII
+   or C65 screen codes). For a .prg the addresses are the C65's, from the load address in its first two bytes; for a
+   .crt the header and the CHIP packets are read, so a byte also tells its bank and C65 address. A click on a byte
+   selects it in both views and shows its value in every base, and the word starting there *@
+<div class="absolute inset-0 flex flex-col overflow-hidden @(Visible ? null : "invisible")">
+    <div class="flex flex-wrap items-center gap-3 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
+        <span class="font-mono text-chip-300">@Path</span>
+        <span class="text-night-400">@bytes.Length bytes@(IsPrg ? $" · .prg loaded at ${loadAddress:X4}-${loadAddress + bytes.Length - 3:X4}" : "")@(cartridge is not null ? " · " + cartridge : "")</span>
+        <label class="ml-4 flex items-center gap-1">characters
+            <select class="field py-0.5" @bind="charset">
+                <option value="ascii">ASCII</option>
+                <option value="petscii">PETSCII</option>
+                <option value="screen">screen codes</option>
+            </select>
+        </label>
+        <form class="flex items-center gap-1" @onsubmit="GoTo">
+            <input class="field w-28 py-0.5 font-mono" placeholder="@(IsPrg ? "$0801 or +16" : "offset")" @bind="goTo" />
+            <button class="rounded border border-night-600 px-2 py-0.5">Go</button>
+        </form>
+        <button class="rounded border border-night-600 px-2 py-0.5" @onclick="Load" title="Read the file again">⟳ Reload</button>
+        <span class="ml-auto text-red-300">@error</span>
+    </div>
+
+    <div class="flex min-h-0 flex-1">
+        <div id="@scrollId" class="min-w-0 flex-1 overflow-auto px-3 py-2 font-mono text-[13px] leading-6">
+            <Virtualize Items="rows" ItemSize="24" OverscanCount="20" Context="row">
+                <div class="flex whitespace-pre">
+                    <span class="w-20 shrink-0 text-night-400">@AddressText(row)</span>
+                    <span class="shrink-0">
+                        @for (int i = 0; i < 16; i++)
+                        {
+                            int at = row * 16 + i;
+                            @if (i == 8) { <span> </span> }
+                            @if (at < bytes.Length)
+                            {
+                                <span class="@ByteClass(at) cursor-pointer rounded-sm px-[3px]" @onclick="() => selected = at">@bytes[at].ToString("X2")</span>
+                            }
+                            else
+                            {
+                                <span class="px-[3px]">  </span>
+                            }
+                        }
+                    </span>
+                    <span class="ml-4 shrink-0 border-l border-night-800 pl-3">
+                        @for (int i = 0; i < 16 && row * 16 + i < bytes.Length; i++)
+                        {
+                            int at = row * 16 + i;
+                            var (text, reverse) = CharOf(bytes[at]);
+                            <span class="@ByteClass(at) @(reverse ? "bg-night-200 text-night-900" : null) cursor-pointer" @onclick="() => selected = at">@text</span>
+                        }
+                    </span>
+                </div>
+            </Virtualize>
+        </div>
+
+        @if (selected is int s && s < bytes.Length)
+        {
+            <aside class="w-56 shrink-0 border-l border-night-800 bg-night-950 p-3 font-mono text-xs leading-6 text-night-200">
+                <div class="mb-1 font-sans text-[11px] font-semibold tracking-wider text-night-300 uppercase">Byte</div>
+                <div>offset   <span class="text-white">@s</span> (@($"${s:X}"))</div>
+                @if (IsPrg && s >= 2) { <div>address  <span class="text-chip-300">$@((loadAddress + s - 2).ToString("X4"))</span></div> }
+                @if (IsPrg && s < 2) { <div class="text-night-400">load address byte</div> }
+                <div class="mt-2">hex      <span class="text-white">$@bytes[s].ToString("X2")</span></div>
+                <div>decimal  <span class="text-white">@bytes[s]</span></div>
+                <div>signed   <span class="text-white">@((sbyte)bytes[s])</span></div>
+                <div>binary   <span class="text-white">%@Convert.ToString(bytes[s], 2).PadLeft(8, '0')</span></div>
+                <div>char     <span class="text-white">@CharOf(bytes[s]).Text</span> (@charset)</div>
+                @if (ChipOf(s) is { } chip)
+                {
+                    <div class="mt-2">bank     <span class="text-white">@chip.Bank</span></div>
+                    <div>address  <span class="text-chip-300">$@((chip.Load + s - chip.Data).ToString("X4"))</span></div>
+                }
+                @if (s + 1 < bytes.Length)
+                {
+                    int word = bytes[s] | bytes[s + 1] << 8;
+                    <div class="mt-2">word     <span class="text-white">$@word.ToString("X4")</span></div>
+                    <div>         <span class="text-white">@word</span></div>
+                }
+            </aside>
+        }
+        @if (chips.Count > 0)
+        {
+            <aside class="w-56 shrink-0 overflow-y-auto border-l border-night-800 bg-night-950 p-3 text-xs text-night-200">
+                <div class="mb-1 text-[11px] font-semibold tracking-wider text-night-300 uppercase">Chips</div>
+                @foreach (var chip in chips)
+                {
+                    <button class="block w-full rounded px-1 py-0.5 text-left font-mono hover:bg-night-800" @onclick="() => Show(chip.Data)">
+                        bank @chip.Bank <span class="text-chip-300">$@chip.Load.ToString("X4")</span> <span class="text-night-400">@chip.Size bytes</span>
+                    </button>
+                }
+            </aside>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Project Project { get; set; } = default!;
+    [Parameter, EditorRequired] public string Path { get; set; } = "";
+    [Parameter] public bool Visible { get; set; }
+
+    [Inject] IJSRuntime JS { get; set; } = default!;
+
+    byte[] bytes = [];
+    int[] rows = [];
+    int? selected;
+    string charset = "petscii";
+    string goTo = "";
+    string? error;
+    int loadAddress;
+    readonly string scrollId = "hex-" + Guid.NewGuid().ToString("N")[..8];
+
+    bool IsPrg => Path.EndsWith(".prg", StringComparison.OrdinalIgnoreCase) && bytes.Length >= 2;
+
+    protected override void OnInitialized() => Load();
+
+    public void Load()
+    {
+        try
+        {
+            bytes = Project.ReadBytes(Path);
+            rows = Enumerable.Range(0, (bytes.Length + 15) / 16).ToArray();
+            loadAddress = bytes.Length >= 2 ? bytes[0] | bytes[1] << 8 : 0;
+            ReadCartridge();
+            if (selected >= bytes.Length) selected = null;
+            error = null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            error = e.Message;
+        }
+    }
+
+    // Offsets; for a .prg the C65 address of each row (the two bytes of the load address come before it)
+    string AddressText(int row) => IsPrg ? $"${(loadAddress + row * 16 - 2) & 0xFFFF:X4}" : $"{row * 16:X6}";
+
+    // A .crt: "C65@CARTRIDGE   ", the header length (big endian), the hardware type, EXROM and GAME, the name;
+    // then CHIP packets: "CHIP", length, chip type, bank, load address, size, and the data
+    sealed record Chip(int Packet, int Data, int Bank, int Load, int Size);
+    readonly List<Chip> chips = [];
+    string? cartridge;
+
+    static int Big(byte[] b, int at, int size) => size == 2 ? b[at] << 8 | b[at + 1] : b[at] << 24 | b[at + 1] << 16 | b[at + 2] << 8 | b[at + 3];
+
+    void ReadCartridge()
+    {
+        chips.Clear();
+        cartridge = null;
+        if (bytes.Length < 0x40 || System.Text.Encoding.ASCII.GetString(bytes, 0, 16) != "C65@CARTRIDGE   ") return;
+        string name = System.Text.Encoding.ASCII.GetString(bytes, 0x20, 32).TrimEnd('\0', ' ');
+        cartridge = $"\"{name}\", type {Big(bytes, 0x16, 2)}, EXROM {bytes[0x18]} GAME {bytes[0x19]}";
+        for (int at = Big(bytes, 0x10, 4); at + 16 <= bytes.Length && System.Text.Encoding.ASCII.GetString(bytes, at, 4) == "CHIP";)
+        {
+            int length = Big(bytes, at + 4, 4);
+            chips.Add(new Chip(at, at + 16, Big(bytes, at + 10, 2), Big(bytes, at + 12, 2), Big(bytes, at + 14, 2)));
+            if (length <= 0) break;
+            at += length;
+        }
+        cartridge += $", {chips.Count} chips";
+    }
+
+    Chip? ChipOf(int at) => chips.FirstOrDefault(c => at >= c.Data && at < c.Data + c.Size);
+
+    async Task Show(int offset)
+    {
+        selected = offset;
+        await JS.InvokeVoidAsync("thing65Studio.scrollTo", scrollId, offset / 16 * 24);
+    }
+
+    string ByteClass(int at) =>
+        at == selected ? "bg-chip-400 text-night-900"
+        : IsPrg && at < 2 ? "text-night-400"
+        : chips.Count > 0 && ChipOf(at) is null ? "text-chip-600"
+        : bytes[at] == 0 ? "text-night-400"
+        : "text-night-100";
+
+    // $hex is a C65 address for a .prg (an offset otherwise), +n or a decimal number an offset
+    async Task GoTo()
+    {
+        string text = goTo.Trim();
+        int? offset = null;
+        if (text.StartsWith('$') && int.TryParse(text[1..], System.Globalization.NumberStyles.HexNumber, null, out int hex))
+            offset = IsPrg ? hex - loadAddress + 2 : hex;
+        else if (int.TryParse(text.TrimStart('+'), out int number))
+            offset = number;
+        if (offset is not int at || at < 0 || at >= bytes.Length)
+        {
+            error = $"{text} is outside the file";
+            return;
+        }
+        error = null;
+        await Show(at);
+    }
+
+    // A byte as a character: ASCII; PETSCII (as the C65 prints it in upper case and graphics mode); screen codes
+    // (what the screen RAM holds: 0 is @, 1 is A, from $80 the same characters in reverse)
+    (string Text, bool Reverse) CharOf(byte value) => charset switch
+    {
+        "ascii" => (value is >= 0x20 and < 0x7F ? ((char)value).ToString() : "·", false),
+        "screen" => (ScreenCode(value & 0x7F), value >= 0x80),
+        _ => (Petscii(value), false),
+    };
+
+    static string ScreenCode(int code) => code switch
+    {
+        0 => "@",
+        >= 1 and <= 26 => ((char)('A' + code - 1)).ToString(),
+        27 => "[", 28 => "£", 29 => "]", 30 => "↑", 31 => "←",
+        >= 0x20 and <= 0x3F => ((char)code).ToString(),
+        _ => "▒",
+    };
+
+    static string Petscii(byte value) => value switch
+    {
+        >= 0x20 and <= 0x5A => ((char)value).ToString(),
+        0x5B => "[", 0x5C => "£", 0x5D => "]", 0x5E => "↑", 0x5F => "←",
+        >= 0xC1 and <= 0xDA => ((char)(value - 0x80)).ToString(),
+        >= 0x60 and <= 0x7F or >= 0xA0 and <= 0xBF => "▒",
+        _ => "·",
+    };
+}
