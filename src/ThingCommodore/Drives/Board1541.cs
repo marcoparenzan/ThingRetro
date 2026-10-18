@@ -84,6 +84,11 @@ public class Board1541
         cable.Clk.Connect(() => ClkLow);
     }
 
+    // Takes the drive off the cable (the cable keeps its connections but they do not see the drive any more)
+    public void Unplug() => iec = null;
+
+    public bool Plugged => iec is not null;
+
     // PB1 pulls DATA down, and so does the attention gate while ATN and the acknowledge (PB4) disagree
     bool DataLow => via1 is not null && ((via1.PortB.Output & 0x02) != 0 || iec is not null && (iec.Atn.IsLow != ((via1.PortB.Output & 0x10) != 0)));
     bool ClkLow => via1 is not null && (via1.PortB.Output & 0x08) != 0;
