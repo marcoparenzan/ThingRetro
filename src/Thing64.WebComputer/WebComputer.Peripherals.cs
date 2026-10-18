@@ -33,6 +33,12 @@ public static partial class WebComputer
             drive.Plug(iecCable);
             cycle += driveClock!.OnComputerCycle;
         }
+        if (drive81 is not null)
+        {
+            drive81.Unplug();
+            drive81.Plug(iecCable);
+            cycle += drive81Clock!.OnComputerCycle;
+        }
         if (printer is not null)
         {
             printer.Unplug();

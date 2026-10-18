@@ -57,6 +57,8 @@ public static partial class WebComputer
         board = new Board(roms, startClock: false);
         systemRoms = roms;
         drive = null;                                        // a new machine: the page plugs the drive in again
+        drive81 = null;
+        drive81Clock = null;
         driveClock = null;
         monitorCable = new MonitorCable(board.VideoOut, screen);
         cycles = 0;
@@ -246,6 +248,13 @@ public static partial class WebComputer
                 InsertDisk(name, content);
                 if (drive is null && (EmbeddedDriveRom() ?? Script.StoredRom(DriveRomName)) is { } rom) AttachDrive(rom, 8);
                 return drive is null ? $"{name} is ready: choose Drive > device 8 (the 1541 ROM is needed)" : $"{name} in drive {drive.DeviceNumber}";
+            }
+            if (name.EndsWith(".d81", StringComparison.OrdinalIgnoreCase))
+            {
+                InsertDisk81(name, content);
+                int device = drive is { DeviceNumber: 8 } ? 9 : 8;
+                if (drive81 is null && (EmbeddedDrive1581Rom() ?? Script.StoredRom(Drive1581RomName)) is { } rom81) AttachDrive81(rom81, device);
+                return drive81 is null ? $"{name} is ready: choose 1581 > device 8 (the 1581 ROM is needed)" : $"{name} in 1581 drive {drive81.DeviceNumber}";
             }
             if (name.EndsWith(".tap", StringComparison.OrdinalIgnoreCase))
             {

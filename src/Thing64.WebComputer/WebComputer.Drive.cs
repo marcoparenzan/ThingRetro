@@ -50,6 +50,7 @@ public static partial class WebComputer
         if (board is null) throw new InvalidOperationException("The C64 is not running");
         if (rom.Length != Board1541.ROM_SIZE) throw new ArgumentException($"a 1541 ROM is {Board1541.ROM_SIZE} bytes, this file is {rom.Length}");
         if (device is < 8 or > 11) throw new ArgumentException($"{device} is not a device number of a drive (8 to 11)");
+        if (drive81 is not null && drive81.DeviceNumber == device) throw new ArgumentException($"the 1581 is already device {device}");
         DetachDrive();
         var unit = new Board1541(rom) { DeviceNumber = device };
         unit.Disk = disk;

@@ -38,6 +38,18 @@
         </section>
     }
 
+    @if (needDrive81Rom)
+    {
+        <section class="roms">
+            <p>
+                The 1581 ROM is copyrighted too: choose the file (32 KB, <code>c-drive-1581.rom</code> or
+                <code>318045-02</code>) and the browser keeps it for the next visits.
+            </p>
+            <InputFile OnChange="LoadDrive81Rom" accept=".rom,.bin" />
+            @if (drive81Error is not null) { <p class="error">@drive81Error</p> }
+        </section>
+    }
+
     <canvas id="screen" width="@MonitorWidth" height="@MonitorHeight" tabindex="0"></canvas>
 
     <nav>
@@ -76,6 +88,23 @@
         <span class="drive" id="drive-text">@driveText</span>
         <button id="eject" hidden="@(!hasDisk)" @onclick="EjectDisk" title="Take the disk out of the drive">Eject</button>
         <button id="save-disk" hidden="@(!hasDisk)" @onclick="SaveDisk" title="Keep the disk (with what the program wrote on it) as a .d64 file">Save disk</button>
+        <label>
+            1581
+            <select id="drive81" @onchange="ChangeDrive81" value="@drive81Device">
+                <option value="0">none</option>
+                <option value="8">device 8</option>
+                <option value="9">device 9</option>
+                <option value="10">device 10</option>
+                <option value="11">device 11</option>
+            </select>
+        </label>
+        <label class="button" title="A .d81 disk image goes into the 1581 (it plugs device 8, or 9 if the 1541 is 8, in if there is none)">
+            Disk .d81
+            <InputFile id="disk81" OnChange="LoadDisk81" accept=".d81" />
+        </label>
+        <span class="drive" id="drive81-text">@drive81Text</span>
+        <button id="eject81" hidden="@(!hasDisk81)" @onclick="EjectDisk81" title="Take the disk out of the 1581">Eject</button>
+        <button id="save-disk81" hidden="@(!hasDisk81)" @onclick="SaveDisk81" title="Keep the disk (with what the program wrote on it) as a .d81 file">Save disk</button>
         <label class="button" title="A .tap tape image goes into the C2N cassette recorder">
             Tape .tap
             <InputFile id="tape" OnChange="LoadTape" accept=".tap" />
@@ -113,7 +142,7 @@
         (Drive), LOAD"$",8 lists the disk and LOAD"NAME",8 loads from it; SAVE writes to the disk in the page, which
         Save disk keeps as a file. The C2N recorder takes a .tap tape (Tape .tap, or New tape to SAVE on): after LOAD or SAVE the
         KERNAL asks to press PLAY, or RECORD and PLAY, and the keys next to the tape are those; Save tape keeps
-        what was recorded. The MPS-803 printer (Printer, device 4 or 5) takes OPEN1,4:PRINT#1,"TEXT":CLOSE1 and
+        what was recorded. A 1581 (1581, device 8 to 11) takes .d81 disks the same way. The MPS-803 printer (Printer, device 4 or 5) takes OPEN1,4:PRINT#1,"TEXT":CLOSE1 and
         OPEN1,4:CMD1:LIST, and Save PDF gives what it printed.
     </p>
 </main>
@@ -136,6 +165,13 @@
     string? driveError;
     string driveText = "no drive";
     Timer? driveWatch;
+
+    // The 1581: the device the page plugged in (0 = none), the ROM it still waits for, and what it says
+    string drive81Device = "0";
+    bool needDrive81Rom, hasDisk81;
+    int pendingDevice81 = 8;
+    string? drive81Error;
+    string drive81Text = "no 1581";
 
     // The C2N recorder and the MPS-803 printer
     string tapeText = "no tape", printerDevice = "0", printerText = "no printer";
@@ -176,6 +212,7 @@
         status = "READY.";
         // The drive of the last visit, if its ROM is at hand
         if (int.TryParse(Script.Setting("drive"), out int device) && device is >= 8 and <= 11) TryAttachDrive(device);
+        if (int.TryParse(Script.Setting("drive81"), out int device81) && device81 is >= 8 and <= 11) TryAttachDrive81(device81);
         if (int.TryParse(Script.Setting("printer"), out int printer) && printer is 4 or 5) WebComputer.SetPrinter(printer);
         RefreshPeripherals();
         // Whatever the program writes to the disk shows (changed) a moment later
@@ -287,8 +324,106 @@
         Script.Focus("screen");
     }
 
+    static byte[]? Drive81Rom() => WebComputer.EmbeddedDrive1581Rom() ?? Script.StoredRom(WebComputer.Drive1581RomName);
+
+    // Plugs the 1581 in, or asks for its ROM
+    void TryAttachDrive81(int device)
+    {
+        pendingDevice81 = device;
+        if (Drive81Rom() is not { } rom)
+        {
+            needDrive81Rom = true;
+            drive81Device = "0";
+            return;
+        }
+        try
+        {
+            WebComputer.AttachDrive81(rom, device);
+            drive81Device = device.ToString();
+            needDrive81Rom = false;
+            drive81Error = null;
+            Script.SetSetting("drive81", device.ToString());
+        }
+        catch (ArgumentException error)
+        {
+            drive81Error = error.Message;
+            needDrive81Rom = !error.Message.Contains("already device", StringComparison.Ordinal);   // a wrong ROM is asked for again
+            drive81Device = "0";
+        }
+        RefreshPeripherals();
+    }
+
+    void ChangeDrive81(ChangeEventArgs e)
+    {
+        int device = int.TryParse(e.Value?.ToString(), out int value) ? value : 0;
+        if (device == 0)
+        {
+            WebComputer.DetachDrive81();
+            needDrive81Rom = false;
+            Script.SetSetting("drive81", "0");
+            RefreshPeripherals();
+        }
+        else
+        {
+            TryAttachDrive81(device);
+        }
+        Script.Focus("screen");
+    }
+
+    // The ROM of the 1581: 32 KB, any file name
+    async Task LoadDrive81Rom(InputFileChangeEventArgs e)
+    {
+        using var stream = e.File.OpenReadStream(128 * 1024);
+        using var copy = new MemoryStream();
+        await stream.CopyToAsync(copy);
+        var rom = copy.ToArray();
+        if (rom.Length != 32768)
+        {
+            drive81Error = $"a 1581 ROM is 32768 bytes, {e.File.Name} is {rom.Length}";
+            return;
+        }
+        Script.StoreRom(WebComputer.Drive1581RomName, rom);
+        needDrive81Rom = false;
+        drive81Error = null;
+        TryAttachDrive81(pendingDevice81);
+    }
+
+    async Task LoadDisk81(InputFileChangeEventArgs e)
+    {
+        using var stream = e.File.OpenReadStream(2 * 1024 * 1024);
+        using var copy = new MemoryStream();
+        await stream.CopyToAsync(copy);
+        status = WebComputer.Load(e.File.Name, copy.ToArray());
+        if (WebComputer.Drive81On) Script.SetSetting("drive81", WebComputer.Drive81Device.ToString());
+        needDrive81Rom = !WebComputer.Drive81On && WebComputer.HasDisk81 && Drive81Rom() is null;
+        pendingDevice81 = 8;
+        RefreshPeripherals();
+        Script.Focus("screen");
+    }
+
+    void EjectDisk81()
+    {
+        WebComputer.EjectDisk81();
+        RefreshPeripherals();
+        Script.Focus("screen");
+    }
+
+    // The disk as it is now: what the program wrote on it too
+    void SaveDisk81()
+    {
+        Script.Download(WebComputer.DiskName81 ?? "disk.d81", WebComputer.Disk81Bytes());
+        WebComputer.Disk81Saved();
+        RefreshPeripherals();
+        Script.Focus("screen");
+    }
+
     void RefreshPeripherals()
     {
+        drive81Device = WebComputer.Drive81On ? WebComputer.Drive81Device.ToString() : "0";
+        hasDisk81 = WebComputer.HasDisk81;
+        string text81 = WebComputer.Drive81Text();
+        if (text81 != drive81Text) { drive81Text = text81; StateHasChanged(); }
+
         hasTape = WebComputer.HasTape;
         string tape = WebComputer.TapeText();
         printerDevice = WebComputer.PrinterOn ? WebComputer.PrinterDevice.ToString() : "0";

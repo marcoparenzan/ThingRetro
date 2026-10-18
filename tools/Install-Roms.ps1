@@ -17,6 +17,7 @@ $map = [ordered]@{
     'c-64-basic.rom' = 'basic'
     'c-64-chargen.rom' = 'chargen'
     'c-drive-1541.rom' = 'c-drive-1541.rom'
+    'c-drive-1581.rom' = 'c-drive-1581.rom'
 }
 foreach ($name in $map.Keys) {
     $from = Join-Path $Source $name
