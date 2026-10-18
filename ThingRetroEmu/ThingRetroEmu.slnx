@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/ThingRetroEmu/ThingRetroEmu.csproj" />
+  <Project Path="src/ThingRetroEmu.WinForms/ThingRetroEmu.WinForms.csproj" />
+  <Project Path="tests/ThingRetroEmu.Tests/ThingRetroEmu.Tests.csproj" />
+</Solution>
