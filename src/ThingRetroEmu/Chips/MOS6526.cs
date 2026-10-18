@@ -9,6 +9,10 @@ public partial class MOS6526 : I6526Pinout
     // /IRQ: active until the ICR is read
     public bool Irq => (interruptStatus & 0x80) != 0;
 
+    // FLAG: a falling edge sets bit 4 of the ICR (and the /IRQ, if enabled). Unconnected it is high
+    public Func<bool> FlagInput { get; set; } = () => true;
+    bool flagWasHigh = true;
+
     // Registers
     private ushort timerA; // $DC04-$DC05/DD04-DD05
     private ushort timerB; // $DC06-$DC07/DD06-DD07
@@ -84,6 +88,13 @@ public partial class MOS6526 : I6526Pinout
     {
         ProcessSignals();
         Clock();
+        bool flagHigh = FlagInput();
+        if (flagWasHigh && !flagHigh)
+        {
+            interruptStatus |= 0x10;
+            CheckInterrupts();
+        }
+        flagWasHigh = flagHigh;
     }
 
     // RS0-RS3: the 16 registers repeat across the whole area selected by /CS

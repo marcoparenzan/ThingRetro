@@ -112,9 +112,10 @@ public interface I6526Pinout
     ParallelPort PortA { get; }          // PA0-PA7
     ParallelPort PortB { get; }          // PB0-PB7
     bool Irq { get; }                    // /IRQ
+    Func<bool> FlagInput { get; set; }   // FLAG: a falling edge sets bit 4 of the ICR (cassette read, the drives' ATN); true = high
     void Reset();                        // /RES
     void Tick();                         // φ2
-    // Not modelled: CNT, SP, FLAG, /PC, TOD (the TOD is counted internally)
+    // Not modelled: CNT, SP, /PC, TOD (the TOD is counted internally)
 }
 
 // Memory as seen by the VIC-II: 14 address bits (A0-A13) and the color nibble (D8-D11).
