@@ -1,0 +1,34 @@
+<Solution>
+  <Folder Name="/Thing64/">
+    <Project Path="Thing64/src/Thing64.C64/Thing64.C64.csproj" />
+    <Project Path="Thing64/src/Thing64.Computer/Thing64.Computer.csproj" />
+    <Project Path="Thing64/src/Thing64.Tests/Thing64.Tests.csproj" />
+    <Project Path="Thing64/src/Thing64.WebComputer/Thing64.WebComputer.csproj" />
+    <Project Path="Thing64/src/Thing64.WebStudio/Thing64.WebStudio.csproj" />
+    <Project Path="Thing64/src/Thing64.WinForms/Thing64.WinForms.csproj" />
+    <Project Path="Thing64/src/Thing64/Thing64.csproj" />
+  </Folder>
+  <Folder Name="/Thing65/">
+    <Project Path="Thing65/src/Thing65.C65/Thing65.C65.csproj" />
+    <Project Path="Thing65/src/Thing65.Computer/Thing65.Computer.csproj" />
+    <Project Path="Thing65/src/Thing65.Tests/Thing65.Tests.csproj" />
+    <Project Path="Thing65/src/Thing65.WebComputer/Thing65.WebComputer.csproj" />
+    <Project Path="Thing65/src/Thing65.WebStudio/Thing65.WebStudio.csproj" />
+    <Project Path="Thing65/src/Thing65.WinForms/Thing65.WinForms.csproj" />
+    <Project Path="Thing65/src/Thing65/Thing65.csproj" />
+  </Folder>
+  <Folder Name="/ThingCommodore/">
+    <Project Path="ThingCommodore/src/ThingCommodore.Tools/ThingCommodore.Tools.csproj" />
+    <Project Path="ThingCommodore/src/ThingCommodore/ThingCommodore.csproj" />
+    <Project Path="ThingCommodore/tests/ThingCommodore.Tests/ThingCommodore.Tests.csproj" />
+  </Folder>
+  <Folder Name="/ThingMOS/">
+    <Project Path="ThingMOS/src/ThingMOS/ThingMOS.csproj" />
+    <Project Path="ThingMOS/tests/ThingMOS.Tests/ThingMOS.Tests.csproj" />
+  </Folder>
+  <Folder Name="/ThingRetroEmu/">
+    <Project Path="ThingRetroEmu/src/ThingRetroEmu.WinForms/ThingRetroEmu.WinForms.csproj" />
+    <Project Path="ThingRetroEmu/src/ThingRetroEmu/ThingRetroEmu.csproj" />
+    <Project Path="ThingRetroEmu/tests/ThingRetroEmu.Tests/ThingRetroEmu.Tests.csproj" />
+  </Folder>
+</Solution>
