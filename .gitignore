@@ -1,0 +1,9 @@
+bin/
+obj/
+.vs/
+TestResults/
+*.nupkg
+*.user
+*.rom
+roms/*
+!roms/README.md

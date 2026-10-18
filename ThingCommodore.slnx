@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ThingCommodore/ThingCommodore.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ThingCommodore.Tests/ThingCommodore.Tests.csproj" />
+  </Folder>
+</Solution>
