@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The tools that make files for the Commodore machines from sources: BASIC text to the tokenized .prg, images to graphics data (bitmaps, character sets,
+       tiles, sprites with the color limits of the VIC-II), and build manifests (.asm and .bas to .prg, cartridges, graphics assets). They do not need a machine:
+       the command line of Thing64 and the web studio use them -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>0.1.0</Version>
+    <PackageId>ThingCommodore.Tools</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ThingCommodore\ThingCommodore.csproj" />
+  </ItemGroup>
+
+</Project>
