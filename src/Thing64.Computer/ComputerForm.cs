@@ -149,7 +149,7 @@ public class ComputerForm : Form
     {
         try
         {
-            var image = new Thing1500.Drive.D64Image(File.ReadAllBytes(path));
+            var image = new ThingRetroEmu.Media.D64Image(File.ReadAllBytes(path));
             if (!EnsureDrive()) return;
             drive1541!.Insert(image, path);
             ShowDrive();

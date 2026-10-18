@@ -25,7 +25,7 @@
     <ProjectReference Include="..\Thing64.Crt\Thing64.Crt.csproj" />
     <ProjectReference Include="..\Thing64.Prg\Thing64.Prg.csproj" />
     <!-- The 1541 disk drive, the same one as the desktop app: its own repository, next to this one (Thing65.Mos has its 6502) -->
-    <ProjectReference Include="..\..\..\Thing1500\src\Thing1500.Drive\Thing1500.Drive.csproj" />
+    <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore\ThingCommodore.csproj" />
   </ItemGroup>
 
   <!-- Logo and icons from images/ of the repository, served from img/ -->

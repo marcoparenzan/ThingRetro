@@ -1,9 +1,11 @@
-using Thing1500.Drive;
+using ThingCommodore.Drives;
+using ThingRetroEmu.Buses;
+using ThingRetroEmu.Media;
 using Thing64.C64;
 
 namespace Thing64.WebComputer;
 
-// A 1541 on the IEC cable of the C64 in the browser: the drive board (Thing1500), the cable, the clock that makes it
+// A 1541 on the IEC cable of the C64 in the browser: the drive board (ThingCommodore), the cable, the clock that makes it
 // follow the computer cycle by cycle, and the disk in it. The drive runs inside the C64's frames, one of its cycles
 // after almost every one of the computer's, so loading and saving through the KERNAL work as on the real machines.
 // The 1541's ROM, like the C64's, is not part of the site: the page asks for it once. The disk is a .d64 file the
