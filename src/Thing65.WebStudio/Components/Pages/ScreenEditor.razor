@@ -1,4 +1,4 @@
-@using Thing65.Graphics
+﻿@using ThingCommodore.Graphics
 @using Thing65.WebStudio.CodeBehind
 @implements IRegionEditor
 
@@ -56,7 +56,7 @@
                         int color = c;
                         <button disabled="@(screen.MulticolorMode && color >= 8)"
                                 class="@((penColor & (screen.MulticolorMode ? 7 : 15)) == color ? "ring-2 ring-chip-400" : "") h-5 w-5 rounded-sm border border-night-700 disabled:opacity-20"
-                                title="@color: @C65Palette.Names[color]" style="background: #@screen.Palette.Rgb[color].ToString("X6")"
+                                title="@color: @C64Palette.Names[color]" style="background: #@screen.Palette.Rgb[color].ToString("X6")"
                                 @onclick="() => SetPenColor(color)"></button>
                     }
                 </div>

@@ -1,4 +1,6 @@
-using Thing65.Mos;
+﻿using ThingMOS;
+using ThingRetroEmu.Chips;
+using ThingRetroEmu.Buses;
 
 namespace Thing65.C65;
 

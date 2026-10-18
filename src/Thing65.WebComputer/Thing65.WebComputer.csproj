@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+﻿<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
 
   <!-- The C65 in the browser: the same board and chips, compiled to WebAssembly. The page drives the board one
        frame at a time (requestAnimationFrame) and paints the frames on a canvas -->
@@ -34,6 +34,12 @@
        Only Debug builds embed them, for local development -->
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">
     <EmbeddedResource Include="../../roms/*" LogicalName="roms/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
   </ItemGroup>
 
 </Project>

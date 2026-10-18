@@ -1,4 +1,4 @@
-using Thing65.Graphics;
+﻿using ThingCommodore.Graphics;
 
 namespace Thing65.WebStudio.CodeBehind;
 
@@ -19,7 +19,7 @@ public sealed class CharsetRegion
     public int First { get; }
     public int Characters { get; }
     public bool Multicolor { get; }
-    public C65Palette Palette { get; } = C65Palette.Pepto;
+    public C64Palette Palette { get; } = C64Palette.Pepto;
 
     public CharsetRegion(AsmRegion region, string[] lines, ProgramImage? image, int values)
     {

@@ -13,9 +13,11 @@
 		<InternalsVisibleTo Include="Thing65.Tests" />
 	</ItemGroup>
 
-	<!-- The C64 motherboard: mounts the MOS chips (Thing65.Mos) in its sockets -->
+	<!-- The C64 motherboard: mounts the chips (ThingMOS, ThingRetroEmu) in its sockets -->
 	<ItemGroup>
-		<ProjectReference Include="..\Thing65.Mos\Thing65.Mos.csproj" />
+		<ProjectReference Include="..\..\..\ThingMOS\src\ThingMOS\ThingMOS.csproj" />
+		<ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore\ThingCommodore.csproj" />
+		<ProjectReference Include="..\..\..\ThingRetroEmu\src\ThingRetroEmu\ThingRetroEmu.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -27,5 +29,14 @@
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	</ItemGroup>
+
+  <ItemGroup>
+    <Using Include="ThingCommodore.Cartridges" />
+    <Using Include="ThingCommodore.Software" />
+    <Using Include="ThingRetroEmu.Sockets" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+  </ItemGroup>
 
 </Project>

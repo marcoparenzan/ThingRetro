@@ -1,8 +1,8 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using Thing65.Asm;
-using Thing65.Build;
+using ThingMOS.Asm;
+using ThingCommodore.Build;
 
 namespace Thing65.WebStudio.CodeBehind;
 
@@ -306,6 +306,6 @@ public sealed class ProgramImage(Assembler.Result result)
         string source = "main.asm";
         if (File.Exists(manifest) && BuildManifest.Load(manifest).Outputs.FirstOrDefault(o => o.Source?.EndsWith(".asm", StringComparison.OrdinalIgnoreCase) == true) is { } output)
             source = output.Source!;
-        return new ProgramImage(ProgramBuilder.Assemble(project.FullPath(source)));
+        return new ProgramImage(ProgramBuilder.Assemble(project.FullPath(source), cpu: ThingMOS.Asm.Cpu.Csg4510));
     }
 }

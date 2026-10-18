@@ -1,8 +1,8 @@
-using Thing65.Build;
+﻿using ThingCommodore.Build;
 using System.ComponentModel;
 using System.Globalization;
-using Thing65.Asm;
-using Thing65.Basic;
+using ThingMOS.Asm;
+using ThingCommodore.Basic;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -202,7 +202,7 @@ static class Commands
     {
         try
         {
-            return ProgramBuilder.Build(source);
+            return ProgramBuilder.Build(source, ThingMOS.Asm.Cpu.Csg4510);
         }
         catch (AssemblerException e)
         {

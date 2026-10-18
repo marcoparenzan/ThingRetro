@@ -1,4 +1,4 @@
-namespace Thing65.Tests;
+﻿namespace Thing65.Tests;
 
 // The C65 board, with a ROM made for the test: every byte of physical address A holds Marker(A), a value that tells
 // which 4 KB of the ROM it comes from, so that the memory map can be checked without the real ROM
@@ -347,7 +347,7 @@ public sealed class BoardC65Tests
     public void Monitor_ShouldReceiveTheVic3Frame()
     {
         var board = NewBoard(withCpu: false);
-        using var monitor = new Thing65.WinForms.C65Monitor();
+        using var monitor = new MonitorControl(new VideoMode(CSG4567.SCREEN_WIDTH, CSG4567.SCREEN_HEIGHT));
         using var cable = new MonitorCable(board.VideoOut, monitor);
 
         board.RunCycles(3 * 312 * 63);

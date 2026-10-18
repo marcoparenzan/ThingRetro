@@ -1,5 +1,7 @@
-using System.Diagnostics;
-using Thing65.Mos;
+﻿using System.Diagnostics;
+using ThingMOS;
+using ThingRetroEmu.Chips;
+using ThingRetroEmu.Buses;
 
 namespace Thing65.C65;
 

@@ -1,4 +1,4 @@
-@using Thing65.Graphics
+﻿@using ThingCommodore.Graphics
 @using Thing65.WebStudio.CodeBehind
 @implements IRegionEditor
 @implements IDisposable
@@ -61,7 +61,7 @@
                         <img src="@thumbnails[index]" alt="" class="pixelated h-[42px] w-12 shrink-0 border border-night-700" />
                         <span class="min-w-0">
                             <span class="block truncate text-night-100">@item.Name</span>
-                            <span class="text-night-400">@(item.Multicolor ? "multicolor" : "hires") · @C65Palette.Names[item.Color]</span>
+                            <span class="text-night-400">@(item.Multicolor ? "multicolor" : "hires") · @C64Palette.Names[item.Color]</span>
                         </span>
                     </button>
                 }

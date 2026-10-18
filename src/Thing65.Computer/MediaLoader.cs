@@ -1,5 +1,5 @@
-using Thing65.C65;
-using Thing65.Prg;
+﻿using Thing65.C65;
+using ThingCommodore.Software;
 
 namespace Thing65.Computer;
 
@@ -57,7 +57,7 @@ public static class MediaLoader
         }
 
         var content = File.ReadAllBytes(path);
-        var (start, end) = PrgFile.GetRange(content);
+        var (start, end) = PrgLoader.GetRange(content);
         string name = DiskName(path);
         var disk = D81Writer.Create(name, content);
         string load = start == BasicStart ? $"DLOAD\"{name}\"\r" : $"BLOAD\"{name}\",B0\r"; // B0: into the RAM of bank 0

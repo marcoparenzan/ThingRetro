@@ -1,4 +1,4 @@
-using Thing65.Build;
+﻿using ThingCommodore.Build;
 using Thing65.Cli;
 using Spectre.Console.Cli;
 
@@ -67,7 +67,7 @@ public sealed class CommandLineTests
         string source = Write("hello.bas", "10 PRINT \"HI\"\n");
 
         Assert.AreEqual(0, RunThing65("basic", source, "-o", Path.Combine(folder, "out.prg")));
-        CollectionAssert.AreEqual(global::Thing65.Basic.BasicTokenizer.Tokenize("10 PRINT \"HI\""), File.ReadAllBytes(Path.Combine(folder, "out.prg")));
+        CollectionAssert.AreEqual(global::ThingCommodore.Basic.BasicTokenizer.Tokenize("10 PRINT \"HI\""), File.ReadAllBytes(Path.Combine(folder, "out.prg")));
     }
 
     [TestMethod]
@@ -89,7 +89,7 @@ public sealed class CommandLineTests
         Assert.AreEqual(0, RunThing65("build", manifest));
 
         Assert.IsTrue(File.Exists(Path.Combine(folder, "prog.prg")));
-        var cartridge = global::Thing65.Crt.CrtFile.Load(File.ReadAllBytes(Path.Combine(folder, "cart.crt")));
+        var cartridge = global::ThingCommodore.Cartridges.CrtFile.Load(File.ReadAllBytes(Path.Combine(folder, "cart.crt")));
         Assert.AreEqual("Normal 8K", cartridge.TypeName);
         Assert.AreEqual("TEST", cartridge.Name);
     }

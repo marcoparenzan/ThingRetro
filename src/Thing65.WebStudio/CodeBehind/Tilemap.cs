@@ -1,4 +1,4 @@
-using Thing65.Graphics;
+﻿using ThingCommodore.Graphics;
 
 namespace Thing65.WebStudio.CodeBehind;
 
@@ -29,7 +29,7 @@ public sealed class Tilemap
     readonly byte[] colors;
     readonly byte[] charset;
     readonly int first;
-    readonly C65Palette palette = C65Palette.Pepto;
+    readonly C64Palette palette = C64Palette.Pepto;
 
     public Tilemap(AsmRegion region, ProgramImage image)
     {

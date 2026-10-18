@@ -1,4 +1,4 @@
-using Thing65.Asm;
+﻿using ThingMOS.Asm;
 
 namespace Thing65.Tests;
 

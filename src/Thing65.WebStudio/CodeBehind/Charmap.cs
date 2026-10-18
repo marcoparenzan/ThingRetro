@@ -1,4 +1,4 @@
-using Thing65.Graphics;
+﻿using ThingCommodore.Graphics;
 
 namespace Thing65.WebStudio.CodeBehind;
 
@@ -23,7 +23,7 @@ public sealed class Charmap
     public int Multicolor1 { get; }
     public int Multicolor2 { get; }
     public IReadOnlyList<string> Names { get; }
-    public C65Palette Palette { get; } = C65Palette.Pepto;
+    public C64Palette Palette { get; } = C64Palette.Pepto;
 
     readonly int values;
 

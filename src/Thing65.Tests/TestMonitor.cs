@@ -1,4 +1,4 @@
-using Thing65.WinForms;
+﻿using Thing65.WinForms;
 using static Thing65.Tests.TestHelpers;
 
 namespace Thing65.Tests;
@@ -10,19 +10,19 @@ public sealed class MonitorTests
     const int FRAME_CYCLES = 312 * 63;
 
     // Fake screen: counts the frames and keeps the pixels
-    sealed unsafe class RecordingScreen : IScreen
+    sealed unsafe class RecordingScreen : IMonitor
     {
         public readonly uint[] Pixels = new uint[MOS6569.SCREEN_WIDTH * MOS6569.SCREEN_HEIGHT];
         public int Frames;
         System.Runtime.InteropServices.GCHandle handle;
 
-        public byte* BeginRender()
+        public byte* BeginFrame(VideoMode mode)
         {
             handle = System.Runtime.InteropServices.GCHandle.Alloc(Pixels, System.Runtime.InteropServices.GCHandleType.Pinned);
             return (byte*)handle.AddrOfPinnedObject();
         }
 
-        public void EndRender()
+        public void EndFrame()
         {
             handle.Free();
             Frames++;
@@ -83,7 +83,7 @@ public sealed class MonitorTests
     public void C65Monitor_ShouldShowBootScreen()
     {
         var board = NewBoard();
-        using var monitor = new C65Monitor(MOS6569.SCREEN_WIDTH, MOS6569.SCREEN_HEIGHT); // the C64 board's VIC-II frame
+        using var monitor = new MonitorControl(new VideoMode(MOS6569.SCREEN_WIDTH, MOS6569.SCREEN_HEIGHT)); // the C64 board's VIC-II frame
         using var cable = new MonitorCable(board.VideoOut, monitor);
 
         board.RunCycles(3 * 985248);
@@ -98,7 +98,7 @@ public sealed class MonitorTests
     [TestMethod]
     public void C65Monitor_ShouldKeepAspectRatioInsideLargerArea()
     {
-        using var monitor = new C65Monitor { Size = new Size(1400, 568) };
+        using var monitor = new MonitorControl(new VideoMode(CSG4567.SCREEN_WIDTH, CSG4567.SCREEN_HEIGHT)) { Size = new Size(1400, 568) };
 
         var bounds = monitor.ImageBounds;
 

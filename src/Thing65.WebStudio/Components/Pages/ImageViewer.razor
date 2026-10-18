@@ -1,5 +1,5 @@
-@using System.Buffers.Binary
-@using Thing65.Graphics
+﻿@using System.Buffers.Binary
+@using ThingCommodore.Graphics
 
 @* A PNG in three views: the picture (zoomed, with the pixel under a click: its RGBA and the nearest C65 color), its
    structure (the chunks of the file, IHDR decoded) and its bytes *@
@@ -71,8 +71,8 @@
                     <div>alpha  <span class="text-white">@(pixel >> 24)</span></div>
                     <div class="mt-2 font-sans text-night-300">Nearest C65 color</div>
                     <div class="flex items-center gap-2">
-                        <span class="h-4 w-4 rounded-sm border border-night-700" style="background: #@C65Palette.Pepto.Rgb[c65].ToString("X6")"></span>
-                        <span class="text-white">@c65 @C65Palette.Names[c65]</span>
+                        <span class="h-4 w-4 rounded-sm border border-night-700" style="background: #@C64Palette.Pepto.Rgb[c65].ToString("X6")"></span>
+                        <span class="text-white">@c65 @C64Palette.Names[c65]</span>
                     </div>
                 </aside>
             }
@@ -162,6 +162,6 @@
     static int Nearest(uint pixel)
     {
         var color = Color.FromRgb(pixel);
-        return Enumerable.Range(0, 16).MinBy(c => C65Palette.Distance(color, C65Palette.Pepto[c]));
+        return Enumerable.Range(0, 16).MinBy(c => C64Palette.Distance(color, C64Palette.Pepto[c]));
     }
 }

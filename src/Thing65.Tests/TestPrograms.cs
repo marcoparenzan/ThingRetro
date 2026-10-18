@@ -1,4 +1,4 @@
-using Thing65.Prg;
+﻿using ThingCommodore.Software;
 using static Thing65.Tests.TestHelpers;
 
 namespace Thing65.Tests;

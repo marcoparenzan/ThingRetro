@@ -1,5 +1,5 @@
-using Thing65.Asm;
-using Thing65.Build;
+﻿using ThingMOS.Asm;
+using ThingCommodore.Build;
 
 namespace Thing65.WebStudio;
 
@@ -161,7 +161,7 @@ public sealed class Project(string name, string folder)
             if (activeFile is null || !SourceExtensions.Contains(Path.GetExtension(activeFile).ToLowerInvariant()))
                 throw new InvalidDataException($"Open a .asm or .bas file to build it, or add a {ManifestName} to the project");
             string prg = Path.ChangeExtension(activeFile, ".prg");
-            bool built = BuildOne(prg, [activeFile], () => ProgramBuilder.Build(FullPath(activeFile)), messages);
+            bool built = BuildOne(prg, [activeFile], () => ProgramBuilder.Build(FullPath(activeFile), ThingMOS.Asm.Cpu.Csg4510), messages);
             return new BuildReport(built, messages, built ? prg : null);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException or UnauthorizedAccessException)
@@ -175,7 +175,7 @@ public sealed class Project(string name, string folder)
     {
         try
         {
-            var result = Thing65.Graphics.GraphicsBuilder.Build(FullPath(asset));
+            var result = ThingCommodore.Graphics.GraphicsBuilder.Build(FullPath(asset));
             messages.Add(new BuildMessage($"{asset}: {result.Conversion.Summary} -> {string.Join(", ", result.Files)}"));
             return true;
         }

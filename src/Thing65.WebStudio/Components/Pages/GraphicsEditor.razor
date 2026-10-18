@@ -1,5 +1,5 @@
-@using System.Text.Json
-@using Thing65.Graphics
+﻿@using System.Text.Json
+@using ThingCommodore.Graphics
 
 @* A graphics asset (.gfx.json): the picture on the left, how the C65 will show it on the right, and the settings of
    the conversion between them. Every change converts again (on the server, in a fraction of a second); Ctrl+S saves
@@ -259,7 +259,7 @@
     {
         var charset = result.Parts.FirstOrDefault(p => p.Name == "charset")?.Data;
         if (charset is null) { charsetWidth = 0; return null; }
-        var palette = C65Palette.Named(settings.Palette);
+        var palette = C64Palette.Named(settings.Palette);
         bool multicolor = settings.Mode == GraphicsMode.MulticolorCharset;
         int count = charset.Length / 8, across = 16, down = (count + across - 1) / across;
         uint[] colors = multicolor
@@ -290,8 +290,8 @@
             {
                 int color = i;
                 string ring = value == color ? "ring-2 ring-chip-400" : chosen == color ? "ring-1 ring-night-300" : "";
-                <button class="h-5 w-5 rounded-sm border border-night-700 @ring" title="@color: @C65Palette.Names[color]"
-                        style="background: #@C65Palette.Named(asset.Palette).Rgb[color].ToString("X6")"
+                <button class="h-5 w-5 rounded-sm border border-night-700 @ring" title="@color: @C64Palette.Names[color]"
+                        style="background: #@C64Palette.Named(asset.Palette).Rgb[color].ToString("X6")"
                         @onclick="() => Update(_ => set(color))"></button>
             }
         </div>
@@ -304,7 +304,7 @@
     static T Parse<T>(ChangeEventArgs e) where T : struct, Enum =>
         Enum.GetValues<T>().First(v => Kebab(v) == e.Value?.ToString());
 
-    static string PaletteOf(ChangeEventArgs e) => e.Value?.ToString() ?? C65Palette.Pepto.Name;
+    static string PaletteOf(ChangeEventArgs e) => e.Value?.ToString() ?? C64Palette.Pepto.Name;
 
     static int? Number(ChangeEventArgs e) => int.TryParse(e.Value?.ToString(), out int n) && n > 0 ? n : null;
 

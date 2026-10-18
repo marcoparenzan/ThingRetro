@@ -1,6 +1,6 @@
-@using System.Globalization
+﻿@using System.Globalization
 @using System.Text
-@using Thing65.Graphics
+@using ThingCommodore.Graphics
 @inject IJSRuntime JS
 
 @* The memory of the C65 (a snapshot of the running machine) to look through: as bytes and characters, with the number
@@ -569,9 +569,9 @@
     RenderFragment ColorChoice(string label, int value, Action<int> set) =>
         @<label class="flex items-center justify-between gap-2">@label
             <span class="flex items-center gap-1">
-                <span class="h-4 w-4 rounded-sm border border-night-700" style="background: #@C65Palette.Pepto.Rgb[value].ToString("X6")"></span>
+                <span class="h-4 w-4 rounded-sm border border-night-700" style="background: #@C64Palette.Pepto.Rgb[value].ToString("X6")"></span>
                 <select class="field py-0.5" value="@value" @onchange="e => { set(int.Parse(e.Value!.ToString()!)); Refresh(); }">
-                    @for (int c = 0; c < 16; c++) { <option value="@c">@c @C65Palette.Names[c]</option> }
+                    @for (int c = 0; c < 16; c++) { <option value="@c">@c @C64Palette.Names[c]</option> }
                 </select>
             </span>
         </label>;

@@ -1,4 +1,4 @@
-@using Thing65.Graphics
+﻿@using ThingCommodore.Graphics
 @using Thing65.WebStudio.CodeBehind
 @inject IJSRuntime JS
 
@@ -211,7 +211,7 @@
             string screenName = $"room{number}";
             int before = charset.Characters.Count;
             charset.Add(screenName, capture);
-            images[screenName] = Url(capture.Render(C65Palette.Pepto));
+            images[screenName] = Url(capture.Render(C64Palette.Pepto));
             added[screenName] = charset.Characters.Count - before;
             open.Clear();
             Report($"{screenName}: {added[screenName]} new characters, {charset.Characters.Count} in the charset", false);

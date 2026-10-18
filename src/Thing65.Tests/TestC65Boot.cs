@@ -1,4 +1,4 @@
-namespace Thing65.Tests;
+﻿namespace Thing65.Tests;
 
 // The real C65 ROM (not in the repository: each user installs their own, see the README). Without it: Inconclusive
 [TestClass]
@@ -151,7 +151,7 @@ public sealed class C65BootTests
     public void Assembler_ShouldMakeAProgramThatRunsOnTheC65()
     {
         string source = Path.Combine(TestHelpers.SamplesFolder, "c65", "hello65.asm");
-        var program = Thing65.Build.ProgramBuilder.Assemble(source).Prg;
+        var program = ThingCommodore.Build.ProgramBuilder.Assemble(source, cpu: ThingMOS.Asm.Cpu.Csg4510).Prg;
         Assert.AreEqual(0x00, program[0]); // load address $1800
         Assert.AreEqual(0x18, program[1]);
 

@@ -1,10 +1,10 @@
-using Thing65.Asm;
-using Thing65.Graphics;
+﻿using ThingMOS.Asm;
+using ThingCommodore.Graphics;
 using static Thing65.Tests.TestHelpers;
 
 namespace Thing65.Tests;
 
-// Thing65.Graphics: a text screen taken from the C64's video memory, turned into the files of a Thing65 project, with
+// ThingCommodore.Graphics: a text screen taken from the C64's video memory, turned into the files of a Thing65 project, with
 // the characters shared between successive captures
 [TestClass]
 public sealed class CaptureTests
@@ -61,12 +61,12 @@ public sealed class CaptureTests
     [TestMethod]
     public void Capture_ShouldRenderTheScreenAsTheC65ShowsIt()
     {
-        var image = Room().Render(C65Palette.Pepto);
+        var image = Room().Render(C64Palette.Pepto);
         // Cell 0: Wall in multicolor, color $0A: its first row is $AA (the pairs 10: multicolor 2), the second $55 (01: multicolor 1)
-        Assert.AreEqual(C65Palette.Pepto.Argb(1), image[0, 0]);
-        Assert.AreEqual(C65Palette.Pepto.Argb(0x0E), image[0, 1]);
+        Assert.AreEqual(C64Palette.Pepto.Argb(1), image[0, 0]);
+        Assert.AreEqual(C64Palette.Pepto.Argb(0x0E), image[0, 1]);
         // A blank cell is the background
-        Assert.AreEqual(C65Palette.Pepto.Argb(5), image[0, 8 * 3]);
+        Assert.AreEqual(C64Palette.Pepto.Argb(5), image[0, 8 * 3]);
     }
 
     [TestMethod]

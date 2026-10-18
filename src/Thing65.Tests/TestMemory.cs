@@ -1,13 +1,13 @@
-using Thing65.Graphics;
+﻿using ThingCommodore.Graphics;
 using static Thing65.Tests.TestHelpers;
 
 namespace Thing65.Tests;
 
-// Thing65.Graphics: the memory of the C64 as pictures (a screen, a charset, sprites, a bitmap), to find them in a dump
+// ThingCommodore.Graphics: the memory of the C64 as pictures (a screen, a charset, sprites, a bitmap), to find them in a dump
 [TestClass]
 public sealed class MemoryViewTests
 {
-    static readonly C65Palette Palette = C65Palette.Pepto;
+    static readonly C64Palette Palette = C64Palette.Pepto;
     static readonly PaintColors Colors = new(Background: 6, Multicolor1: 14, Multicolor2: 1, Ink: 7);
 
     static uint Argb(int color) => Palette.Argb(color);

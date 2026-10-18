@@ -70,7 +70,7 @@ C65, its manual, the CPU and C64 chip documents. See [docs/reference/README.md](
 - Disks written by the C65 are saved to their `.d81` when ejected or replaced, on close and with *Save disk*; a disk made by
   the app for a `.prg` has no file (*Save disk as...*).
 - Keys: PageUp is RESTORE, CAPS LOCK is the C65 one (not a shift).
-- An external **1541** (project Thing1500, sibling folder) can be plugged on the IEC cable from the right click menu
+- An external **1541** (project ThingCommodore, sibling folder) can be plugged on the IEC cable from the right click menu
   (*1541 drive*): device 9, a window with the LED and the track, `.d64` disks that can be inserted, dropped on the screen and
   saved. It needs `c-drive-1541.rom` in the roms folder. Device 8 stays the C65's own drive; in the C64 mode the C65 ROM
   sends the BASIC commands (`LOAD`, `SAVE`) to the internal drive before looking at the cable, so the 1541 is reached with
@@ -125,13 +125,13 @@ Not yet: the 1541 drive and disk/tape images (`.d64`, `.t64`). See [Known limits
 | --- | --- |
 | `src/Thing65.Mos` | The chips as standalone components: **`MOS4510`** (the C65's CPU), **`CSG4567`** (VIC-III), **`F018`** (DMAgic), **`F011`** (disk controller), and the C64's: `MOS6502` (CPU core), `MOS6510` (CPU with I/O port), `MOS6526` (CIA), `MOS6569` (PAL VIC-II), `MOS6581` (SID). Each chip implements its own **pinout** (`I6510Pinout`, `I6526Pinout`, `I6569Pinout`, `I6581Pinout`) and does not know which computer it is mounted in |
 | `src/Thing65.C65` | The **motherboards**: `BoardC65` (the C65: sockets, 128 KB RAM, 128 KB ROM, memory map, wiring), `D81Image`/`D81Writer`, `KeyTyper`; and the C64's `Board` |
-| `src/Thing65.Prg` | Loading `.prg` files and writing into the KERNAL keyboard buffer |
-| `src/Thing65.Crt` | The `.crt` format and the cartridge types |
+| ThingCommodore `Software` (a library, next to this repository) | Loading `.prg` files and writing into the KERNAL keyboard buffer |
+| ThingCommodore `Cartridges` | The `.crt` format and the cartridge types |
 | `src/Thing65.Asm` | 6510 and **4510** assembler (`!cpu`), ACME-compatible: labels, macros, loops, includes, expressions, errors with their file and line |
-| `src/Thing65.Basic` | BASIC V2 tokenizer: a program in text becomes the `.prg` the C64 would have in memory |
-| `src/Thing65.Graphics` | Pictures for the C64: PNG, the palette, the conversion of an image to bitmaps, character sets, tiles and sprites |
-| `src/Thing65.Build` | From sources to C64 files: `.asm` and `.bas` to `.prg`, build manifests (`thing65.json`) with programs and cartridges |
-| `src/Thing65.WinForms` | `C65Monitor` (the screen, a UserControl), `PcKeyboard` (the keyboard cable), `PcSpeakers` (the speakers), joystick and paddle simulators |
+| ThingCommodore.Tools `Basic` | BASIC V2 tokenizer: a program in text becomes the `.prg` the C64 would have in memory |
+| ThingCommodore.Tools `Graphics` | Pictures for the C64: PNG, the palette, the conversion of an image to bitmaps, character sets, tiles and sprites |
+| ThingCommodore.Tools `Build` | From sources to C64 files: `.asm` and `.bas` to `.prg`, build manifests (`thing65.json`) with programs and cartridges |
+| `src/Thing65.WinForms` | `MonitorControl` (ThingRetroEmu.WinForms) (the screen, a UserControl), `PcKeyboard` (the keyboard cable), `PcSpeakers` (the speakers), joystick and paddle simulators |
 | `src/Thing65.Computer` | The desktop app: one **C65** in a window (`ComputerForm`), loading of `.prg`/`.d81`, the ROM folder, the settings |
 | `src/Thing65` | The `thing65` command line (Spectre.Console), a .NET global tool: `run`, `asm`, `basic`, `build` |
 | `src/Thing65.WebComputer` | The C65 in the browser: the same board compiled to WebAssembly (Blazor, AOT), on a canvas |
@@ -152,7 +152,7 @@ board.SidSocket.Remove();                          // take the 6581 out...
 board.SidSocket.Insert(new MySid());               // ...and put in anything with the I6581Pinout pinout
 board.Reset();
 
-var monitor = new C65Monitor { Dock = DockStyle.Fill };
+var monitor = new MonitorControl { Dock = DockStyle.Fill };
 form.Controls.Add(monitor);
 var video = new MonitorCable(board.VideoOut, monitor);        // the monitor cable
 var keys  = new PcKeyboard(monitor, board.Keyboard);          // the keyboard cable
@@ -374,13 +374,13 @@ The keys used by the joystick do not reach the C64 keyboard. A source can be in 
 
 ### Using the C64 in another application
 
-`C65Monitor` is a normal UserControl: it can go into any form, together with other controls. The monitor keeps
+`MonitorControl` (ThingRetroEmu.WinForms) is a normal UserControl: it can go into any form, together with other controls. The monitor keeps
 its proportions (`KeepAspectRatio`), receives the keyboard only when it has the focus and offers `CaptureFrame()`
 for a copy of the last frame. To load files from code:
 
 ```csharp
-using Thing65.Crt;
-using Thing65.Prg;
+using ThingCommodore.Cartridges;
+using ThingCommodore.Software;
 
 board.Enqueue(() => board.LoadPrg(File.ReadAllBytes("game.prg")));   // on the emulation thread
 board.Enqueue(() => board.TypeText("RUN\r"));

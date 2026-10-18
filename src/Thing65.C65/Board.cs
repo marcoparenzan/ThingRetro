@@ -1,11 +1,13 @@
-using System.Diagnostics;
-using Thing65.Mos;
+﻿using System.Diagnostics;
+using ThingMOS;
+using ThingRetroEmu.Chips;
+using ThingRetroEmu.Buses;
 
 namespace Thing65.C65;
 
 // The C64 (PAL) motherboard: sockets for the MOS chips, RAM, color RAM, ROMs, PLA and the traces that
 // connect everything. The chips do not know the board: the board wires them through their pinouts
-public partial class Board
+public partial class Board : IC64Memory
 {
     Task? clock;
 

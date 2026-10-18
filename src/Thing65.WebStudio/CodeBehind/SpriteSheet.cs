@@ -1,4 +1,4 @@
-using Thing65.Graphics;
+﻿using ThingCommodore.Graphics;
 
 namespace Thing65.WebStudio.CodeBehind;
 
@@ -31,7 +31,7 @@ public sealed class SpriteSheet
     public int Multicolor1 { get; }
     public int Multicolor2 { get; }
     public int Background { get; }
-    public C65Palette Palette { get; } = C65Palette.Pepto;
+    public C64Palette Palette { get; } = C64Palette.Pepto;
 
     public SpriteSheet(AsmRegion region, string[] lines, ProgramImage? image, int values)
     {
@@ -127,9 +127,9 @@ public sealed class SpriteSheet
     {
         if (picture.Pixels.All(p => p >> 24 == 0xFF))
         {
-            var corner = Graphics.Color.FromRgb(picture.Pixels[0]);
+            var corner = ThingCommodore.Graphics.Color.FromRgb(picture.Pixels[0]);
             for (int i = 0; i < picture.Pixels.Length; i++)
-                if (C65Palette.Distance(Graphics.Color.FromRgb(picture.Pixels[i]), corner) < 1200) picture.Pixels[i] = 0;
+                if (C64Palette.Distance(ThingCommodore.Graphics.Color.FromRgb(picture.Pixels[i]), corner) < 1200) picture.Pixels[i] = 0;
         }
         var conversion = Converter.Convert(picture, new GraphicsAsset
         {

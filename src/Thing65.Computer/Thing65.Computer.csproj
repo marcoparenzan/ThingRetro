@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- The desktop app: one C65 in a window, with board, monitor, keyboard, speakers and control ports wired
        together, plus loading .prg/.d81 files, the ROM folder and the settings -->
@@ -15,7 +15,6 @@
     <ProjectReference Include="..\Thing65.C65\Thing65.C65.csproj" />
     <!-- The 1541 drive of the sibling project ThingCommodore -->
     <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore\ThingCommodore.csproj" />
-    <ProjectReference Include="..\Thing65.Prg\Thing65.Prg.csproj" />
     <ProjectReference Include="..\Thing65.WinForms\Thing65.WinForms.csproj" />
   </ItemGroup>
 
@@ -29,6 +28,13 @@
   <!-- The application icon, for the windows -->
   <ItemGroup>
     <EmbeddedResource Include="..\..\images\thing65.ico" LogicalName="thing65.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
   </ItemGroup>
 
 </Project>

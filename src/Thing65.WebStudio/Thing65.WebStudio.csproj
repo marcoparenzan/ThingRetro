@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <!-- The studio in the browser: a Blazor Server app (projects, files, editor, assembler and builds run on the
        server, over a local folder of projects). The C65 is the WebAssembly web computer (Thing65.WebComputer, the
@@ -17,14 +17,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Thing65.Asm\Thing65.Asm.csproj" />
-    <ProjectReference Include="..\Thing65.Build\Thing65.Build.csproj" />
+    <ProjectReference Include="..\..\..\ThingMOS\src\ThingMOS\ThingMOS.csproj" />
+    <ProjectReference Include="..\..\..\ThingRetroEmu\src\ThingRetroEmu\ThingRetroEmu.csproj" />
+    <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore.Tools\ThingCommodore.Tools.csproj" />
   </ItemGroup>
 
   <!-- Files of the rest of the repository: the 6502 language of the editor, logo and icons. Embedded and served by
        Program.cs at the path in their name (linked static web assets come out empty in development) -->
   <ItemGroup>
-    <EmbeddedResource Include="..\Thing65.Asm\Editor\asm6502.js" LogicalName="wwwroot/js/asm6502.js" />
+    <EmbeddedResource Include="..\..\..\ThingMOS\src\ThingMOS\Asm\Editor\asm6502.js" LogicalName="wwwroot/js/asm6502.js" />
     <EmbeddedResource Include="..\..\images\logos\thing65-logo-600x200.png;..\..\images\icons\thing65-chip-16.png;..\..\images\icons\thing65-chip-32.png;..\..\images\icons\thing65-chip-64.png;..\..\images\icons\thing65-chip-256.png"
                       LogicalName="wwwroot/img/%(Filename)%(Extension)" />
   </ItemGroup>

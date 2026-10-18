@@ -14,9 +14,31 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
     <Using Include="Thing65.C65" />
-    <Using Include="Thing65.Mos" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
+    <Using Include="ThingMOS" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
+    <Using Include="ThingRetroEmu.Chips" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
+    <Using Include="ThingRetroEmu.Buses" />
   </ItemGroup>
 
   <!-- The same ROMs as the app, copied into roms next to the tests -->
@@ -25,13 +47,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Thing65.Asm\Thing65.Asm.csproj" />
+    <ProjectReference Include="..\..\..\ThingMOS\src\ThingMOS\ThingMOS.csproj" />
+    <ProjectReference Include="..\..\..\ThingRetroEmu\src\ThingRetroEmu\ThingRetroEmu.csproj" />
     <ProjectReference Include="..\Thing65.C65\Thing65.C65.csproj" />
     <ProjectReference Include="..\Thing65.Computer\Thing65.Computer.csproj" />
-    <ProjectReference Include="..\Thing65.Crt\Thing65.Crt.csproj" />
-    <ProjectReference Include="..\Thing65.Prg\Thing65.Prg.csproj" />
-    <ProjectReference Include="..\Thing65.Basic\Thing65.Basic.csproj" />
-    <ProjectReference Include="..\Thing65.Build\Thing65.Build.csproj" />
+    <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore\ThingCommodore.csproj" />
+    <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore.Tools\ThingCommodore.Tools.csproj" />
     <ProjectReference Include="..\Thing65\Thing65.csproj" />
     <ProjectReference Include="..\Thing65.WinForms\Thing65.WinForms.csproj" />
   </ItemGroup>

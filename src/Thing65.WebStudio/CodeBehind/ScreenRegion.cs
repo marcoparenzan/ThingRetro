@@ -1,4 +1,4 @@
-using Thing65.Graphics;
+﻿using ThingCommodore.Graphics;
 
 namespace Thing65.WebStudio.CodeBehind;
 
@@ -27,7 +27,7 @@ public sealed class ScreenRegion
     public int Multicolor2 { get; }
     public string CharsetLabel { get; }
     public bool CharsetMulticolor { get; }
-    public C65Palette Palette { get; } = C65Palette.Pepto;
+    public C64Palette Palette { get; } = C64Palette.Pepto;
 
     readonly byte[] charset;
 

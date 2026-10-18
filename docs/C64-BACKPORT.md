@@ -29,7 +29,7 @@ such instruction.
 
 (When something is found: file, what is wrong, how it shows, and whether it was fixed here.)
 
-## Changes made for Thing1500 (the disk drives)
+## Changes made for the disk drives (now ThingCommodore)
 
 - `Pinouts.cs`: new `I6502Pinout` (the 6502 without the port); `MOS6502` implements it. No behavior change: the same
   change would do in Thing64 if the drives are to share its `Mos` library.

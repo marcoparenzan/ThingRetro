@@ -1,17 +1,19 @@
-using Thing65.WinForms;
+﻿using Thing65.WinForms;
 using Thing65.C65;
-using Thing65.Mos;
+using ThingMOS;
+using ThingRetroEmu.Chips;
+using ThingRetroEmu.Buses;
 
 namespace Thing65.Computer;
 
-// A C65: a window hosting a C65Monitor and wiring the pieces together. It works on its own or inside another
+// A C65: a window hosting a MonitorControl and wiring the pieces together. It works on its own or inside another
 // form (MDI child). The same wiring (BoardC65, monitor, MonitorCable, PcKeyboard, PcSpeakers with AudioCable,
 // ControlPortSelector) works in any form, next to other controls too.
 // Right click on the monitor: control ports, audio, disk, reset
 public class ComputerForm : Form
 {
     readonly BoardC65 board;
-    readonly C65Monitor monitor = new() { Dock = DockStyle.Fill };
+    readonly MonitorControl monitor = new(new VideoMode(CSG4567.SCREEN_WIDTH, CSG4567.SCREEN_HEIGHT)) { Dock = DockStyle.Fill };
     readonly MonitorCable monitorCable;
     readonly PcKeyboard keyboardCable;
     readonly PcSpeakers? speakers;
@@ -45,7 +47,7 @@ public class ComputerForm : Form
 
         // Control ports: joystick from the keyboard or USB, paddles from the mouse; the joystick keys
         // do not reach the C65 keyboard
-        controlPorts = new ControlPortSelector(board, monitor);
+        controlPorts = new ControlPortSelector(board.ControlPort1, board.ControlPort2, monitor);
         controlPorts.Select(1, settings.Port1);
         controlPorts.Select(2, settings.Port2);
         controlPorts.Changed += SaveControlPorts;
