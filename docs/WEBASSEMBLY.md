@@ -74,6 +74,8 @@ own. Messages, all between pages of the same origin:
 | studio → C64 | `{ type: 'focus' }` | the keyboard goes to the C64 |
 | studio → C64 | `{ type: 'capture' }` | send the video memory |
 | C64 → studio | `{ type: 'capture', bytes }` | the 17,472 bytes of `Board.CaptureVideo`: the 16 KB of the VIC-II's bank (the character ROM where the chip reads it), the Color RAM, the registers |
+| studio → C64 | `{ type: 'memory' }` | send all the memory |
+| C64 → studio | `{ type: 'memory', bytes }` | the 70,722 bytes of `Board.CaptureMemory`: the 64 KB of RAM (also under the ROMs and the I/O), Color RAM, the VIC-II registers, the 4 KB of character ROM, the VIC-II bank and the CPU port |
 
 `WebComputer.cs` exposes the C# side to JavaScript with `[JSExport]` (`Frame`, `Load`, `KeyDown`, `CaptureVideo`...)
 and `computer.js` calls it.
@@ -89,7 +91,7 @@ same ones. Clearing the site data makes the page ask again.
 Whenever something the C64 is made of changes: the chips, the board (`Thing64.C64`), `WebComputer.cs`,
 `computer.js`, the keyboard layout. Work on the studio itself (editors, panels, assembler) does not need it.
 
-Typical case: a feature adds a message (the capture did). Until the C64 is published again it ignores the new message
+Typical case: a feature adds a message (the capture and the memory viewer did). Until the C64 is published again it ignores the new message
 and the studio waits for an answer that never comes; the capture button says so after five seconds.
 
 ## When something does not reach the browser

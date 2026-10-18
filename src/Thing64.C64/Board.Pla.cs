@@ -184,9 +184,31 @@ public partial class Board
         var data = new byte[Bank + Colors + Registers];
         for (int i = 0; i < Bank; i++) data[i] = VicRead(i);
         for (int i = 0; i < Colors; i++) data[Bank + i] = colorRam.Address((ushort)i);
-        if (vic is not null)
-            for (int register = 0; register <= 0x2E; register++)
-                if (register is not (0x1E or 0x1F)) data[Bank + Colors + register] = vic.Read(register);
+        CopyVicRegisters(data, Bank + Colors);
+        return data;
+    }
+
+    // The VIC-II registers $D000-$D02E at "at" (the collision registers $D01E and $D01F, which clear when read, are 0)
+    void CopyVicRegisters(byte[] data, int at)
+    {
+        if (vic is null) return;
+        for (int register = 0; register <= 0x2E; register++)
+            if (register is not (0x1E or 0x1F)) data[at + register] = vic.Read(register);
+    }
+
+    // For tools: the memory of the machine. The 64 KB of RAM (also what is under the BASIC and KERNAL ROMs and the I/O,
+    // which the CPU does not see), the 1024 nibbles of Color RAM, the VIC-II registers $D000-$D03F, the 4 KB of the
+    // character ROM, then the VIC-II bank and the CPU port ($01)
+    public byte[] CaptureMemory()
+    {
+        const int Ram = 65536, Colors = 1024, Registers = 64, Characters = 4096;
+        var data = new byte[Ram + Colors + Registers + Characters + 2];
+        for (int i = 0; i < Ram; i++) data[i] = ram64.Address((ushort)i);
+        for (int i = 0; i < Colors; i++) data[Ram + i] = colorRam.Address((ushort)i);
+        CopyVicRegisters(data, Ram + Colors);
+        for (int i = 0; i < Characters; i++) data[Ram + Colors + Registers + i] = Chargen((ushort)i);
+        data[^2] = (byte)vicBank;
+        data[^1] = cpu is null ? (byte)0xFF : cpu.Port.Pins;
         return data;
     }
 

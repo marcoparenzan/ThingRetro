@@ -54,6 +54,7 @@ public static partial class WebComputer
     public static void Start(SystemRoms roms)
     {
         board = new Board(roms, startClock: false);
+        drive = null;                                        // a new machine: the page plugs the drive in again
         monitorCable = new MonitorCable(board.VideoOut, screen);
         cycles = 0;
         SetJoystick(joystickPort, joystickKeys);
@@ -127,13 +128,13 @@ public static partial class WebComputer
         board?.Keyboard.ReleaseAll();
     }
 
-    // The joystick: plugged into port 1 or 2 (0 = none), moved by the keypad ("keypad") or by the arrows with
-    // Ctrl as fire ("arrows"), and by any gamepad. Its keys do not reach the C64 keyboard
+    // The joystick: plugged into port 1 or 2 (0 = none), moved by the arrows with Ctrl as fire ("arrows", the
+    // default) or by the keypad ("keypad"), and by any gamepad. Its keys do not reach the C64 keyboard
     const int Up = 0x01, Down = 0x02, Left = 0x04, Right = 0x08, Fire = 0x10;
     static readonly Joystick joystick = new();
     static readonly HashSet<string> joystickCodes = new(StringComparer.Ordinal);
     static int joystickPort = 2, joystickKeyBits, gamepadBits;
-    static string joystickKeys = "keypad";
+    static string joystickKeys = "arrows";
 
     static readonly Dictionary<string, int> KeypadKeys = new()
     {
@@ -214,6 +215,10 @@ public static partial class WebComputer
     [JSExport]
     public static byte[] CaptureVideo() => board?.CaptureVideo() ?? [];
 
+    // The whole memory (Board.CaptureMemory), for the studio's memory viewer
+    [JSExport]
+    public static byte[] CaptureMemory() => board?.CaptureMemory() ?? [];
+
     [JSExport]
     public static void Reset()
     {
@@ -223,14 +228,21 @@ public static partial class WebComputer
         board.Reset();
     }
 
-    // A .prg restarts the machine and runs after the boot; a .crt is inserted (which restarts the machine).
-    // Returns a description for the page, or the error
+    // A .prg restarts the machine and runs after the boot; a .crt is inserted (which restarts the machine); a .d64 goes
+    // into the drive (device 8 is plugged in if there is no drive and the 1541 ROM is at hand). Returns a description for
+    // the page, or the error
     [JSExport]
     public static string Load(string name, byte[] content)
     {
         if (board is null) return "The C64 is not running";
         try
         {
+            if (name.EndsWith(".d64", StringComparison.OrdinalIgnoreCase))
+            {
+                InsertDisk(name, content);
+                if (drive is null && (EmbeddedDriveRom() ?? Script.StoredRom(DriveRomName)) is { } rom) AttachDrive(rom, 8);
+                return drive is null ? $"{name} is ready: choose Drive > device 8 (the 1541 ROM is needed)" : $"{name} in drive {drive.DeviceNumber}";
+            }
             if (name.EndsWith(".crt", StringComparison.OrdinalIgnoreCase))
             {
                 var cartridge = CrtFile.Load(content);
@@ -245,7 +257,7 @@ public static partial class WebComputer
             loadAtCycle = cycles + (long)(BootTime.TotalSeconds * CyclesPerSecond);
             return $"{name} ${start:X4}-${end - 1:X4}";
         }
-        catch (Exception e) when (e is ArgumentException or InvalidDataException or NotSupportedException)
+        catch (Exception e) when (e is ArgumentException or InvalidDataException or NotSupportedException or InvalidOperationException)
         {
             return "Error: " + e.Message;
         }

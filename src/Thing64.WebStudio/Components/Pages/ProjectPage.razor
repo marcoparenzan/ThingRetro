@@ -188,6 +188,8 @@ else
                                 @onclick="CaptureScreen">📷 Capture</button>
                         <button class="rounded border border-night-600 px-2 py-1 text-night-200 hover:border-chip-400" title="The captures and the files that come out of them"
                                 @onclick="() => showCaptures = !showCaptures">@(showCaptures ? "Hide captures" : "Captures")</button>
+                        <button class="rounded border border-night-600 px-2 py-1 text-night-200 hover:border-chip-400" title="The 64 KB of the C64 to look through: bytes, screens, charsets, sprites, bitmaps"
+                                @onclick="OpenMemory">▦ Memory</button>
                     }
                     @if (Computer.Available && computerOn && !computerWindow)
                     {
@@ -196,6 +198,7 @@ else
                     }
                 </div>
             </div>
+            <MemoryViewer @ref="memoryViewer" Visible="@(showMemory && showComputer)" OnSnapshot="SnapshotMemory" OnClose="() => showMemory = false" />
         </div>
         <div class="h-36 shrink-0 overflow-auto border-t border-night-800 bg-night-950 px-3 py-2 font-mono text-xs">
             @if (log.Count == 0)
@@ -242,6 +245,8 @@ else
     bool computerWindow;                            // the C64 is in a window of its own, not in the tab
     bool showCaptures;                              // the panel of the screens taken from the C64
     CapturePanel? capturePanel;
+    bool showMemory;                                // the viewer of the C64's memory, over the C64
+    MemoryViewer? memoryViewer;
     DotNetObjectReference<ProjectPage>? self;
     bool editorReady;
 
@@ -566,6 +571,28 @@ else
     {
         showCaptures = true;
         if (!await JS.InvokeAsync<bool>("thing64Studio.captureComputer")) computerStatus = "The C64 is not running yet: there is no screen to capture";
+    }
+
+    // The viewer of the memory: opened with a snapshot of the running C64 if it has none yet
+    async Task OpenMemory()
+    {
+        showMemory = true;
+        if (memoryViewer?.HasMemory != true) await SnapshotMemory();
+    }
+
+    async Task SnapshotMemory()
+    {
+        showMemory = true;
+        if (!await JS.InvokeAsync<bool>("thing64Studio.memoryComputer")) computerStatus = "The C64 is not running yet: there is no memory to look at";
+    }
+
+    [JSInvokable]
+    public void ComputerMemory(byte[] bytes)
+    {
+        showMemory = true;
+        if (bytes.Length == 0) computerStatus = "The C64 has nothing to show yet";
+        else memoryViewer?.SetMemory(bytes);
+        StateHasChanged();
     }
 
     [JSInvokable]

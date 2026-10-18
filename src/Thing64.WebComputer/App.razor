@@ -26,12 +26,24 @@
         </section>
     }
 
+    @if (needDriveRom)
+    {
+        <section class="roms">
+            <p>
+                The 1541 ROM is copyrighted too: choose the file (16 KB, <code>c-drive-1541.rom</code> or
+                <code>1541-II</code>...) and the browser keeps it for the next visits.
+            </p>
+            <InputFile OnChange="LoadDriveRom" accept=".rom,.bin" />
+            @if (driveError is not null) { <p class="error">@driveError</p> }
+        </section>
+    }
+
     <canvas id="screen" width="@MonitorWidth" height="@MonitorHeight" tabindex="0"></canvas>
 
     <nav>
         <label class="button">
             Load .prg / .crt
-            <InputFile OnChange="LoadProgram" accept=".prg,.crt" />
+            <InputFile OnChange="LoadProgram" accept=".prg,.crt,.d64" />
         </label>
         <button @onclick="Reset">Reset</button>
         <button id="sound">Sound: on</button>
@@ -47,6 +59,23 @@
                 <option value="arrows">arrows + Ctrl</option>
             </select>
         </label>
+        <label>
+            Drive
+            <select id="drive" @onchange="ChangeDrive" value="@driveDevice">
+                <option value="0">none</option>
+                <option value="8">device 8</option>
+                <option value="9">device 9</option>
+                <option value="10">device 10</option>
+                <option value="11">device 11</option>
+            </select>
+        </label>
+        <label class="button" title="A .d64 disk image goes into the drive (it plugs device 8 in if there is none)">
+            Disk .d64
+            <InputFile id="disk" OnChange="LoadDisk" accept=".d64" />
+        </label>
+        <span class="drive" id="drive-text">@driveText</span>
+        <button id="eject" hidden="@(!hasDisk)" @onclick="EjectDisk" title="Take the disk out of the drive">Eject</button>
+        <button id="save-disk" hidden="@(!hasDisk)" @onclick="SaveDisk" title="Keep the disk (with what the program wrote on it) as a .d64 file">Save disk</button>
         <span class="speed" id="speed"></span>
     </nav>
 
@@ -54,7 +83,9 @@
         Click the screen to type (and to start the sound). Keys are positional as on a C64: Esc is RUN/STOP, Tab CTRL,
         left Alt the C= key, F2/F4/F6/F8 are Shift + F1/F3/F5/F7. The joystick moves with the numeric keypad (8 2 4 6,
         diagonals 7 9 1 3, fire 0 or 5) or the arrows with Ctrl as fire, and with any gamepad; almost every game wants
-        it in port 2. Programs and cartridges can also be dropped on the screen.
+        it in port 2. Programs, cartridges and .d64 disks can also be dropped on the screen. With a 1541 plugged in
+        (Drive), LOAD"$",8 lists the disk and LOAD"NAME",8 loads from it; SAVE writes to the disk in the page, which
+        Save disk keeps as a file.
     </p>
 </main>
 
@@ -64,10 +95,18 @@
 
     string status = "Starting...";
     string joystickPort = "2";
-    string joystickKeys = "keypad";
+    string joystickKeys = "arrows";
     bool needRoms;
     bool embedded;
     string? romError;
+
+    // The 1541: the device the page plugged in (0 = none), the ROM it still waits for, and what it says
+    string driveDevice = "0";
+    bool needDriveRom, hasDisk;
+    int pendingDevice = 8;
+    string? driveError;
+    string driveText = "no drive";
+    Timer? driveWatch;
 
     protected override void OnInitialized() =>
         embedded = new Uri(Navigation.Uri).Query.Contains("embedded", StringComparison.OrdinalIgnoreCase);
@@ -101,7 +140,115 @@
         WebComputer.Start(roms);
         await Script.Start("screen");
         status = "READY.";
+        // The drive of the last visit, if its ROM is at hand
+        if (int.TryParse(Script.Setting("drive"), out int device) && device is >= 8 and <= 11) TryAttachDrive(device);
+        // Whatever the program writes to the disk shows (changed) a moment later
+        driveWatch ??= new Timer(_ => InvokeAsync(RefreshDrive), null, 1000, 1000);
         StateHasChanged();
+    }
+
+    static byte[]? DriveRom() => WebComputer.EmbeddedDriveRom() ?? Script.StoredRom(WebComputer.DriveRomName);
+
+    // Plugs the drive in, or asks for its ROM
+    void TryAttachDrive(int device)
+    {
+        pendingDevice = device;
+        if (DriveRom() is not { } rom)
+        {
+            needDriveRom = true;
+            driveDevice = "0";
+            return;
+        }
+        try
+        {
+            WebComputer.AttachDrive(rom, device);
+            driveDevice = device.ToString();
+            needDriveRom = false;
+            driveError = null;
+            Script.SetSetting("drive", device.ToString());
+        }
+        catch (ArgumentException error)
+        {
+            driveError = error.Message;
+            needDriveRom = true;                              // the ROM kept is not a 1541's: ask again
+            driveDevice = "0";
+        }
+        RefreshDrive();
+    }
+
+    void RefreshDrive()
+    {
+        driveDevice = WebComputer.DriveOn ? WebComputer.DriveDevice.ToString() : "0";
+        hasDisk = WebComputer.HasDisk;
+        string text = WebComputer.DriveText();
+        if (text == driveText) return;
+        driveText = text;
+        StateHasChanged();
+    }
+
+    void ChangeDrive(ChangeEventArgs e)
+    {
+        int device = int.TryParse(e.Value?.ToString(), out int value) ? value : 0;
+        if (device == 0)
+        {
+            WebComputer.DetachDrive();
+            needDriveRom = false;
+            Script.SetSetting("drive", "0");
+            RefreshDrive();
+        }
+        else
+        {
+            TryAttachDrive(device);
+        }
+        Script.Focus("screen");
+    }
+
+    // The ROM of the 1541: 16 KB, any file name
+    async Task LoadDriveRom(InputFileChangeEventArgs e)
+    {
+        using var stream = e.File.OpenReadStream(64 * 1024);
+        using var copy = new MemoryStream();
+        await stream.CopyToAsync(copy);
+        var rom = copy.ToArray();
+        if (rom.Length != 16384)
+        {
+            driveError = $"a 1541 ROM is 16384 bytes, {e.File.Name} is {rom.Length}";
+            return;
+        }
+        Script.StoreRom(WebComputer.DriveRomName, rom);
+        needDriveRom = false;
+        driveError = null;
+        TryAttachDrive(pendingDevice);
+    }
+
+    async Task LoadDisk(InputFileChangeEventArgs e)
+    {
+        using var stream = e.File.OpenReadStream(256 * 1024);
+        using var copy = new MemoryStream();
+        await stream.CopyToAsync(copy);
+        status = WebComputer.Load(e.File.Name, copy.ToArray());
+        if (WebComputer.DriveOn) Script.SetSetting("drive", WebComputer.DriveDevice.ToString());
+        needDriveRom = !WebComputer.DriveOn && WebComputer.HasDisk && DriveRom() is null;
+        pendingDevice = 8;
+        RefreshDrive();
+        Script.Focus("screen");
+    }
+
+    void EjectDisk()
+    {
+        WebComputer.EjectDisk();
+        RefreshDrive();
+        Script.Focus("screen");
+    }
+
+    // The disk as it is now: what the program wrote on it too
+    void SaveDisk()
+    {
+        string name = WebComputer.DiskName ?? "disk.d64";
+        Script.Download(name, WebComputer.DiskBytes());
+        WebComputer.DiskSaved();
+        RefreshDrive();
+        Script.Focus("screen");
     }
 
     // The three ROM files, recognized by their names (kernal..., basic..., char...)
@@ -165,6 +312,7 @@
 
     public ValueTask DisposeAsync()
     {
+        driveWatch?.Dispose();
         if (!needRoms) Script.Stop();
         return ValueTask.CompletedTask;
     }

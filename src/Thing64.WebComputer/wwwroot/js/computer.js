@@ -3,8 +3,9 @@
 // Talks to WebComputer.cs (JSExport/JSImport).
 // Opened by a page of the same site (the web studio: in an iframe, or in a window it opened), it runs the programs
 // that page sends:
-//   host -> computer: { type: 'load', name, bytes }, { type: 'focus' }, { type: 'capture' }
-//   computer -> host: { type: 'ready' }, { type: 'status', text }, { type: 'capture', bytes } (the video memory)
+//   host -> computer: { type: 'load', name, bytes }, { type: 'focus' }, { type: 'capture' }, { type: 'memory' }
+//   computer -> host: { type: 'ready' }, { type: 'status', text }, { type: 'capture', bytes } (the video memory),
+//                     { type: 'memory', bytes } (the whole memory)
 
 let computer = null;      // the [JSExport] methods of WebComputer
 let canvas = null;
@@ -34,6 +35,8 @@ window.addEventListener('message', e => {
         startAudio();
     } else if (e.data?.type === 'capture') {
         e.source.postMessage({ type: 'capture', bytes: running ? computer.CaptureVideo() : new Uint8Array(0) }, location.origin);
+    } else if (e.data?.type === 'memory') {
+        e.source.postMessage({ type: 'memory', bytes: running ? computer.CaptureMemory() : new Uint8Array(0) }, location.origin);
     }
 });
 host?.postMessage({ type: 'ready' }, location.origin);
@@ -201,6 +204,22 @@ export function storedRom(name) {
     const text = localStorage.getItem('thing64.rom.' + name);
     if (!text) return null;
     return Uint8Array.from(atob(text), c => c.charCodeAt(0));
+}
+
+export function setting(name) {
+    return localStorage.getItem('thing64.' + name);
+}
+
+export function setSetting(name, value) {
+    localStorage.setItem('thing64.' + name, value);
+}
+
+export function download(name, content) {
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([content], { type: 'application/octet-stream' }));
+    link.download = name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
 export function storeRom(name, content) {

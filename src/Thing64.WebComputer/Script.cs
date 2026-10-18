@@ -23,4 +23,15 @@ static partial class Script
 
     [JSImport("storeRom", "computer")]
     public static partial void StoreRom(string name, byte[] content);
+
+    // Small things the page remembers between visits (which drive is plugged in)
+    [JSImport("setting", "computer")]
+    public static partial string? Setting(string name);
+
+    [JSImport("setSetting", "computer")]
+    public static partial void SetSetting(string name, string value);
+
+    // A file for the person to keep (a disk that was written to)
+    [JSImport("download", "computer")]
+    public static partial void Download(string name, byte[] content);
 }

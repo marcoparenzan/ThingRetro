@@ -339,6 +339,13 @@ A Blazor Server app: the server owns the files and the builds, the browser shows
   and remembers how each screen uses the characters to decide `multicolor=1`; `CharsetText` and `ScreenText` write
   the files, which stay in the panel's memory. The files are plain assembler with the `;@` regions the editors read:
   tests assemble them.
+- **Memory viewer** (`MemoryViewer.razor`, `Thing64.Graphics/MemoryCapture.cs` and `MemoryRender.cs`): the page asks the
+  C64 for its memory (`Board.CaptureMemory`: the 64 KB of RAM, Color RAM, the VIC-II registers, the character ROM, the
+  VIC-II bank and the CPU port; 70,722 bytes) and keeps it. `MemoryCapture` knows what the VIC-II is set to show
+  (screen, charset, bitmap, colors); `MemoryRender` turns bytes into pictures (a screen of characters through any
+  charset, a charset, sprites with their stride, a bitmap), reading RAM with the addresses wrapping at 64 KB. The
+  viewer makes the picture when something changes, not at each move of the mouse; the offset is a plain address that
+  every control moves.
 - **Styles**: Tailwind (the browser build, from the CDN), with a theme made of the two colors of the logo: night
   (`#05083a`) and chip (`#7c8af7`). Files from the rest of the repository (logo, icons, `asm6502.js`) are embedded
   in the assembly and served by `Program.cs`.

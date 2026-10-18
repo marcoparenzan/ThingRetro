@@ -13,6 +13,7 @@ window.thing64Studio = (() => {
     const ready = new Set();            // the C64s (windows) that posted 'ready': they can receive programs
     let pendingRun = null;              // a program for a C64 that is not ready yet
     let captureTimer = 0;               // waiting for the C64 to answer a capture
+    let memoryTimer = 0;                // ... or a request for its memory
     let computerWindow = null;          // the C64 in a window of its own
     let windowWatch = 0;
 
@@ -49,6 +50,9 @@ window.thing64Studio = (() => {
         } else if (e.data?.type === 'capture') {
             clearTimeout(captureTimer);
             page.invokeMethodAsync('ComputerCaptured', e.data.bytes);
+        } else if (e.data?.type === 'memory') {
+            clearTimeout(memoryTimer);
+            page.invokeMethodAsync('ComputerMemory', e.data.bytes);
         }
     }
 
@@ -232,6 +236,17 @@ window.thing64Studio = (() => {
             clearTimeout(captureTimer);
             captureTimer = setTimeout(() => page?.invokeMethodAsync('ComputerStatus',
                 'The C64 does not answer the capture: it was published before captures existed. Publish it again: dotnet publish src/Thing64.WebComputer -c Release -o artifacts/web'), 5000);
+            return true;
+        },
+
+        // Asks the C64 for all its memory (the answer comes as a 'memory' message). False if there is no C64 to ask
+        memoryComputer() {
+            const target = computerTarget();
+            if (!target || !ready.has(target)) return false;
+            target.postMessage({ type: 'memory' }, location.origin);
+            clearTimeout(memoryTimer);
+            memoryTimer = setTimeout(() => page?.invokeMethodAsync('ComputerStatus',
+                'The C64 does not answer: it was published before the memory viewer existed. Publish it again: dotnet publish src/Thing64.WebComputer -c Release -o artifacts/web'), 5000);
             return true;
         },
 

@@ -127,7 +127,7 @@ of the solution, so that the desktop app is there).
 
 A .NET tool cannot use Windows Forms, so the command line is `net10.0` and starts the desktop app
 (`Thing64.Computer.exe`, a C64 in a window), which travels inside the tool package in its `desktop` folder. The ROMs are in
-`src/Thing64.Computer/roms` (`kernal`, `basic`, `chargen`) and are copied next to the desktop app. They are the
+`roms` (`kernal`, `basic`, `chargen`) and are copied next to the desktop app. They are the
 original C64 ROMs, protected by copyright: the tool package contains them, so keep it for yourself.
 
 ### The C64 in the browser
@@ -136,8 +136,8 @@ original C64 ROMs, protected by copyright: the tool package contains them, so ke
 drives the board one frame at a time (`requestAnimationFrame`) and paints the frames on a canvas. Keys are
 positional as in the desktop app; programs and cartridges are loaded with a button or dropped on the screen.
 The SID plays through Web Audio (an AudioWorklet), starting at the first click or key on the screen. The joystick
-goes into port 2 (or 1) and moves with the numeric keypad, or the arrows with Ctrl as fire, and with any gamepad
-(Gamepad API).
+goes into port 2 (or 1) and moves with the arrows with Ctrl as fire (the default) or the numeric keypad, and with any
+gamepad (Gamepad API); in the arrows mode they are not the C64 cursor keys.
 
 ```powershell
 dotnet run --project src/Thing64.WebComputer              # development server on http://localhost:5164
@@ -232,6 +232,15 @@ web computer, in WebAssembly, in a tab next to the files (or in a window of its 
   The values are constants with a name (`charset1__FIRST`, `room1__BACKGROUND`, `room1__BORDER`,
   `room1__MULTICOLOR_1`, `room1__MULTICOLOR_2`) that the regions' parameters use, not numbers written in them.
   Bitmap and extended color screens cannot be captured.
+- **Memory viewer** (▦ under the C64): a snapshot of the running C64's 64 KB (the RAM under the ROMs and the I/O
+  too, plus the character ROM, Color RAM and the VIC-II registers) to look through, to find a screen, a charset or
+  sprites that no register points to. *Bytes* shows rows of as many bytes as you like with their characters (ASCII,
+  PETSCII or screen codes), from any offset; *Screen*, *Charset*, *Sprites* and *Bitmap* decode the same bytes as
+  pictures (hires or multicolor, any colors, the number of columns, characters or sprites in a row). The offset moves a
+  byte at a time: buttons for a byte, a character or sprite, a row and a page, the arrow keys, Page Up and Down, the
+  wheel, a slider, an address to go to, and a click on what you see to start there. *As the VIC-II shows it* sets the
+  offset, charset, screen and colors to the ones the chip has now. Bytes and charsets can be copied as `.byte` rows
+  and as a `;@ charset` region.
 
 ```powershell
 dotnet publish src/Thing64.WebComputer -c Release -o artifacts/web   # the C64, once (and after changing it)
