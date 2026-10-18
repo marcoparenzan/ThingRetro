@@ -1,4 +1,6 @@
-using Thing1500.Drive;
+using ThingCommodore.Drives;
+using ThingRetroEmu.Buses;
+using ThingRetroEmu.Media;
 using Thing65.Computer;
 
 namespace Thing65.Tests;

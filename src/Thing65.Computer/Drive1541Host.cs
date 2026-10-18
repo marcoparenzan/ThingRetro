@@ -1,4 +1,6 @@
-using Thing1500.Drive;
+using ThingCommodore.Drives;
+using ThingRetroEmu.Buses;
+using ThingRetroEmu.Media;
 using Thing65.C65;
 
 namespace Thing65.Computer;
@@ -19,7 +21,8 @@ public sealed class Drive1541Host
         this.board = board;
         drive = new Board1541(rom) { DeviceNumber = deviceNumber };
         var cable = new IecBus();
-        cable.Attach(board.Iec);
+        cable.Attach(() => board.Iec.AtnLow(), () => board.Iec.ClkLow(), () => board.Iec.DataLow(),
+            input => board.Iec.ClkInputLow = input, input => board.Iec.DataInputLow = input);
         drive.Plug(cable);
         var clock = new DriveClock(985_248, drive.Tick);
         board.Enqueue(() => board.AfterCycle = clock.OnComputerCycle);
