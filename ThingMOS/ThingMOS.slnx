@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/ThingMOS/ThingMOS.csproj" />
+  <Project Path="tests/ThingMOS.Tests/ThingMOS.Tests.csproj" />
+</Solution>

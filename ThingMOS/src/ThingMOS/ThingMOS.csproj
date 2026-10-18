@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The chips of MOS Technology (and of its successor CSG, the maker of the C65's custom chips): 6502, 6510, 4510, the CIAs, the SID, the VIC-II
+       and VIC-III, the VIA, the DMAgic and the C65's floppy controller, with their pinouts, and the assembler of their instruction sets.
+       They do not know which computer they are in. Sockets, buses, media and the chips of other makers are in ThingRetroEmu -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <!-- Code run at every cycle (a million times per second): optimized in Debug too, otherwise it cannot keep up -->
+    <Optimize>true</Optimize>
+    <Version>0.1.0</Version>
+    <PackageId>ThingMOS</PackageId>
+    <Description>The MOS Technology and CSG chips as components: 6502, 6510, 4510, 6526, 8520, 6522, 6581, 6569, VIC-III, DMAgic, F011, and their assembler</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="ThingRetroEmu.Chips" />
+    <Using Include="ThingRetroEmu.Sockets" />
+    <Using Include="ThingRetroEmu.Buses" />
+    <Using Include="ThingRetroEmu.Media" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.Video" />
+    <InternalsVisibleTo Include="ThingMOS.Tests" />
+    <InternalsVisibleTo Include="Thing64.Tests" />
+    <InternalsVisibleTo Include="Thing65.Tests" />
+    <InternalsVisibleTo Include="ThingCommodore.Tests" />
+    <ProjectReference Include="..\..\..\ThingRetroEmu\src\ThingRetroEmu\ThingRetroEmu.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Asm\Editor\asm6502.js" Pack="true" PackagePath="content\Asm\" />
+  </ItemGroup>
+
+</Project>
