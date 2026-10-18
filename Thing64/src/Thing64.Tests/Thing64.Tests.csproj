@@ -1,0 +1,64 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MSTest" Version="3.8.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
+    <Using Include="Thing64.C64" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
+    <Using Include="ThingMOS" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
+    <Using Include="ThingRetroEmu.Chips" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
+    <Using Include="ThingRetroEmu.Buses" />
+    <Using Include="ThingRetroEmu.Video" />
+    <Using Include="ThingRetroEmu.Audio" />
+    <Using Include="ThingRetroEmu.Ports" />
+    <Using Include="ThingRetroEmu.WinForms" />
+    <Using Include="ThingRetroEmu.Media" />
+  </ItemGroup>
+
+  <!-- The same ROMs as the app, copied into roms next to the tests -->
+  <ItemGroup>
+    <Content Include="../../roms/*" Link="roms\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\ThingRetroEmu\src\ThingRetroEmu\ThingRetroEmu.csproj" />
+    <ProjectReference Include="..\..\..\ThingMOS\src\ThingMOS\ThingMOS.csproj" />
+    <ProjectReference Include="..\Thing64.C64\Thing64.C64.csproj" />
+    <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore\ThingCommodore.csproj" />
+    <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore.Tools\ThingCommodore.Tools.csproj" />
+    <ProjectReference Include="..\Thing64\Thing64.csproj" />
+    <ProjectReference Include="..\Thing64.WinForms\Thing64.WinForms.csproj" />
+  </ItemGroup>
+
+</Project>

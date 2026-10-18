@@ -1,0 +1,139 @@
+/* The colors of the logo: night blue #05083a and periwinkle #7c8af7 */
+:root {
+    --background: #f5f6fe;
+    --text: #05083a;
+    --muted: #5a618f;
+    --accent: #7c8af7;
+    --border: #d5d9fb;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --background: #05083a;
+        --text: #e8eaff;
+        --muted: #9aa2e0;
+        --accent: #7c8af7;
+        --border: #232a75;
+    }
+}
+
+body {
+    margin: 0;
+    background: var(--background);
+    color: var(--text);
+    font: 15px/1.5 "Segoe UI", system-ui, sans-serif;
+}
+
+main {
+    max-width: 840px;
+    margin: 0 auto;
+    padding: 16px;
+}
+
+header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+h1 {
+    margin: 0;
+    line-height: 0;
+}
+
+/* The logo has dark lettering: in dark mode it sits on a light badge */
+h1 img {
+    height: 56px;
+    padding: 4px 10px;
+    border-radius: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+    h1 img {
+        background: #f4f4f6;
+    }
+}
+
+.status, .speed, .hint {
+    color: var(--muted);
+}
+
+/* In the web studio: always dark, on the studio's panel */
+body:has(main.embedded) {
+    --background: #03052a;
+    --text: #e8eaff;
+    --muted: #9aa2e0;
+    --border: #232a75;
+}
+
+main.embedded {
+    max-width: none;
+    padding: 0;
+}
+
+main.embedded nav {
+    justify-content: center;
+    margin: 8px 0 0;
+    gap: 8px;
+    font-size: 13px;
+}
+
+main.embedded .speed {
+    display: none;
+}
+
+/* As large as the frame allows, width and height (the controls below take about 96 pixels) */
+main.embedded canvas {
+    max-width: none;
+    width: min(100%, calc((100vh - 96px) * 403 / 284));
+    margin: 0 auto;
+}
+
+canvas {
+    box-sizing: border-box;     /* the border inside the width: no horizontal scroll bar */
+    display: block;
+    width: 100%;
+    max-width: 806px;
+    aspect-ratio: 403 / 284;
+    image-rendering: pixelated;
+    background: #000;
+    outline: none;
+    border: 2px solid var(--border);
+}
+
+canvas:focus {
+    border-color: var(--accent);
+}
+
+nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin: 12px 0;
+}
+
+button, .button, select {
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+}
+
+.button input[type=file] {
+    display: none;
+}
+
+.roms {
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+.error {
+    color: #c0392b;
+}

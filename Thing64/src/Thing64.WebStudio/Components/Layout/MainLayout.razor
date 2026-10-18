@@ -1,0 +1,13 @@
+@inherits LayoutComponentBase
+
+@* The header with the logo, then the page: the home (projects) or a project, which fills the window *@
+<div class="flex h-screen flex-col">
+    <header class="flex h-14 shrink-0 items-center gap-4 border-b border-night-200 bg-white px-4">
+        <a href="" class="shrink-0"><img src="img/thing64-logo-600x200.png" alt="Thing64" class="h-10" /></a>
+        <span class="rounded bg-night-900 px-2 py-0.5 text-xs font-semibold tracking-widest text-chip-400 uppercase">Studio</span>
+        <SectionOutlet SectionName="header" />
+    </header>
+    <div class="min-h-0 flex-1">
+        @Body
+    </div>
+</div>

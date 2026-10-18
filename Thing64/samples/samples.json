@@ -1,0 +1,46 @@
+// Build manifest of the samples: thing64 build samples/samples.json
+// Each output is built from its sources in src/ (paths relative to this file)
+{
+  "outputs": [
+    { "file": "hello.prg", "source": "src/hello.bas", "description": "BASIC and text colors" },
+    { "file": "math.prg", "source": "src/math.bas", "description": "Expressions in BASIC" },
+    { "file": "sprite.prg", "source": "src/sprite.bas", "description": "A bouncing expanded sprite" },
+    { "file": "keys.prg", "source": "src/keys.bas", "description": "Function keys and cursor keys" },
+    { "file": "joystick.prg", "source": "src/joystick.bas", "description": "Joystick in port 2" },
+    { "file": "paddle.prg", "source": "src/paddle.bas", "description": "Paddles in port 1" },
+    { "file": "sound.prg", "source": "src/sound.bas", "description": "A scale played by the SID" },
+
+    { "file": "sys.prg", "source": "src/sys.asm", "description": "Machine language at $C000, started with SYS 49152" },
+    { "file": "rasterbars.prg", "source": "src/rasterbars.asm", "description": "VIC-II raster interrupt: a bar in the border" },
+    { "file": "irq.prg", "source": "src/irq.asm", "description": "CIA 1 timer interrupt hooked into the KERNAL" },
+    { "file": "nmi.prg", "source": "src/nmi.asm", "description": "NMI from the CIA 2 timer" },
+    { "file": "decimal.prg", "source": "src/decimal.asm", "description": "Decimal mode (BCD): a 4-digit counter" },
+
+    { "file": "music.prg", "source": "src/music.asm", "description": "Three SID voices played by the interrupt: PWM, filter, noise" },
+
+    { "file": "multicolor.prg", "source": "src/multicolor.asm", "description": "Multicolor text with a character set in RAM" },
+    { "file": "ecm.prg", "source": "src/ecm.asm", "description": "Extended color mode: four background colors" },
+    { "file": "bitmap.prg", "source": "src/bitmap.asm", "description": "High-resolution bitmap" },
+    { "file": "mcbitmap.prg", "source": "src/mcbitmap.asm", "description": "Multicolor bitmap" },
+    { "file": "sprites.prg", "source": "src/sprites.asm", "description": "Eight sprites: expansion, multicolor, priority, collisions" },
+    { "file": "scroll.prg", "source": "src/scroll.asm", "description": "Horizontal fine scroll of one line" },
+    { "file": "vicbank.prg", "source": "src/vicbank.asm", "description": "VIC-II bank and characters copied from ROM" },
+    { "file": "borders.prg", "source": "src/borders.asm", "description": "Top and bottom borders open, with sprites inside" },
+
+    {
+      "file": "hello.crt", "description": "8K cartridge with autostart",
+      "cartridge": { "name": "HELLO CART", "type": 0, "exromActive": true, "gameActive": false,
+                     "banks": [ { "bank": 0, "source": "src/cartridge.asm" } ] }
+    },
+    {
+      "file": "ultimax.crt", "description": "Ultimax cartridge: a C64 without KERNAL",
+      "cartridge": { "name": "ULTIMAX", "type": 0, "exromActive": false, "gameActive": true,
+                     "banks": [ { "bank": 0, "source": "src/ultimax.asm" } ] }
+    },
+    {
+      "file": "banks.crt", "description": "Magic Desk cartridge with two banks",
+      "cartridge": { "name": "BANKS", "type": 19, "exromActive": true, "gameActive": false,
+                     "banks": [ { "bank": 0, "source": "src/banks0.asm" }, { "bank": 1, "source": "src/banks1.asm" } ] }
+    }
+  ]
+}
