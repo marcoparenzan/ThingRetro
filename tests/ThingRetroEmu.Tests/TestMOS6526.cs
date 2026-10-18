@@ -167,3 +167,65 @@ public sealed class MOS6526Tests
         Assert.AreEqual(0x10 - underflowsA, (int)_cia.Read(0x06));
     }
 }
+
+[TestClass]
+public sealed class MOS6526FlagTests
+{
+    [TestMethod]
+    public void Flag_FallingEdge_ShouldSetBit4AndRaiseIrqWhenEnabled()
+    {
+        var cia = new MOS6526();
+        bool flag = true;
+        cia.FlagInput = () => flag;
+        cia.Write(0x0D, 0x90);       // enable FLAG
+        for (int i = 0; i < 5; i++) cia.Tick();
+        Assert.IsFalse(cia.Irq);
+
+        flag = false;
+        for (int i = 0; i < 5; i++) cia.Tick();
+
+        Assert.IsTrue(cia.Irq);
+        Assert.AreEqual(0x90, cia.Read(0x0D));
+        Assert.IsFalse(cia.Irq, "reading the ICR releases /IRQ");
+        flag = true;
+        for (int i = 0; i < 5; i++) cia.Tick();
+        Assert.IsFalse(cia.Irq, "the rising edge does nothing");
+    }
+
+    [TestMethod]
+    public void Flag_WhenNotEnabled_ShouldSetOnlyTheBit()
+    {
+        var cia = new MOS6526();
+        bool flag = true;
+        cia.FlagInput = () => flag;
+        flag = false;
+        for (int i = 0; i < 5; i++) cia.Tick();
+
+        Assert.IsFalse(cia.Irq);
+        Assert.AreEqual(0x10, cia.Read(0x0D));
+    }
+}
+
+[TestClass]
+public sealed class MOS6526TimerBTests
+{
+    [TestMethod]
+    [DataRow(0x60)]
+    [DataRow(0xB0)]
+    [DataRow(0x110)]
+    [DataRow(0x400)]
+    public void TimerB_OneShot_ShouldUnderflowAfterTheLatchPlusOneCycles(int latch)
+    {
+        var cia = new MOS6526();
+        cia.Write(0x0D, 0x82);                       // enable timer B
+        cia.Write(0x06, (byte)(latch & 0xFF));
+        cia.Write(0x07, (byte)(latch >> 8));
+        cia.Read(0x0D);
+        cia.Write(0x0F, 0x19);                       // force load, one shot, start
+        int cycles = 0;
+        while (!cia.Irq && cycles < 5000) { cia.Tick(); cycles++; }
+
+        Assert.AreEqual(latch + 1, cycles, 1);
+        Assert.AreEqual(0, cia.Read(0x0F) & 1, "one shot stops the timer");
+    }
+}
