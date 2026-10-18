@@ -22,6 +22,7 @@ public partial class Board
     public ControlPort ControlPort1 { get; } = new("control port 1");
     public ControlPort ControlPort2 { get; } = new("control port 2");
     public IecPort Iec { get; } = new();    // serial connector: a cable takes it to the disk drives
+    public ThingRetroEmu.Ports.CassettePort Cassette { get; } = new();    // cassette connector: a recorder (C2N) plugs into it
 
     // Called at the end of every cycle: for what is clocked with the computer and lives outside the board, such as the
     // disk drives on the IEC cable

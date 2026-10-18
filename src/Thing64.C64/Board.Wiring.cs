@@ -50,7 +50,11 @@ public partial class Board
         chip.NmiInput = () => nmiLine.IsLow;
         chip.RdyInput = () => vic?.BusAvailable ?? true;
         chip.AecInput = () => vic?.AddressEnable ?? true;
-        chip.Port.External = () => 0xFF;
+        // P3 (cassette write) and P5 (motor, low = on) are outputs to the cassette connector; P4 is the sense input, low while a key of
+        // the recorder is down. Without a recorder plugged in they are pull-ups
+        chip.Port.External = () => (byte)(Cassette.SenseLow() ? 0xEF : 0xFF);
+        Cassette.MotorOn = () => (chip.Port.Pins & 0x20) == 0;
+        Cassette.WriteHigh = () => (chip.Port.Pins & 0x08) != 0;
         chip.Port.Changed += MemoryMap;
         cpu = chip;
         MemoryMap();
@@ -87,6 +91,7 @@ public partial class Board
     {
         chip.PortA.External = () => ControlPort2.DigitalLines;
         chip.PortB.External = () => (byte)(keyboard.GetKeyboardState(chip.PortA.Pins) & ControlPort1.DigitalLines);
+        chip.FlagInput = () => Cassette.ReadHigh();      // FLAG: the cassette read line
         cia1 = chip;
     }
 
