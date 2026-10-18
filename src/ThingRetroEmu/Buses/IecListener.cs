@@ -52,6 +52,16 @@ public abstract class IecListener
         cable.Data.Connect(() => dataLow);
     }
 
+    // Takes the device off the cable
+    public void Unplug()
+    {
+        bus = null;
+        dataLow = false;
+        state = State.Idle;
+        listening = false;
+        addressedTalker = false;
+    }
+
     // The computer asked this device to listen, on this channel (the secondary address 0-15; -1 when it sent none)
     protected virtual void OnListen(int channel) { }
 
