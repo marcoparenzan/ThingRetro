@@ -1,8 +1,9 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using Thing64.C64;
-using Thing64.Mos;
+using ThingRetroEmu.Chips;
+using ThingRetroEmu.Buses;
 
 namespace Thing64.WinForms;
 

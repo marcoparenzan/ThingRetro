@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- From sources to C64 files: .asm and .bas to .prg, images to graphics data, build manifests (thing64.json) with
        programs, cartridges and graphics assets.
@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Thing64.Asm\Thing64.Asm.csproj" />
+    <ProjectReference Include="..\..\..\ThingRetroEmu\src\ThingRetroEmu\ThingRetroEmu.csproj" />
     <ProjectReference Include="..\Thing64.Basic\Thing64.Basic.csproj" />
     <ProjectReference Include="..\Thing64.Crt\Thing64.Crt.csproj" />
     <ProjectReference Include="..\Thing64.Graphics\Thing64.Graphics.csproj" />

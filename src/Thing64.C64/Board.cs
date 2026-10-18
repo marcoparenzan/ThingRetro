@@ -1,5 +1,6 @@
-using System.Diagnostics;
-using Thing64.Mos;
+﻿using System.Diagnostics;
+using ThingRetroEmu.Chips;
+using ThingRetroEmu.Buses;
 
 namespace Thing64.C64;
 

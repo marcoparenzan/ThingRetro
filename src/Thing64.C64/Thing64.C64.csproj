@@ -13,9 +13,9 @@
 		<InternalsVisibleTo Include="Thing64.Tests" />
 	</ItemGroup>
 
-	<!-- The C64 motherboard: mounts the MOS chips (Thing64.Mos) in its sockets -->
+	<!-- The C64 motherboard: mounts the chips (ThingRetroEmu) in its sockets -->
 	<ItemGroup>
-		<ProjectReference Include="..\Thing64.Mos\Thing64.Mos.csproj" />
+		<ProjectReference Include="..\..\..\ThingRetroEmu\src\ThingRetroEmu\ThingRetroEmu.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

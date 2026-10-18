@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- The thing64 command line: assembles, tokenizes BASIC, builds projects, and starts the desktop app (a C64 in a
        window, Thing64.Computer). Packaged as a .NET global tool (see tools/Install-Tool.ps1); a tool cannot use
@@ -28,7 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Thing64.Asm\Thing64.Asm.csproj" />
+    <ProjectReference Include="..\..\..\ThingRetroEmu\src\ThingRetroEmu\ThingRetroEmu.csproj" />
     <ProjectReference Include="..\Thing64.Basic\Thing64.Basic.csproj" />
     <ProjectReference Include="..\Thing64.Build\Thing64.Build.csproj" />
   </ItemGroup>

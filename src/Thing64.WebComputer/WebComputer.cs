@@ -1,10 +1,11 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.JavaScript;
 using System.Runtime.Versioning;
 using Thing64.C64;
 using Thing64.Crt;
-using Thing64.Mos;
+using ThingRetroEmu.Chips;
+using ThingRetroEmu.Buses;
 using Thing64.Prg;
 
 namespace Thing64.WebComputer;

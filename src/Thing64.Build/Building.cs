@@ -1,6 +1,6 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
-using Thing64.Asm;
+using ThingRetroEmu.Asm;
 using Thing64.Basic;
 using Thing64.Crt;
 using Thing64.Graphics;

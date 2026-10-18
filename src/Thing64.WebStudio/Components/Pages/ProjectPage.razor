@@ -1,4 +1,4 @@
-@page "/project/{Name}"
+﻿@page "/project/{Name}"
 @implements IAsyncDisposable
 @implements Thing64.WebStudio.Assistant.IStudioHost
 @implements Thing64.WebStudio.CodeBehind.IRegionHost
@@ -277,9 +277,9 @@ else
             self = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("thing64Studio.init", "editor", self, new
             {
-                mnemonics = Thing64.Asm.Assembler.Mnemonics,
-                directives = Thing64.Asm.Assembler.Directives,
-                descriptions = Thing64.Asm.InstructionSet.Descriptions,
+                mnemonics = ThingRetroEmu.Asm.Assembler.Mnemonics,
+                directives = ThingRetroEmu.Asm.Assembler.Directives,
+                descriptions = ThingRetroEmu.Asm.InstructionSet.Descriptions,
             });
             editorReady = true;
             // The main source opens by itself

@@ -16,7 +16,9 @@
   <ItemGroup>
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
     <Using Include="Thing64.C64" />
-    <Using Include="Thing64.Mos" />
+    <Using Include="ThingRetroEmu.Chips" />
+    <Using Include="ThingRetroEmu.Buses" />
+    <Using Include="ThingRetroEmu.Media" />
   </ItemGroup>
 
   <!-- The same ROMs as the app, copied into roms next to the tests -->
@@ -25,7 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Thing64.Asm\Thing64.Asm.csproj" />
+    <ProjectReference Include="..\..\..\ThingRetroEmu\src\ThingRetroEmu\ThingRetroEmu.csproj" />
     <ProjectReference Include="..\Thing64.C64\Thing64.C64.csproj" />
     <ProjectReference Include="..\Thing64.Crt\Thing64.Crt.csproj" />
     <ProjectReference Include="..\Thing64.Prg\Thing64.Prg.csproj" />

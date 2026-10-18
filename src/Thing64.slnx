@@ -1,4 +1,4 @@
-<Solution>
+﻿<Solution>
   <Configurations>
     <Platform Name="Any CPU" />
     <Platform Name="x64" />
@@ -11,13 +11,11 @@
     <Project Path="Thing64/Thing64.csproj" />
   </Folder>
   <Folder Name="/Lib/">
-    <Project Path="Thing64.Asm/Thing64.Asm.csproj" />
     <Project Path="Thing64.Basic/Thing64.Basic.csproj" />
     <Project Path="Thing64.Build/Thing64.Build.csproj" />
     <Project Path="Thing64.C64/Thing64.C64.csproj" />
     <Project Path="Thing64.Crt/Thing64.Crt.csproj" />
     <Project Path="Thing64.Graphics/Thing64.Graphics.csproj" />
-    <Project Path="Thing64.Mos/Thing64.Mos.csproj" />
     <Project Path="Thing64.Prg/Thing64.Prg.csproj" />
     <Project Path="Thing64.WinForms/Thing64.WinForms.csproj" />
   </Folder>

@@ -1,4 +1,4 @@
-@inject NavigationManager Navigation
+﻿@inject NavigationManager Navigation
 @implements IAsyncDisposable
 
 @* The page: the C64 monitor (a canvas), loading of programs and cartridges, reset, and the ROMs the first time *@
@@ -90,8 +90,8 @@
 </main>
 
 @code {
-    const int MonitorWidth = Thing64.Mos.MOS6569.SCREEN_WIDTH;
-    const int MonitorHeight = Thing64.Mos.MOS6569.SCREEN_HEIGHT;
+    const int MonitorWidth = ThingRetroEmu.Chips.MOS6569.SCREEN_WIDTH;
+    const int MonitorHeight = ThingRetroEmu.Chips.MOS6569.SCREEN_HEIGHT;
 
     string status = "Starting...";
     string joystickPort = "2";

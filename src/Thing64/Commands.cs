@@ -1,7 +1,7 @@
-using Thing64.Build;
+﻿using Thing64.Build;
 using System.ComponentModel;
 using System.Globalization;
-using Thing64.Asm;
+using ThingRetroEmu.Asm;
 using Thing64.Basic;
 using Spectre.Console;
 using Spectre.Console.Cli;
