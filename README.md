@@ -37,14 +37,18 @@ It boots the original C65 ROM to the `READY.` prompt of **BASIC 10**, with 80 co
 The C64 core (`Board`, `MOS6502`, `MOS6510`, `MOS6569`...) is still in the repository: the tests of the chips the C65 shares
 (CIA, SID, the VIC-II compatibility) run on it.
 
-## The system ROM
+## The system ROMs
 
-The C65 ROM is protected by copyright and is **not** in the repository. Cloanto's free *C64 Forever Free Express Edition*
-(personal use) includes it: install it, copy `c-65-19910828.rom` from `C:\Users\Public\Documents\CBM Files\Shared\rom` into
-`roms`, and build. The tests that need it are *Inconclusive* without it. See
-[docs/reference/mega65/mega65-rom-faq.txt](docs/reference/mega65/mega65-rom-faq.txt) (after downloading the reference
-documentation) for the MEGA65 project's explanation. The C64 ROMs in the same folder (`kernal`, `basic`, `chargen`) are those
-of the old board.
+The ROMs are protected by copyright and are **not** in the repository (they are ignored by git). Cloanto's free
+*C64 Forever Free Express Edition* (personal use) installs them: download and install it, then run, from the repository root:
+
+```powershell
+./tools/Install-Roms.ps1
+```
+
+The script copies the ROMs from `C:\Users\Public\Documents\CBM Files\Shared\rom` into `roms` with the names the project
+expects (see [roms/README.md](roms/README.md)). The tests that need a ROM are *Inconclusive* without it.
+The C65 ROM (`c-65-19910828.rom`, 128 KB) is also copied; see the MEGA65 project's ROM FAQ in the reference documentation for background.
 
 ## Reference documentation
 

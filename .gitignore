@@ -375,3 +375,8 @@ roms/*.rom
 # Reference documentation: downloaded by tools/Download-Reference.ps1, owned by its authors
 docs/reference/*
 !docs/reference/README.md
+
+# System ROMs (copyright Commodore/Cloanto): each user installs their own with tools/Install-Roms.ps1
+roms/*
+!roms/README.md
+src/**/roms/
