@@ -302,7 +302,10 @@ thing64 build samples/samples.json   # rebuilds them from samples/src
 
 Right click on the monitor: for each control port you choose what is connected. The choice is kept between runs;
 the default is the keypad joystick in port 2, the one almost every game uses. **Swap ports** (Ctrl+F12) is for
-the games that want the joystick in port 1. The same menu has **Audio** (mute) and **Reset**.
+the games that want the joystick in port 1. The same menu has **Audio** (mute) and **Reset**, and the peripherals, which are also in the **Peripherals** item of the
+menu bar: the **1541** and **1581** disk drives (device 8-11; `.d64`/`.d81` can be inserted or dropped on the screen; they need
+`c-drive-1541.rom` / `c-drive-1581.rom` in the roms folder), the **tape** (C2N: insert, record, play, rewind, `.tap`), the
+**MPS-803 printer** (device 4 or 5, printout saved as PDF) and a window that shows what they are doing.
 
 | Choice | Controls |
 | --- | --- |

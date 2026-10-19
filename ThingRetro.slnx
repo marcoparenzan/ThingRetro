@@ -19,6 +19,7 @@
   </Folder>
   <Folder Name="/ThingCommodore/">
     <Project Path="ThingCommodore/src/ThingCommodore.Tools/ThingCommodore.Tools.csproj" />
+    <Project Path="ThingCommodore/src/ThingCommodore.WinForms/ThingCommodore.WinForms.csproj" />
     <Project Path="ThingCommodore/src/ThingCommodore/ThingCommodore.csproj" />
     <Project Path="ThingCommodore/tests/ThingCommodore.Tests/ThingCommodore.Tests.csproj" />
   </Folder>

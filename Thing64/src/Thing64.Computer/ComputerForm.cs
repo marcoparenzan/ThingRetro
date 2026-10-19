@@ -1,5 +1,7 @@
 ﻿using Thing64.WinForms;
 using Thing64.C64;
+using ThingCommodore.Hosting;
+using ThingCommodore.WinForms;
 
 namespace Thing64.Computer;
 
@@ -11,14 +13,14 @@ public class ComputerForm : Form
 {
     readonly Board board;
     readonly MonitorControl monitor = new() { Dock = DockStyle.Fill };
-    readonly MonitorCable monitorCable;
+    readonly VideoMenu video;
     readonly PcKeyboard keyboardCable;
     readonly PcSpeakers? speakers;
     readonly AudioCable? audioCable;
     readonly ControlPortSelector controlPorts;
     readonly AppSettings settings = AppSettings.Current;
-    Drive1541Host? drive1541;
-    DriveForm? driveForm;
+    readonly PeripheralRack rack;
+    readonly PeripheralMenus peripherals;
 
     public ComputerForm(SystemRoms roms, string? startupFile = null)
     {
@@ -26,11 +28,24 @@ public class ComputerForm : Form
         Text = "C64";
         Icon = AppIcon.Value;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = monitor.Size;
         Controls.Add(monitor);
+        video = new VideoMenu(board.VideoOut, monitor);
+
+        // The peripherals on the cables: disk drives and printer on the IEC cable, the recorder on the cassette connector
+        rack = new PeripheralRack(board.Iec, board.Cassette, board.Enqueue, cycle => board.AfterCycle = cycle,
+            name => File.Exists(Path.Combine(RomFolder.DefaultPath, name)) ? File.ReadAllBytes(Path.Combine(RomFolder.DefaultPath, name)) : null,
+            roms.Chargen);
+        peripherals = new PeripheralMenus(rack, this, "Thing64", RomFolder.DefaultPath);
+        var menuBar = new MenuStrip();
+        var peripheralMenu = new ToolStripMenuItem("Peripherals");
+        peripherals.AddTo(peripheralMenu.DropDownItems);
+        menuBar.Items.Add(peripheralMenu);
+        menuBar.Items.Add(video.CreateItem());
+        MainMenuStrip = menuBar;
+        Controls.Add(menuBar);
+        ClientSize = new Size(monitor.Width, monitor.Height + menuBar.PreferredSize.Height);
 
         // The explicit connections: video output -> monitor, PC keyboard (on the monitor) -> C64 keyboard
-        monitorCable = new MonitorCable(board.VideoOut, monitor);
         keyboardCable = new PcKeyboard(monitor, board.Keyboard);
 
         // Audio output -> PC speakers. Without an audio device the emulator still works, silently
@@ -60,7 +75,8 @@ public class ComputerForm : Form
             settings.Save();
         };
         menu.Items.Add(audio);
-        menu.Items.Add(new ToolStripMenuItem("1541 drive (device 8)...", null, (_, _) => ShowDrive()));
+        peripherals.AddTo(menu.Items);
+        menu.Items.Add(video.CreateItem());
         menu.Items.Add(new ToolStripMenuItem("Reset", null, (_, _) => Reset()));
         monitor.ContextMenuStrip = menu;
 
@@ -94,9 +110,9 @@ public class ComputerForm : Form
 
     void LoadFile(string path, Func<string> load)
     {
-        if (MediaLoader.IsD64(path))
+        if (PeripheralMenus.IsPeripheralFile(path))
         {
-            OpenD64(path);
+            peripherals.Open(path);
             return;
         }
         try
@@ -108,70 +124,6 @@ public class ComputerForm : Form
             MessageBox.Show(this, e.Message, $"Thing64 - {Path.GetFileName(path)}", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         monitor.Focus();
-    }
-
-    // The 1541 on the IEC cable (device 8). It is plugged in the first time it is asked for
-    bool EnsureDrive()
-    {
-        if (drive1541 is not null) return true;
-        string? rom = Drive1541Host.FindRom();
-        if (rom is null)
-        {
-            MessageBox.Show(this,
-                $"The 1541 ROM ({Drive1541Host.RomName}, 16 KB) was not found in {RomFolder.DefaultPath}.\n\n" +
-                "Copy it from the Shared\\rom folder of C64 Forever Free Express Edition and start again.",
-                "Thing64", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return false;
-        }
-        drive1541 = new Drive1541Host(board, File.ReadAllBytes(rom), 8);
-        return true;
-    }
-
-    void ShowDrive()
-    {
-        if (!EnsureDrive()) return;
-        if (driveForm is null || driveForm.IsDisposed)
-        {
-            driveForm = new DriveForm(drive1541!, BrowseD64, SaveD64As) { Owner = this };
-            driveForm.Location = new Point(Right + 8, Top);
-        }
-        driveForm.Show();
-        driveForm.BringToFront();
-    }
-
-    void BrowseD64()
-    {
-        using var dialog = new OpenFileDialog { Filter = "1541 disks (*.d64)|*.d64|All files|*.*" };
-        if (dialog.ShowDialog(this) == DialogResult.OK) OpenD64(dialog.FileName);
-    }
-
-    void OpenD64(string path)
-    {
-        try
-        {
-            var image = new ThingRetroEmu.Media.D64Image(File.ReadAllBytes(path));
-            if (!EnsureDrive()) return;
-            drive1541!.Insert(image, path);
-            ShowDrive();
-        }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
-        {
-            MessageBox.Show(this, e.Message, $"Thing64 - {Path.GetFileName(path)}", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-    }
-
-    void SaveD64As()
-    {
-        using var dialog = new SaveFileDialog { Filter = "1541 disk (*.d64)|*.d64", FileName = "disk.d64" };
-        if (dialog.ShowDialog(this) != DialogResult.OK || drive1541 is null) return;
-        try
-        {
-            drive1541.SaveAs(dialog.FileName);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-            MessageBox.Show(this, e.Message, "Thing64", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
     }
 
     static string? DroppedFile(DragEventArgs e) =>
@@ -191,17 +143,17 @@ public class ComputerForm : Form
         board.Stop();
         try
         {
-            drive1541?.Save();
+            rack.SaveAll();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, $"The disk could not be saved: {ex.Message}", "Thing64", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, $"A disk or tape could not be saved: {ex.Message}", "Thing64", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         controlPorts.Dispose();
         keyboardCable.Dispose();
         audioCable?.Dispose();
         speakers?.Dispose();
-        monitorCable.Dispose();
+        video.Dispose();
         base.OnFormClosed(e);
     }
 }

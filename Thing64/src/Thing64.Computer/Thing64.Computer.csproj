@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Thing64.C64\Thing64.C64.csproj" />
     <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore\ThingCommodore.csproj" />
+    <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore.WinForms\ThingCommodore.WinForms.csproj" />
     <ProjectReference Include="..\Thing64.WinForms\Thing64.WinForms.csproj" />
     <!-- The 1541 drive of the sibling project ThingCommodore -->
   </ItemGroup>

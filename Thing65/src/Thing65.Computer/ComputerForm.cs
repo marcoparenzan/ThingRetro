@@ -1,5 +1,7 @@
 ﻿using Thing65.WinForms;
 using Thing65.C65;
+using ThingCommodore.Hosting;
+using ThingCommodore.WinForms;
 using ThingMOS;
 using ThingRetroEmu.Chips;
 using ThingRetroEmu.Buses;
@@ -14,15 +16,15 @@ public class ComputerForm : Form
 {
     readonly BoardC65 board;
     readonly MonitorControl monitor = new(new VideoMode(CSG4567.SCREEN_WIDTH, CSG4567.SCREEN_HEIGHT)) { Dock = DockStyle.Fill };
-    readonly MonitorCable monitorCable;
+    readonly VideoMenu video;
     readonly PcKeyboard keyboardCable;
     readonly PcSpeakers? speakers;
     readonly AudioCable? audioCable;
     readonly ControlPortSelector controlPorts;
     readonly AppSettings settings = AppSettings.Current;
     readonly DiskSlot disk = new();
-    Drive1541Host? drive1541;
-    DriveForm? driveForm;
+    readonly PeripheralRack rack;
+    readonly PeripheralMenus peripherals;
 
     public ComputerForm(SystemRom128 rom, string? startupFile = null)
     {
@@ -30,11 +32,25 @@ public class ComputerForm : Form
         Text = "C65";
         Icon = AppIcon.Value;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = monitor.Size;
         Controls.Add(monitor);
+        video = new VideoMenu(board.VideoOut, monitor);
+
+        // The external peripherals on the IEC cable: the C65 has its own drive as device 8, so they start at 9. It has no cassette connector
+        rack = new PeripheralRack(board.Iec, null, board.Enqueue, cycle => board.AfterCycle = cycle,
+            name => File.Exists(Path.Combine(RomFolder.DefaultPath, name)) ? File.ReadAllBytes(Path.Combine(RomFolder.DefaultPath, name)) : null,
+            File.ReadAllBytes(Path.Combine(RomFolder.DefaultPath, "chargen")));
+        peripherals = new PeripheralMenus(rack, this, "Thing65", RomFolder.DefaultPath, firstDevice: 9);
+        var menuBar = new MenuStrip();
+        var internalDrive = new ToolStripMenuItem("Disk (internal drive 8)");
+        AddDiskItems(internalDrive.DropDownItems);
+        var peripheralMenu = new ToolStripMenuItem("Peripherals");
+        peripherals.AddTo(peripheralMenu.DropDownItems);
+        menuBar.Items.AddRange([internalDrive, peripheralMenu, video.CreateItem()]);
+        MainMenuStrip = menuBar;
+        Controls.Add(menuBar);
+        ClientSize = new Size(monitor.Width, monitor.Height + menuBar.PreferredSize.Height);
 
         // The explicit connections: video output -> monitor, PC keyboard (on the monitor) -> C65 keyboard
-        monitorCable = new MonitorCable(board.VideoOut, monitor);
         keyboardCable = new PcKeyboard(monitor, board.Keyboard);
 
         // Audio output -> PC speakers. Without an audio device the emulator still works, silently
@@ -64,16 +80,14 @@ public class ComputerForm : Form
             settings.Save();
         };
         menu.Items.Add(audio);
-        menu.Items.Add(new ToolStripMenuItem("Insert disk or run program...", null, (_, _) => Browse()));
-        menu.Items.Add(new ToolStripMenuItem("Save disk", null, (_, _) => board.Enqueue(() => disk.Save())));
-        menu.Items.Add(new ToolStripMenuItem("Save disk as...", null, (_, _) => SaveDiskAs()));
-        menu.Items.Add(new ToolStripMenuItem("Eject disk", null, (_, _) => board.Enqueue(() => { disk.Set(null, null); board.Disk = null; })));
+        AddDiskItems(menu.Items);
         var expansion = new ToolStripMenuItem("RAM expansion (1 MB)") { CheckOnClick = true };
         expansion.CheckedChanged += (_, _) => SetRamExpansion(expansion.Checked);
         menu.Items.Add(expansion);
         menu.Items.Add(new ToolStripMenuItem("Insert cartridge...", null, (_, _) => InsertCartridge()));
         menu.Items.Add(new ToolStripMenuItem("Remove cartridge", null, (_, _) => board.Enqueue(() => { board.CartridgeSocket.Remove(); board.Reset(); })));
-        menu.Items.Add(new ToolStripMenuItem("1541 drive (device 9)...", null, (_, _) => ShowDrive()));
+        peripherals.AddTo(menu.Items);
+        menu.Items.Add(video.CreateItem());
         menu.Items.Add(new ToolStripMenuItem("Reset", null, (_, _) => Reset()));
         monitor.ContextMenuStrip = menu;
 
@@ -95,6 +109,15 @@ public class ComputerForm : Form
 
         // As a tab: whenever the tab comes to the front the keyboard goes to the C65
         Activated += (_, _) => monitor.Focus();
+    }
+
+    // The disk of the C65's own drive
+    void AddDiskItems(ToolStripItemCollection items)
+    {
+        items.Add(new ToolStripMenuItem("Insert disk or run program...", null, (_, _) => Browse()));
+        items.Add(new ToolStripMenuItem("Save disk", null, (_, _) => board.Enqueue(() => disk.Save())));
+        items.Add(new ToolStripMenuItem("Save disk as...", null, (_, _) => SaveDiskAs()));
+        items.Add(new ToolStripMenuItem("Eject disk", null, (_, _) => board.Enqueue(() => { disk.Set(null, null); board.Disk = null; })));
     }
 
     public void Reset() => board.Enqueue(board.Reset);
@@ -122,70 +145,6 @@ public class ComputerForm : Form
             });
         }
         catch (Exception e) when (e is IOException or ArgumentException or UnauthorizedAccessException)
-        {
-            MessageBox.Show(this, e.Message, "Thing65", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-    }
-
-    // The external 1541 on the IEC cable (device 9: 8 is the C65's own drive). It is plugged in the first time it is asked for
-    bool EnsureDrive()
-    {
-        if (drive1541 is not null) return true;
-        string? rom = Drive1541Host.FindRom();
-        if (rom is null)
-        {
-            MessageBox.Show(this,
-                $"The 1541 ROM ({Drive1541Host.RomName}, 16 KB) was not found in {RomFolder.DefaultPath}.\n\n" +
-                "Copy it from the Shared\\rom folder of C64 Forever Free Express Edition and start again.",
-                "Thing65", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return false;
-        }
-        drive1541 = new Drive1541Host(board, File.ReadAllBytes(rom), 9);
-        return true;
-    }
-
-    void ShowDrive()
-    {
-        if (!EnsureDrive()) return;
-        if (driveForm is null || driveForm.IsDisposed)
-        {
-            driveForm = new DriveForm(drive1541!, BrowseD64, SaveD64As) { Owner = this };
-            driveForm.Location = new Point(Right + 8, Top);
-        }
-        driveForm.Show();
-        driveForm.BringToFront();
-    }
-
-    void BrowseD64()
-    {
-        using var dialog = new OpenFileDialog { Filter = "1541 disks (*.d64)|*.d64|All files|*.*" };
-        if (dialog.ShowDialog(this) == DialogResult.OK) OpenD64(dialog.FileName);
-    }
-
-    void OpenD64(string path)
-    {
-        try
-        {
-            var image = new ThingRetroEmu.Media.D64Image(File.ReadAllBytes(path));
-            if (!EnsureDrive()) return;
-            drive1541!.Insert(image, path);
-            ShowDrive();
-        }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
-        {
-            MessageBox.Show(this, e.Message, $"Thing65 - {Path.GetFileName(path)}", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-    }
-
-    void SaveD64As()
-    {
-        using var dialog = new SaveFileDialog { Filter = "1541 disk (*.d64)|*.d64", FileName = "disk.d64" };
-        if (dialog.ShowDialog(this) != DialogResult.OK || drive1541 is null) return;
-        try
-        {
-            drive1541.SaveAs(dialog.FileName);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             MessageBox.Show(this, e.Message, "Thing65", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
@@ -221,9 +180,10 @@ public class ComputerForm : Form
 
     void LoadFile(string path, Func<string> load)
     {
+        // A .d81 goes to the C65's own drive; a .d64 to the external 1541
         if (MediaLoader.IsD64(path))
         {
-            OpenD64(path);
+            peripherals.Open(path);
             return;
         }
         try
@@ -255,7 +215,7 @@ public class ComputerForm : Form
         try
         {
             disk.Save();
-            drive1541?.Save();
+            rack.SaveAll();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -265,7 +225,7 @@ public class ComputerForm : Form
         keyboardCable.Dispose();
         audioCable?.Dispose();
         speakers?.Dispose();
-        monitorCable.Dispose();
+        video.Dispose();
         base.OnFormClosed(e);
     }
 }

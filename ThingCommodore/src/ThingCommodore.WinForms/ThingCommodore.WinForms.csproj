@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The WinForms side of the Commodore peripherals: the Disk, Tape and Printer menus and the window that shows the drives, the recorder and the printer.
+       Machine-independent: it works on a PeripheralRack -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ThingCommodore\ThingCommodore.csproj" />
+  </ItemGroup>
+
+</Project>

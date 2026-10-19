@@ -14,7 +14,7 @@ public static class MediaLoader
     public static bool IsCartridge(string path) => HasExtension(path, ".crt");
     public static bool IsProgram(string path) => HasExtension(path, ".prg");
     public static bool IsD64(string path) => HasExtension(path, ".d64");   // a 1541 disk, for the drive on the IEC cable
-    public static bool IsSupported(string path) => IsCartridge(path) || IsProgram(path) || IsD64(path);
+    public static bool IsSupported(string path) => IsCartridge(path) || IsProgram(path) || ThingCommodore.WinForms.PeripheralMenus.IsPeripheralFile(path);
 
     static bool HasExtension(string path, string extension) =>
         string.Equals(Path.GetExtension(path), extension, StringComparison.OrdinalIgnoreCase);
