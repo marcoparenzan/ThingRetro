@@ -1,0 +1,24 @@
+@using ThingCommodore.Graphics
+
+@* A shared color of a conversion: "auto" (chosen from the pictures) or one of the 16 colors; the color the conversion chose is outlined *@
+<div class="flex items-center gap-2">
+    <span class="w-20">@Label</span>
+    <button class="@(Value is null ? "border-chip-400 text-white" : "border-night-600 text-night-300") rounded border px-1.5 py-0.5"
+            @onclick="() => ValueChanged.InvokeAsync(null)" title="Chosen from the pictures">auto</button>
+    @for (int i = 0; i < 16; i++)
+    {
+        int color = i;
+        string ring = Value == color ? "ring-2 ring-chip-400" : Chosen == color ? "ring-1 ring-night-300" : "";
+        <button class="h-5 w-5 rounded-sm border border-night-700 @ring" title="@color: @C64Palette.Names[color]"
+                style="background: #@C64Palette.Named(Palette).Rgb[color].ToString("X6")"
+                @onclick="() => ValueChanged.InvokeAsync(color)"></button>
+    }
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public int? Value { get; set; }
+    [Parameter] public int? Chosen { get; set; }
+    [Parameter] public string Palette { get; set; } = "pepto";
+    [Parameter] public EventCallback<int?> ValueChanged { get; set; }
+}

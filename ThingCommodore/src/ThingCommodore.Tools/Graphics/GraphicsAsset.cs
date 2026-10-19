@@ -17,6 +17,10 @@ public enum GraphicsMode
 
 public enum Fit { Fit, Fill, Stretch }
 
+// How the picture is reduced to the C64's pixels: the average of the part of the picture each pixel covers (box, the default),
+// the picture's pixel at the middle of it (nearest: hard edges), or a blend of the four around it (bilinear: smoother)
+public enum Resample { Box, Nearest, Bilinear }
+
 public enum Dither { None, Ordered, FloydSteinberg }
 
 public sealed record TileSize(int Width, int Height);
@@ -33,6 +37,13 @@ public sealed record GraphicsAsset
     public GraphicsMode Mode { get; init; } = GraphicsMode.MulticolorBitmap;
     public Fit Fit { get; init; } = Fit.Fit;
     public Dither Dither { get; init; } = Dither.Ordered;
+
+    // Downsampling: how the picture is reduced (Box when left out) and a correction of its tones before the colors are chosen,
+    // each from -100 to 100 percent (0 or left out: as it is)
+    public Resample? Resample { get; init; }
+    public int? Brightness { get; init; }
+    public int? Contrast { get; init; }
+    public int? Saturation { get; init; }
     public string Palette { get; init; } = "pepto";
 
     // Characters: the screen in cells (at most 40x25 for a full screen; more for a map wider than the screen).

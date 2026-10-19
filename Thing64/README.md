@@ -180,7 +180,16 @@ web computer, in WebAssembly, in a tab next to the files (or in a window of its 
   the graphics editor: the picture and how the C64 will show it side by side, the mode (hires or multicolor bitmap,
   characters, sprites), fit, dithering, palette, the shared colors, the limit of characters and the tiles. Every
   build converts the assets again and writes their data files and an include (`name.inc.asm`, with a label on each
-  part and constants for the colors), so the assembly never falls behind the picture.
+  part and constants for the colors), so the assembly never falls behind the picture. The downsampling can be tuned
+  (box, nearest or bilinear resampling; brightness, contrast and saturation).
+- **Image sets** (the 🗂 button, `.imgset.json`): several pictures become screens of characters (40x25 or fewer)
+  that share one charset. The pictures can be added at any time, from the disk or from the project; the settings are the
+  size in characters, hires or multicolor, the first screen code, the character limit, the downsampling and the shared
+  colors (chosen from all the pictures). *Write files* makes `name.asm` (the `;@ charset` region), one file for each
+  picture (a `;@ screen` region) and `name.set.asm`, which includes them all: the charset editor and the screen editor
+  open them as they are, so editing is done with the same editors as any other charset and screen. Ticking *Keep the
+  characters already in name.asm* keeps a charset edited by hand: its characters stay, the pictures reuse them and the
+  new characters follow.
 - **Editor regions** ("code behind"): data in a source can be marked for a visual editor with comment lines,
   which the assembler ignores. Above the first one Monaco shows "✎ Edit"; saving the editor rewrites only the
   `.byte` lines of the region. The screen editor edits what the C64 shows: screen codes and colors, painted with

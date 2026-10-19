@@ -289,6 +289,13 @@ A Blazor Server app: the server owns the files and the builds, the browser shows
   Monaco models; each change converts again off the circuit's thread (`Converter.Convert`), and the preview travels
   as a PNG data URL. The pictures are served by `/project-files/{project}/{path}`, through `Project.FullPath`.
   Imported images become PNG in the browser (`createImageBitmap` and a canvas), since the converter reads PNG only.
+- **Image sets** (`ImageSetEditor.razor`, `.imgset.json`): the settings of `ImageSetAsset` (a superset of the character
+  modes of `GraphicsAsset`) and a list of pictures; `Converter.ConvertSet` resizes them all, chooses the shared colors from
+  all of them, builds one `Charset` (optionally starting from the characters of an existing `name.asm`, which are frozen: never
+  merged away) and returns the screens. The output is text that the region editors already know (`ImageSetConversion.CharsetText`
+  and `ScreenText`: a `;@ charset` and a `;@ screen` per picture) plus `name.set.asm`, which includes them: that file has to be
+  `!source`d by the program (the editor offers to add the line to the main source) because the editors read the assembled
+  program. The charset editor and the screen editor are opened through `ProjectPage.OpenRegion`; no editing code is duplicated.
 - **Editor regions** (`CodeBehind/`, `TilemapEditor.razor`): `AsmRegion` finds the `;@ editor ... ;@ end` blocks
   of a source, reads the values of their `.byte` lines and writes them back (keeping indentation, keyword and end of
   line comments, and nothing else of the file). `ProgramImage` assembles the project and resolves the parameters

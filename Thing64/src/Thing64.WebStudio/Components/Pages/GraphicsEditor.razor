@@ -64,11 +64,11 @@
 
     @* Shared colors: chosen from the picture (auto) unless fixed here *@
     <div class="flex flex-wrap gap-x-6 gap-y-2 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
-        @if (UsesBackground) { @Swatches("Background", asset.Background, c => asset with { Background = c }, Shared("BACKGROUND")) }
+        @if (UsesBackground) { <ColorSwatches Label="Background" Value="asset.Background" Chosen='Shared("BACKGROUND")' Palette="@asset.Palette" ValueChanged="c => Update(a => a with { Background = c })" /> }
         @if (UsesMulticolors)
         {
-            @Swatches("Multicolor 1", asset.Multicolor1, c => asset with { Multicolor1 = c }, Shared("MULTICOLOR1"))
-            @Swatches("Multicolor 2", asset.Multicolor2, c => asset with { Multicolor2 = c }, Shared("MULTICOLOR2"))
+            <ColorSwatches Label="Multicolor 1" Value="asset.Multicolor1" Chosen='Shared("MULTICOLOR1")' Palette="@asset.Palette" ValueChanged="c => Update(a => a with { Multicolor1 = c })" />
+            <ColorSwatches Label="Multicolor 2" Value="asset.Multicolor2" Chosen='Shared("MULTICOLOR2")' Palette="@asset.Palette" ValueChanged="c => Update(a => a with { Multicolor2 = c })" />
         }
         @if (!UsesBackground && !UsesMulticolors)
         {
@@ -278,24 +278,6 @@
         charsetWidth = image.Width;
         return "data:image/png;base64," + System.Convert.ToBase64String(Png.Write(image));
     }
-
-    // A row of the 16 colors, and "auto": the color the conversion chose is outlined
-    RenderFragment Swatches(string label, int? value, Func<int?, GraphicsAsset> set, int? chosen) => __builder =>
-    {
-        <div class="flex items-center gap-2">
-            <span class="w-20">@label</span>
-            <button class="@(value is null ? "border-chip-400 text-white" : "border-night-600 text-night-300") rounded border px-1.5 py-0.5"
-                    @onclick="() => Update(_ => set(null))" title="Chosen from the picture">auto</button>
-            @for (int i = 0; i < 16; i++)
-            {
-                int color = i;
-                string ring = value == color ? "ring-2 ring-chip-400" : chosen == color ? "ring-1 ring-night-300" : "";
-                <button class="h-5 w-5 rounded-sm border border-night-700 @ring" title="@color: @C64Palette.Names[color]"
-                        style="background: #@C64Palette.Named(asset.Palette).Rgb[color].ToString("X6")"
-                        @onclick="() => Update(_ => set(color))"></button>
-            }
-        </div>
-    };
 
     int? Shared(string constant) => conversion?.Constants.TryGetValue(constant, out int c) == true ? c : null;
 

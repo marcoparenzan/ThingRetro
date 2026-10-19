@@ -20,7 +20,7 @@ public sealed class Conversion
 // From a picture to the C64: resize it to the mode's resolution, choose the colors (the shared ones, then the best
 // ones for each cell, which is the whole difficulty of C64 graphics), place every pixel on one of its cell's colors
 // (with dithering, to fake the colors in between), then encode the result as the VIC-II reads it
-public static class Converter
+public static partial class Converter
 {
     const int Transparent = -1;
 
@@ -28,7 +28,7 @@ public static class Converter
     {
         var palette = C64Palette.Named(asset.Palette);
         var layout = new Layout(asset);
-        var (colors, opaque) = Resize(source, layout, asset.Fit);
+        var (colors, opaque) = Resize(source, layout, asset);
 
         // Shared colors: those the image uses most, unless the asset fixes them
         var popular = Popularity(colors, opaque, palette);
@@ -92,10 +92,13 @@ public static class Converter
         public int CellOf(int x, int y) => (y / CellHeight) * Columns + x / CellWidth;
     }
 
-    // Each C64 pixel is the average of the part of the picture it covers (fit: all of it, with borders; fill: the
-    // middle, cut; stretch: all of it, deformed). Less than half covered by opaque pixels: transparent
-    static (Color[] Colors, bool[] Opaque) Resize(RgbImage source, Layout layout, Fit fit)
+    // Each C64 pixel comes from the part of the picture it covers (fit: all of it, with borders; fill: the middle, cut; stretch: all of
+    // it, deformed), by the average of that part (box), its middle pixel (nearest) or a blend of the four pixels around its middle
+    // (bilinear); then the tones are corrected. Less than half covered by opaque pixels: transparent
+    static (Color[] Colors, bool[] Opaque) Resize(RgbImage source, Layout layout, GraphicsAsset asset)
     {
+        var fit = asset.Fit;
+        var resample = asset.Resample ?? Resample.Box;
         double screenWidth = layout.Width * layout.PixelWidth, screenHeight = layout.Height;
         double scaleX = screenWidth / source.Width, scaleY = screenHeight / source.Height;
         if (fit == Fit.Fit) scaleX = scaleY = Math.Min(scaleX, scaleY);
@@ -111,33 +114,80 @@ public static class Converter
             {
                 double u0 = (x * layout.PixelWidth - left) / scaleX, u1 = ((x + 1) * layout.PixelWidth - left) / scaleX;
                 Color sum = default;
-                double weight = 0;
-                for (int sy = Math.Max(0, (int)Math.Floor(v0)); sy < Math.Min(source.Height, (int)Math.Ceiling(v1)); sy++)
+                double weight = 0, needed = (u1 - u0) * (v1 - v0) / 2;
+                switch (resample)
                 {
-                    double h = Math.Min(sy + 1, v1) - Math.Max(sy, v0);
-                    for (int sx = Math.Max(0, (int)Math.Floor(u0)); sx < Math.Min(source.Width, (int)Math.Ceiling(u1)); sx++)
+                    case Resample.Nearest:
+                        Sample((int)Math.Floor((u0 + u1) / 2), (int)Math.Floor((v0 + v1) / 2), 1);
+                        needed = 0.5;
+                        break;
+                    case Resample.Bilinear:
                     {
-                        uint pixel = source[sx, sy];
-                        double w = h * (Math.Min(sx + 1, u1) - Math.Max(sx, u0)) * (pixel >> 24) / 255.0;
-                        sum += Color.FromRgb(pixel) * w;
-                        weight += w;
+                        double u = (u0 + u1) / 2 - 0.5, v = (v0 + v1) / 2 - 0.5;
+                        int sx = (int)Math.Floor(u), sy = (int)Math.Floor(v);
+                        double fx = u - sx, fy = v - sy;
+                        Sample(sx, sy, (1 - fx) * (1 - fy));
+                        Sample(sx + 1, sy, fx * (1 - fy));
+                        Sample(sx, sy + 1, (1 - fx) * fy);
+                        Sample(sx + 1, sy + 1, fx * fy);
+                        needed = 0.5;
+                        break;
                     }
+                    default:
+                        for (int sy = Math.Max(0, (int)Math.Floor(v0)); sy < Math.Min(source.Height, (int)Math.Ceiling(v1)); sy++)
+                        {
+                            double h = Math.Min(sy + 1, v1) - Math.Max(sy, v0);
+                            for (int sx = Math.Max(0, (int)Math.Floor(u0)); sx < Math.Min(source.Width, (int)Math.Ceiling(u1)); sx++)
+                                Sample(sx, sy, h * (Math.Min(sx + 1, u1) - Math.Max(sx, u0)));
+                        }
+                        break;
                 }
                 int i = y * layout.Width + x;
-                opaque[i] = weight >= (u1 - u0) * (v1 - v0) / 2;
-                colors[i] = weight > 0 ? sum * (1 / weight) : default;
+                opaque[i] = weight >= needed;
+                colors[i] = weight > 0 ? Tone(sum * (1 / weight), asset) : default;
+
+                void Sample(int sx, int sy, double share)
+                {
+                    if (sx < 0 || sy < 0 || sx >= source.Width || sy >= source.Height) return;
+                    uint pixel = source[sx, sy];
+                    double w = share * (pixel >> 24) / 255.0;
+                    sum += Color.FromRgb(pixel) * w;
+                    weight += w;
+                }
             }
         }
         return (colors, opaque);
     }
 
+    // The correction of the tones: saturation (the distance from the grey of the same brightness), contrast (around the middle grey),
+    // brightness (added), in this order
+    static Color Tone(Color color, GraphicsAsset asset)
+    {
+        if (asset.Saturation is { } saturation and not 0)
+        {
+            double luma = 0.299 * color.R + 0.587 * color.G + 0.114 * color.B, k = 1 + saturation / 100.0;
+            color = new Color(luma + (color.R - luma) * k, luma + (color.G - luma) * k, luma + (color.B - luma) * k);
+        }
+        if (asset.Contrast is { } contrast and not 0)
+        {
+            double c = Math.Clamp(contrast, -100, 100) * 2.55, factor = 259 * (c + 255) / (255 * (259 - c));
+            color = new Color((color.R - 128) * factor + 128, (color.G - 128) * factor + 128, (color.B - 128) * factor + 128);
+        }
+        if (asset.Brightness is { } brightness and not 0) color += new Color(1, 1, 1) * (Math.Clamp(brightness, -100, 100) * 2.55);
+        return color.Clamp();
+    }
+
     // The 16 colors, most used first (each pixel counts for the color nearest to it)
-    static int[] Popularity(Color[] colors, bool[] opaque, C64Palette palette)
+    static int[] Popularity(Color[] colors, bool[] opaque, C64Palette palette) => Ranked(Counts(colors, opaque, palette));
+
+    static int[] Counts(Color[] colors, bool[] opaque, C64Palette palette)
     {
         var counts = new int[16];
         for (int i = 0; i < colors.Length; i++) if (opaque[i]) counts[Nearest(colors[i], palette, Enumerable.Range(0, 16))]++;
-        return Enumerable.Range(0, 16).OrderByDescending(c => counts[c]).ToArray();
+        return counts;
     }
+
+    static int[] Ranked(int[] counts) => Enumerable.Range(0, 16).OrderByDescending(c => counts[c]).ToArray();
 
     static int Nearest(Color color, C64Palette palette, IEnumerable<int> choices) =>
         choices.MinBy(c => C64Palette.Distance(color, palette[c]));
@@ -437,12 +487,31 @@ public static class Converter
     {
         readonly List<byte[]> characters = [];
         readonly List<int> uses = [];
+        readonly List<string> tags = [];
         readonly Dictionary<string, int> index = [];
+        int frozen;
 
         public int Count => characters.Count;
         public byte[] this[int number] => characters[number];
 
-        public int Add(byte[] bytes)
+        // What each character says about itself (for a set: the picture it first came from)
+        public string Tag(int number) => tags[number];
+
+        // Characters that are already there (a charset that was edited): they keep their places and are never merged away,
+        // the pictures just find them
+        public void Freeze(IEnumerable<(byte[] Bytes, string Tag)> existing)
+        {
+            foreach (var (bytes, tag) in existing)
+            {
+                index.TryAdd(System.Convert.ToHexString(bytes), characters.Count);
+                characters.Add(bytes);
+                uses.Add(0);
+                tags.Add(tag);
+            }
+            frozen = characters.Count;
+        }
+
+        public int Add(byte[] bytes, string tag = "")
         {
             string key = System.Convert.ToHexString(bytes);
             if (!index.TryGetValue(key, out int number))
@@ -451,6 +520,7 @@ public static class Converter
                 index[key] = number;
                 characters.Add(bytes);
                 uses.Add(0);
+                tags.Add(tag);
             }
             uses[number]++;
             return number;
@@ -460,9 +530,10 @@ public static class Converter
         public void Reduce(int[] screen, int limit)
         {
             limit = Math.Clamp(limit, 1, 256);
+            if (frozen > limit) throw new InvalidDataException($"The charset already has {frozen} characters: more than the {limit} allowed");
             while (characters.Count > limit)
             {
-                int victim = Enumerable.Range(0, characters.Count).MinBy(c => uses[c]);
+                int victim = Enumerable.Range(frozen, characters.Count - frozen).MinBy(c => uses[c]);
                 int twin = Enumerable.Range(0, characters.Count).Where(c => c != victim).MinBy(c => Difference(characters[victim], characters[c]));
                 int last = characters.Count - 1;
                 for (int cell = 0; cell < screen.Length; cell++)
@@ -473,8 +544,10 @@ public static class Converter
                 uses[twin] += uses[victim];
                 characters[victim] = characters[last];
                 uses[victim] = uses[last];
+                tags[victim] = tags[last];
                 characters.RemoveAt(last);
                 uses.RemoveAt(last);
+                tags.RemoveAt(last);
             }
         }
 

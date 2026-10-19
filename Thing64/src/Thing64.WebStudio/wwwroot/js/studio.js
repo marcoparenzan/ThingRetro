@@ -66,10 +66,7 @@ window.thing64Studio = (() => {
 
     // An image of any format the browser can show becomes a PNG here (the converter reads PNG only), no larger than
     // 1280 pixels: plenty for a C64 screen, and small enough to travel to the server
-    async function importImage(e) {
-        const file = e.target.files[0];
-        e.target.value = '';
-        if (!file || !page) return;
+    async function toPng(file) {
         const bitmap = await createImageBitmap(file);
         const scale = Math.min(1, 1280 / Math.max(bitmap.width, bitmap.height));
         const canvas = document.createElement('canvas');
@@ -77,7 +74,14 @@ window.thing64Studio = (() => {
         canvas.height = Math.round(bitmap.height * scale);
         canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
         const png = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-        await page.invokeMethodAsync('ImageImported', file.name, new Uint8Array(await png.arrayBuffer()));
+        return new Uint8Array(await png.arrayBuffer());
+    }
+
+    async function importImage(e) {
+        const file = e.target.files[0];
+        e.target.value = '';
+        if (!file || !page) return;
+        await page.invokeMethodAsync('ImageImported', file.name, await toPng(file));
     }
 
     // Above each ";@ editor" line that opens a region (not its continuation lines, not ";@ end"), a link that
@@ -239,6 +243,20 @@ window.thing64Studio = (() => {
             captureTimer = setTimeout(() => page?.invokeMethodAsync('ComputerStatus',
                 'The C64 does not answer the capture: it was published before captures existed. Publish it again: dotnet publish src/Thing64.WebComputer -c Release -o artifacts/web'), 5000);
             return true;
+        },
+
+        // One or more images chosen from the disk for an image set: each arrives as a PNG (ImageChosen), then ImagesChosen says that was all.
+        // "target" is the DotNetObjectReference of the editor of the set
+        chooseImages(target) {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.multiple = true;
+            input.addEventListener('change', async () => {
+                for (const file of input.files) await target.invokeMethodAsync('ImageChosen', file.name, await toPng(file));
+                await target.invokeMethodAsync('ImagesChosen');
+            });
+            input.click();
         },
 
         // Asks the C64 for all its memory (the answer comes as a 'memory' message). False if there is no C64 to ask

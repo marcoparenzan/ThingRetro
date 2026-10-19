@@ -1,0 +1,542 @@
+﻿@using System.Globalization
+@using System.Text.Json
+@using ThingCommodore.Graphics
+@using Thing64.WebStudio.CodeBehind
+@implements IDisposable
+@inject IJSRuntime JS
+
+@* An image set (.imgset.json): several pictures that become screens of characters (40x25 or less) sharing one charset. The settings
+   on top say how they are reduced (size in characters, hires or multicolor, how the picture is resampled, its tones, the colors
+   shared by all); every change converts again. "Write files" makes the files the visual editors already open: name.asm (the
+   charset region) and one file for each picture (a screen region), so the characters and the screens are edited with the charset
+   editor and the screen editor, and pictures can be added later without losing what was edited by hand *@
+<div class="absolute inset-0 flex flex-col overflow-hidden @(Visible ? null : "invisible")">
+    <div class="flex flex-wrap items-end gap-3 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
+        <label class="flex flex-col gap-1">Name
+            <input class="field w-32 font-mono" value="@asset.Name" placeholder="@ImageSetAsset.NameOf(Path)"
+                   @onchange="e => Update(a => a with { Name = Blank(e.Value?.ToString()) })" title="The labels, and the file name.asm" />
+        </label>
+        <label class="flex flex-col gap-1">Colors
+            <select class="field" value="@(asset.Multicolor ? "multicolor" : "hires")" @onchange='e => Update(a => a with { Multicolor = e.Value?.ToString() == "multicolor" })'>
+                <option value="multicolor">multicolor (4x8 characters)</option>
+                <option value="hires">hires (8x8 characters)</option>
+            </select>
+        </label>
+        <label class="flex flex-col gap-1">Columns
+            <input type="number" min="1" max="40" class="field w-16" value="@asset.Columns" placeholder="40" @onchange="e => Update(a => a with { Columns = Number(e, 40) })" />
+        </label>
+        <label class="flex flex-col gap-1">Rows
+            <input type="number" min="1" max="25" class="field w-16" value="@asset.Rows" placeholder="25" @onchange="e => Update(a => a with { Rows = Number(e, 25) })" />
+        </label>
+        <label class="flex flex-col gap-1" title="The screen code of the first character of the charset: the codes below it are the ROM's">First code
+            <input class="field w-16 font-mono" value="@($"${asset.First:X2}")" @onchange="SetFirst" />
+        </label>
+        <label class="flex flex-col gap-1" title="At most this many characters in the whole charset: the least used are merged into the most similar">Max characters
+            <input type="number" min="1" max="256" class="field w-20" value="@asset.MaxCharacters" placeholder="@(256 - asset.First)"
+                   @onchange="e => Update(a => a with { MaxCharacters = Number(e, null) })" />
+        </label>
+        <label class="flex flex-col gap-1">Palette
+            <select class="field" value="@asset.Palette" @onchange='e => Update(a => a with { Palette = e.Value?.ToString() ?? "pepto" })'>
+                <option value="pepto">pepto</option>
+                <option value="colodore">colodore</option>
+            </select>
+        </label>
+        <span class="ml-auto self-center">
+            @if (converting) { <span class="animate-pulse text-chip-300">converting...</span> }
+        </span>
+    </div>
+
+    @* Downsampling: how each picture is brought down to the cells *@
+    <div class="flex flex-wrap items-end gap-3 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
+        <span class="self-center text-[11px] font-semibold tracking-wider text-night-300 uppercase">Downsampling</span>
+        <label class="flex flex-col gap-1" title="fit: the whole picture, with borders; fill: the middle, cut; stretch: the whole picture, deformed">Fit
+            <select class="field" value="@Kebab(asset.Fit)" @onchange="e => Update(a => a with { Fit = Parse<Fit>(e) })">
+                @foreach (var fit in Enum.GetValues<Fit>()) { <option value="@Kebab(fit)">@Kebab(fit)</option> }
+            </select>
+        </label>
+        <label class="flex flex-col gap-1" title="box: the average of what each pixel covers; nearest: the picture's pixel at its middle (hard edges, pixel art); bilinear: a blend of the four around it">Resample
+            <select class="field" value="@Kebab(asset.Resample ?? Resample.Box)" @onchange="e => Update(a => a with { Resample = Parse<Resample>(e) is var r and not Resample.Box ? r : null })">
+                @foreach (var resample in Enum.GetValues<Resample>()) { <option value="@Kebab(resample)">@Kebab(resample)</option> }
+            </select>
+        </label>
+        <label class="flex flex-col gap-1" title="How the colors in between are faked, with the pixels around">Dither
+            <select class="field" value="@Kebab(asset.Dither)" @onchange="e => Update(a => a with { Dither = Parse<Dither>(e) })">
+                @foreach (var dither in Enum.GetValues<Dither>()) { <option value="@Kebab(dither)">@Kebab(dither)</option> }
+            </select>
+        </label>
+        @Tone("Brightness", asset.Brightness, v => asset with { Brightness = v })
+        @Tone("Contrast", asset.Contrast, v => asset with { Contrast = v })
+        @Tone("Saturation", asset.Saturation, v => asset with { Saturation = v })
+    </div>
+
+    @* Shared colors: chosen from all the pictures (auto) unless fixed here *@
+    <div class="flex flex-wrap gap-x-6 gap-y-2 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
+        <ColorSwatches Label="Background" Value="asset.Background" Chosen="conversion?.Background" Palette="@asset.Palette" ValueChanged="c => Update(a => a with { Background = c })" />
+        @if (asset.Multicolor)
+        {
+            <ColorSwatches Label="Multicolor 1" Value="asset.Multicolor1" Chosen="conversion?.Multicolor1" Palette="@asset.Palette" ValueChanged="c => Update(a => a with { Multicolor1 = c })" />
+            <ColorSwatches Label="Multicolor 2" Value="asset.Multicolor2" Chosen="conversion?.Multicolor2" Palette="@asset.Palette" ValueChanged="c => Update(a => a with { Multicolor2 = c })" />
+        }
+    </div>
+
+    <div class="min-h-0 flex-1 overflow-auto p-3 text-xs text-night-200">
+        @if (error is not null) { <p class="mb-3 rounded border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">@error</p> }
+        @if (message is not null) { <p class="mb-3 rounded border border-night-700 px-3 py-2 text-sm text-night-200">@message</p> }
+
+        <div class="mb-2 flex flex-wrap items-center gap-2">
+            <span class="text-[11px] font-semibold tracking-wider text-night-300 uppercase">Pictures</span>
+            <span class="text-night-400">@pictures.Count in the set</span>
+            <button class="rounded border border-night-600 px-2 py-1 hover:border-chip-400" @onclick="ChooseImages" title="Pictures from your disk (any format): they are copied next to this file">＋ Add images…</button>
+            @if (Unused().Count > 0)
+            {
+                <select class="field py-1" @onchange="AddFromProject" title="A picture the project already has">
+                    <option value="">＋ from the project…</option>
+                    @foreach (var path in Unused()) { <option value="@path">@path</option> }
+                </select>
+            }
+        </div>
+        @if (pictures.Count == 0)
+        {
+            <p class="mb-4 text-night-400">No pictures yet. Add one or more: they are reduced together, the characters they have in common are kept once.</p>
+        }
+        <div class="mb-4 grid gap-3 xl:grid-cols-2">
+            @for (int i = 0; i < pictures.Count; i++)
+            {
+                int index = i;
+                var picture = pictures[i];
+                var screen = conversion?.Screens.FirstOrDefault(s => s.Source == picture.Path);
+                <div class="rounded border border-night-800 p-2">
+                    <div class="mb-1 flex items-center gap-1">
+                        <span class="truncate font-mono text-chip-300" title="@picture.Path">@picture.Path</span>
+                        @if (picture.Image is not null) { <span class="text-night-400">@picture.Image.Width x @picture.Image.Height</span> }
+                        <span class="ml-auto"></span>
+                        @if (screen is not null && ScreenWritten(screen))
+                        {
+                            <button class="tool border border-night-700" @onclick="() => EditScreen(screen)" title="Open the screen in the screen editor">✎ Screen</button>
+                        }
+                        <button class="tool border border-night-700 disabled:opacity-30" disabled="@(index == 0)" @onclick="() => Move(index, -1)" title="Earlier: its characters come first in the charset">↑</button>
+                        <button class="tool border border-night-700 disabled:opacity-30" disabled="@(index == pictures.Count - 1)" @onclick="() => Move(index, 1)">↓</button>
+                        <button class="tool border border-night-700" @onclick="() => Remove(index)" title="Take it out of the set">✕</button>
+                    </div>
+                    @if (picture.Error is not null)
+                    {
+                        <p class="text-red-300">@picture.Error</p>
+                    }
+                    else
+                    {
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="checker flex aspect-[8/5] items-center justify-center rounded border border-night-800">
+                                <img src="@SourceUrl(picture)" alt="" class="max-h-full max-w-full object-contain" />
+                            </div>
+                            <div class="checker flex aspect-[8/5] items-center justify-center rounded border border-night-800">
+                                @if (screen is not null && previews.TryGetValue(screen.Source, out var url))
+                                {
+                                    <img src="@url" alt="" class="pixelated h-full w-full object-contain" />
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        @if (conversion is not null)
+        {
+            <div class="mb-2 text-[11px] font-semibold tracking-wider text-night-300 uppercase">Shared charset</div>
+            <p class="mb-2 text-night-300">@conversion.Summary</p>
+            <img src="@charsetUrl" alt="" class="pixelated mb-3 rounded border border-night-800" style="width: @(charsetWidth * 2)px" />
+
+            <label class="mb-3 flex items-start gap-2" title="For pictures added after the charset was edited by hand">
+                <input type="checkbox" class="mt-0.5" checked="@asset.KeepCharset" disabled="@(!CharsetExists)" @onchange="e => Update(a => a with { KeepCharset = (bool)e.Value! })" />
+                <span>Keep the characters already in <span class="font-mono text-night-100">@CharsetPath</span>
+                    <span class="text-night-400">(@(CharsetExists ? "the file is there" : "not written yet")): they stay where they are, the pictures use them when they have the same bytes, and the new characters follow. Without it the charset is made again from the pictures.</span></span>
+            </label>
+
+            <div class="mb-1 text-[11px] font-semibold tracking-wider text-night-300 uppercase">Files</div>
+            <table class="mb-3 w-full max-w-3xl text-left">
+                <tbody class="text-night-100">
+                    @foreach (var file in Files())
+                    {
+                        <tr class="border-t border-night-800">
+                            <td class="py-1 pr-3 font-mono text-chip-300">@file.Path</td>
+                            <td class="pr-3 text-night-300">@file.What</td>
+                            <td class="text-night-400">@(!File.Exists(Project.FullPath(file.Path)) ? "new" : Project.ReadText(file.Path) == file.Text ? "up to date" : "will be replaced")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div class="mb-3 flex flex-wrap items-center gap-2">
+                <button class="rounded border border-chip-400 bg-night-700 px-3 py-1.5 text-white hover:bg-night-600" @onclick="WriteFiles">Write files</button>
+                <button class="rounded border border-night-600 px-3 py-1.5 hover:border-chip-400 disabled:opacity-40" disabled="@(!CharsetExists)" @onclick="EditCharset"
+                        title="Open the charset in the charset editor">✎ Edit charset</button>
+            </div>
+
+            @if (CharsetExists && !Included)
+            {
+                <p class="mb-2 max-w-3xl rounded border border-amber-700 bg-amber-950/30 px-3 py-2 text-amber-200">
+                    The program does not include these files yet, and the editors read the characters and the screens from the assembled program:
+                    add <span class="font-mono">!source "@IncludePath"</span> to <span class="font-mono">@MainPath</span>
+                    <button class="ml-2 rounded border border-amber-600 px-2 py-0.5 hover:bg-amber-900/40" @onclick="AddToMain">Add it at the end of @MainPath</button>
+                </p>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Project Project { get; set; } = default!;
+    [Parameter, EditorRequired] public string Path { get; set; } = "";
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> OnDirty { get; set; }
+
+    // Opens a region of a file in its visual editor (the file and the line of the ;@ line, from 1)
+    [Parameter] public EventCallback<(string File, int Line)> OnOpenRegion { get; set; }
+
+    // The files were written: the tree of the project shows them
+    [Parameter] public EventCallback OnFilesWritten { get; set; }
+
+    // The page around: the files may be open in Monaco
+    [Parameter] public IRegionHost? Host { get; set; }
+
+    sealed class Picture
+    {
+        public required string Path { get; init; }      // relative to the folder of the set
+        public RgbImage? Image { get; set; }
+        public string? Error { get; set; }
+        public string Stamp { get; set; } = "";
+    }
+
+    sealed record FileToWrite(string Path, string Text, string What);
+
+    ImageSetAsset asset = new();
+    string savedJson = "";
+    readonly List<Picture> pictures = [];
+    ImageSetConversion? conversion;
+    readonly Dictionary<string, string> previews = [];
+    string? charsetUrl;
+    int charsetWidth;
+    string? error, message;
+    bool converting;
+    int version;
+    DotNetObjectReference<ImageSetEditor>? self;
+
+    public bool Dirty => asset.ToJson() != savedJson;
+
+    string Folder => System.IO.Path.GetDirectoryName(Path)?.Replace('\\', '/') ?? "";
+    string SetName => CapturedCharset.Identifier(asset.Name ?? ImageSetAsset.NameOf(Path));
+    string CharsetPath => Combine(Folder, SetName + ".asm");
+    string IncludePath => Combine(Folder, SetName + ".set.asm");
+    bool CharsetExists => File.Exists(Project.FullPath(CharsetPath));
+    string MainPath => ProgramImage.MainSource(Project);
+
+    bool Included
+    {
+        get
+        {
+            string main = Project.FullPath(MainPath);
+            return File.Exists(main) && File.ReadAllText(main).Contains(SetName + ".set.asm", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        self = DotNetObjectReference.Create(this);
+        await Load();
+    }
+
+    public void Dispose() => self?.Dispose();
+
+    // From the disk: the .imgset.json and its pictures
+    public async Task Load()
+    {
+        try
+        {
+            asset = ImageSetAsset.Parse(Project.ReadText(Path));
+            error = null;
+        }
+        catch (Exception e) when (e is JsonException or IOException or InvalidDataException)
+        {
+            error = $"{System.IO.Path.GetFileName(Path)}: {e.Message}";
+        }
+        savedJson = asset.ToJson();
+        LoadPictures();
+        await Convert();
+    }
+
+    void LoadPictures()
+    {
+        pictures.Clear();
+        foreach (string source in asset.Sources) pictures.Add(ReadPicture(source));
+    }
+
+    Picture ReadPicture(string source)
+    {
+        var picture = new Picture { Path = source };
+        try
+        {
+            string full = Combine(Folder, source);
+            picture.Image = Png.Read(Project.ReadBytes(full));
+            picture.Stamp = File.GetLastWriteTimeUtc(Project.FullPath(full)).Ticks.ToString();
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException)
+        {
+            picture.Error = $"{source}: {e.Message}";
+        }
+        return picture;
+    }
+
+    public Task<bool> Save()
+    {
+        Project.WriteText(Path, asset.ToJson());
+        savedJson = asset.ToJson();
+        _ = OnDirty.InvokeAsync(false);
+        return Task.FromResult(true);
+    }
+
+    async Task Update(Func<ImageSetAsset, ImageSetAsset> change)
+    {
+        asset = change(asset);
+        await OnDirty.InvokeAsync(Dirty);
+        await Convert();
+    }
+
+    // ------------------------------------------------------------------------------------------------------ pictures
+
+    async Task ChooseImages() => await JS.InvokeVoidAsync("thing64Studio.chooseImages", self);
+
+    // One picture from the disk, already a PNG (studio.js): copied next to the set
+    [JSInvokable]
+    public void ImageChosen(string fileName, byte[] png)
+    {
+        string stem = string.Concat(System.IO.Path.GetFileNameWithoutExtension(fileName).Select(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' ? c : '-')).Trim('-');
+        if (stem.Length == 0) stem = "image";
+        string name = stem;
+        for (int n = 2; File.Exists(Project.FullPath(Combine(Folder, name + ".png"))); n++) name = $"{stem}-{n}";
+        File.WriteAllBytes(Project.FullPath(Combine(Folder, name + ".png")), png);
+        asset = asset with { Sources = [.. asset.Sources, name + ".png"] };
+        pictures.Add(ReadPicture(name + ".png"));
+    }
+
+    [JSInvokable]
+    public async Task ImagesChosen()
+    {
+        await OnDirty.InvokeAsync(Dirty);
+        await OnFilesWritten.InvokeAsync();
+        await Convert();
+        StateHasChanged();
+    }
+
+    // The PNGs of the project that are not in the set, relative to the set's folder
+    List<string> Unused()
+    {
+        var used = asset.Sources.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        string folder = Project.FullPath(Folder);
+        return Directory.EnumerateFiles(Project.Folder, "*.png", SearchOption.AllDirectories)
+            .Select(f => System.IO.Path.GetRelativePath(folder, f).Replace('\\', '/'))
+            .Where(p => !used.Contains(p) && !p.Split('/').Any(part => part.StartsWith('.') && part != ".."))
+            .Order().ToList();
+    }
+
+    async Task AddFromProject(ChangeEventArgs e)
+    {
+        string? path = e.Value?.ToString();
+        if (string.IsNullOrEmpty(path)) return;
+        asset = asset with { Sources = [.. asset.Sources, path] };
+        pictures.Add(ReadPicture(path));
+        await OnDirty.InvokeAsync(Dirty);
+        await Convert();
+    }
+
+    async Task Remove(int index)
+    {
+        pictures.RemoveAt(index);
+        await Update(a => a with { Sources = [.. a.Sources.Where((_, i) => i != index)] });
+    }
+
+    async Task Move(int index, int delta)
+    {
+        (pictures[index], pictures[index + delta]) = (pictures[index + delta], pictures[index]);
+        await Update(a =>
+        {
+            var sources = a.Sources.ToList();
+            (sources[index], sources[index + delta]) = (sources[index + delta], sources[index]);
+            return a with { Sources = sources };
+        });
+    }
+
+    string SourceUrl(Picture picture) => $"project-files/{Uri.EscapeDataString(Project.Name)}/{Combine(Folder, picture.Path)}?v={picture.Stamp}";
+
+    // ----------------------------------------------------------------------------------------------------- conversion
+
+    // The conversion runs off the circuit's thread; a result older than the last change is dropped
+    async Task Convert()
+    {
+        int mine = ++version;
+        var valid = pictures.Where(p => p.Image is not null).Select(p => (p.Path, p.Image!)).ToList();
+        if (valid.Count == 0)
+        {
+            conversion = null;
+            previews.Clear();
+            charsetUrl = null;
+            converting = false;
+            return;
+        }
+        converting = true;
+        var settings = asset;
+        string name = SetName;
+        List<(byte[] Bytes, string Description)>? existing = null;
+        try
+        {
+            if (settings.KeepCharset) existing = ReadCharset();
+            var result = await Task.Run(() => Converter.ConvertSet(valid, settings, name, existing));
+            if (mine != version) return;
+            conversion = result;
+            previews.Clear();
+            foreach (var screen in result.Screens) previews[screen.Source] = Url(screen.Preview);
+            var charset = result.CharsetImage();
+            charsetWidth = charset.Width;
+            charsetUrl = Url(charset);
+            error = null;
+        }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException or FormatException)
+        {
+            if (mine == version) error = e.Message;
+        }
+        finally
+        {
+            if (mine == version) converting = false;
+        }
+    }
+
+    // The characters of name.asm as they are now (edited by hand, perhaps), with their comments
+    List<(byte[] Bytes, string Description)>? ReadCharset()
+    {
+        if (!CharsetExists) return null;
+        string[] lines = Project.ReadText(CharsetPath).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+        var region = AsmRegion.Find(lines).FirstOrDefault(r => r.Editor == "charset")
+            ?? throw new FormatException($"{CharsetPath} has no ;@ charset region");
+        return CharmapFile.Read(lines, region, region.Labels.First(), null)
+            .Select(c => (c.Bytes.Select(b => (byte)b).ToArray(), c.Description)).ToList();
+    }
+
+    // ------------------------------------------------------------------------------------------------------- files
+
+    List<FileToWrite> Files()
+    {
+        var files = new List<FileToWrite> { new(CharsetPath, conversion!.CharsetText(), $"the charset: {conversion.Characters.Count} characters") };
+        files.AddRange(conversion.Screens.Select(s => new FileToWrite(Combine(Folder, conversion.ScreenFileName(s)), conversion.ScreenText(s), $"the screen of {s.Source}")));
+        files.Add(new(IncludePath, IncludeText(), "includes all of them: this is the one to !source"));
+        return files;
+    }
+
+    string IncludeText()
+    {
+        var lines = new List<string>
+        {
+            $"; {SetName}: the files of the image set {System.IO.Path.GetFileName(Path)}. Include this one: !source \"{System.IO.Path.GetFileName(IncludePath)}\"",
+            $"!source \"{System.IO.Path.GetFileName(CharsetPath)}\"",
+        };
+        lines.AddRange(conversion!.Screens.Select(s => $"!source \"{conversion.ScreenFileName(s)}\""));
+        return string.Join("\n", lines) + "\n";
+    }
+
+    bool ScreenWritten(SetScreen screen) => File.Exists(Project.FullPath(Combine(Folder, conversion!.ScreenFileName(screen))));
+
+    async Task WriteFiles()
+    {
+        if (conversion is null) return;
+        message = null;
+        var files = Files();
+        var replaced = files.Where(f => File.Exists(Project.FullPath(f.Path)) && Project.ReadText(f.Path) != f.Text).Select(f => f.Path).ToList();
+        if (replaced.Count > 0 && !await JS.InvokeAsync<bool>("confirm",
+                $"Writing replaces what changed in {string.Join(", ", replaced)}. What was edited by hand in them is lost (to keep the characters of the charset, tick \"Keep the characters already in...\"). Write them anyway?"))
+            return;
+        foreach (var file in files)
+            if (Host is not null && !await Host.CanWriteAsync(file.Path)) return;
+        try
+        {
+            foreach (var file in files)
+            {
+                if (!Directory.Exists(System.IO.Path.GetDirectoryName(Project.FullPath(file.Path)))) Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Project.FullPath(file.Path))!);
+                Project.WriteText(file.Path, file.Text);
+                if (Host is not null) await Host.WrittenAsync(file.Path);
+            }
+            message = $"{files.Count} files written next to {System.IO.Path.GetFileName(Path)}";
+            await OnFilesWritten.InvokeAsync();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            error = e.Message;
+        }
+    }
+
+    // The ;@ line of the first region of a file, from 1
+    int RegionLine(string path)
+    {
+        string[] lines = Project.ReadText(path).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+        return AsmRegion.Find(lines).FirstOrDefault()?.StartLine + 1 ?? 1;
+    }
+
+    async Task EditCharset() => await OnOpenRegion.InvokeAsync((CharsetPath, RegionLine(CharsetPath)));
+
+    async Task EditScreen(SetScreen screen)
+    {
+        string file = Combine(Folder, conversion!.ScreenFileName(screen));
+        await OnOpenRegion.InvokeAsync((file, RegionLine(file)));
+    }
+
+    // The line that makes the program include the set, at the end of the main source
+    async Task AddToMain()
+    {
+        string main = MainPath;
+        if (Host is not null && !await Host.CanWriteAsync(main)) return;
+        try
+        {
+            string relative = System.IO.Path.GetRelativePath(System.IO.Path.GetDirectoryName(Project.FullPath(main))!, Project.FullPath(IncludePath)).Replace('\\', '/');
+            string text = Project.ReadText(main);
+            if (!text.EndsWith('\n')) text += "\n";
+            Project.WriteText(main, text + $"\n; the image set {SetName}: its charset and its screens\n!source \"{relative}\"\n");
+            if (Host is not null) await Host.WrittenAsync(main);
+            message = $"The line was added at the end of {main}: move it where the data should go";
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            error = e.Message;
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------------- helpers
+
+    // A tone, -100 to 100, 0 as it is
+    RenderFragment Tone(string label, int? value, Func<int?, ImageSetAsset> set) => __builder =>
+    {
+        <label class="flex flex-col gap-1">@label <span class="font-mono text-night-300">@((value ?? 0).ToString("+0;-0;0"))</span>
+            <span class="flex items-center gap-1">
+                <input type="range" min="-100" max="100" step="5" value="@(value ?? 0)" class="w-28"
+                       @onchange="e => Update(_ => set(int.Parse(e.Value!.ToString()!) is var v and not 0 ? v : null))" />
+                <button class="tool border border-night-700" @onclick="() => Update(_ => set(null))" title="As it is">0</button>
+            </span>
+        </label>
+    };
+
+    async Task SetFirst(ChangeEventArgs e)
+    {
+        string text = e.Value?.ToString()?.Trim() ?? "";
+        bool ok = text.StartsWith('$') ? int.TryParse(text[1..], NumberStyles.HexNumber, null, out int value) : int.TryParse(text, out value);
+        if (!ok || value is < 0 or > 255) { error = $"{text} is not a screen code (0 to 255)"; return; }
+        await Update(a => a with { First = value });
+    }
+
+    static string Url(RgbImage image) => "data:image/png;base64," + System.Convert.ToBase64String(Png.Write(image));
+
+    static string Kebab<T>(T value) where T : struct, Enum => JsonNamingPolicy.KebabCaseLower.ConvertName(value.ToString());
+
+    static T Parse<T>(ChangeEventArgs e) where T : struct, Enum =>
+        Enum.GetValues<T>().First(v => Kebab(v) == e.Value?.ToString());
+
+    static int? Number(ChangeEventArgs e, int? otherwise) => int.TryParse(e.Value?.ToString(), out int n) && n > 0 ? n : otherwise;
+
+    static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+
+    static string Combine(string folder, string file) => folder.Length == 0 ? file : folder + "/" + file;
+}

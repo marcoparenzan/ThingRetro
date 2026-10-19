@@ -43,6 +43,7 @@ else
             <span class="mr-auto pl-1 text-xs font-semibold tracking-wider text-night-300 uppercase">Files</span>
             <button class="tool" title="New file" @onclick='() => StartEdit("file")'>＋📄</button>
             <button class="tool" title="New folder" @onclick='() => StartEdit("folder")'>＋📁</button>
+            <button class="tool" title="New image set: several pictures as screens that share one charset" @onclick="NewImageSet">🗂</button>
             <label class="tool cursor-pointer" title="Import an image (any format) as C64 graphics">🖼<input id="import-image" type="file" accept="image/*" hidden /></label>
             <button class="tool" title="Rename" disabled="@(selected is null)" @onclick='() => StartEdit("rename")'>✎</button>
             <button class="tool" title="Delete" disabled="@(selected is null)" @onclick="DeleteSelected">🗑</button>
@@ -136,6 +137,11 @@ else
             {
                 <GraphicsEditor @key="tab" @ref="graphicsEditors[tab]" Project="project!" Path="@tab" Visible="@(tab == active && !showComputer)"
                                 OnDirty="changed => Changed(tab, changed)" />
+            }
+            @foreach (var tab in tabs.Where(IsImageSet))
+            {
+                <ImageSetEditor @key="tab" @ref="imageSetEditors[tab]" Project="project!" Path="@tab" Host="this" Visible="@(tab == active && !showComputer)"
+                                OnDirty="changed => Changed(tab, changed)" OnOpenRegion="args => OpenRegion(args.File, args.Line)" OnFilesWritten="() => Refresh()" />
             }
             @if (tabs.Count == 0 && !showComputer)
             {
@@ -387,8 +393,8 @@ else
 
     // Which tabs Monaco shows: text files, except graphics assets and regions, which have their own editors;
     // anything else is binary: PNG pictures in the image viewer, the rest in the hex viewer
-    static bool IsMonaco(string? path) => path is not null && IsText(path) && !IsGraphics(path) && !IsRegion(path);
-    static bool IsBinary(string path) => !IsText(path) && !IsGraphics(path) && !IsRegion(path);
+    static bool IsMonaco(string? path) => path is not null && IsText(path) && !IsGraphics(path) && !IsImageSet(path) && !IsRegion(path);
+    static bool IsBinary(string path) => !IsText(path) && !IsGraphics(path) && !IsImageSet(path) && !IsRegion(path);
     static bool IsImage(string path) => path.EndsWith(".png", StringComparison.OrdinalIgnoreCase);
 
     readonly Dictionary<string, HexViewer> hexViewers = [];
@@ -451,6 +457,31 @@ else
     static bool IsGraphics(string? path) => path?.EndsWith(GraphicsAsset.Extension, StringComparison.OrdinalIgnoreCase) == true;
 
     readonly Dictionary<string, GraphicsEditor> graphicsEditors = [];
+
+    // Image sets (.imgset.json): several pictures as screens that share a charset, with their own editor
+    static bool IsImageSet(string? path) => path?.EndsWith(ImageSetAsset.Extension, StringComparison.OrdinalIgnoreCase) == true;
+
+    readonly Dictionary<string, ImageSetEditor> imageSetEditors = [];
+
+    // A new, empty image set in the selected folder, open to add the pictures
+    async Task NewImageSet()
+    {
+        try
+        {
+            string folder = TargetFolder, name = "images";
+            for (int n = 2; File.Exists(project!.FullPath(Combine(folder, name + ImageSetAsset.Extension))); n++) name = $"images-{n}";
+            string path = Combine(folder, name + ImageSetAsset.Extension);
+            project.WriteText(path, new ImageSetAsset().ToJson());
+            selected = path;
+            ExpandTo(path);
+            Refresh();
+            await Open(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Report(e.Message);
+        }
+    }
 
     // An image chosen with the import button (studio.js has already made it a PNG): saved in the selected folder,
     // with a new .gfx.json next to it, which opens
@@ -520,6 +551,7 @@ else
         if (dirty.Contains(path) && !await JS.InvokeAsync<bool>("confirm", $"{FileName(path)} has changes that are not saved. Close it anyway?"))
             return;
         if (IsGraphics(path)) graphicsEditors.Remove(path);
+        else if (IsImageSet(path)) imageSetEditors.Remove(path);
         else if (IsRegion(path)) regionEditors.Remove(path);
         else if (IsBinary(path)) { hexViewers.Remove(path); imageViewers.Remove(path); }
         else await JS.InvokeVoidAsync("thing64Studio.close", path);
@@ -616,6 +648,12 @@ else
                 dirty.Remove(path);
                 return true;
             }
+            if (imageSetEditors.TryGetValue(path, out var imageSet))
+            {
+                await imageSet.Save();
+                dirty.Remove(path);
+                return true;
+            }
             if (regionEditors.TryGetValue(path, out var region))
             {
                 if (!await region.Save()) return false;
@@ -696,6 +734,8 @@ else
             }
             if (File.Exists(project!.FullPath(path)) && graphicsEditors.TryGetValue(path, out var graphics))
                 await graphics.Load();
+            else if (File.Exists(project.FullPath(path)) && imageSetEditors.TryGetValue(path, out var imageSet))
+                await imageSet.Load();
             else if (File.Exists(project.FullPath(path)))
                 await JS.InvokeVoidAsync("thing64Studio.reload", path, project.ReadText(path));
             else

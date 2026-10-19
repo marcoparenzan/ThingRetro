@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using ThingMOS.Asm;
@@ -300,12 +300,14 @@ public sealed class ProgramImage(Assembler.Result result)
     }
 
     // The program of the project: the source of the first output of thing64.json, or main.asm
-    public static ProgramImage Assemble(Project project)
+    public static ProgramImage Assemble(Project project) => new(ProgramBuilder.Assemble(project.FullPath(MainSource(project))));
+
+    // The file the program starts from (relative to the project)
+    public static string MainSource(Project project)
     {
         string manifest = Path.Combine(project.Folder, Project.ManifestName);
-        string source = "main.asm";
         if (File.Exists(manifest) && BuildManifest.Load(manifest).Outputs.FirstOrDefault(o => o.Source?.EndsWith(".asm", StringComparison.OrdinalIgnoreCase) == true) is { } output)
-            source = output.Source!;
-        return new ProgramImage(ProgramBuilder.Assemble(project.FullPath(source)));
+            return output.Source!;
+        return "main.asm";
     }
 }
