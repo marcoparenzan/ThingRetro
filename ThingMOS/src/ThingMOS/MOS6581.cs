@@ -1,4 +1,4 @@
-namespace ThingMOS;
+﻿namespace ThingMOS;
 
 // MOS 6581 SID: three voices (oscillator, waveforms, envelope), a multimode filter and the master volume.
 // Everything advances one step at every φ2 cycle (985248 Hz on the PAL C64). AUDIO OUT is the instantaneous
@@ -69,17 +69,28 @@ public partial class MOS6581 : I6581Pinout
     // φ2: one cycle of oscillators, envelopes, filter and mixer
     public void Tick()
     {
-        foreach (var voice in voices) voice.ClockOscillator();
-        foreach (var voice in voices) voice.ApplySync();
-        foreach (var voice in voices) voice.ClockEnvelope();
+        // The three voices by name: this runs at every cycle, and the order of the steps and of the sums is part of the sound
+        var v0 = voices[0];
+        var v1 = voices[1];
+        var v2 = voices[2];
+        v0.ClockOscillator();
+        v1.ClockOscillator();
+        v2.ClockOscillator();
+        v0.ApplySync();
+        v1.ApplySync();
+        v2.ApplySync();
+        v0.ClockEnvelope();
+        v1.ClockEnvelope();
+        v2.ClockEnvelope();
 
         double filterInput = 0, direct = 0;
-        for (int v = 0; v < 3; v++)
-        {
-            double output = voices[v].Output() * VOICE_SCALE;
-            if ((filterRouting & (1 << v)) != 0) filterInput += output;
-            else if (v != 2 || (modeVolume & 0x80) == 0) direct += output; // "3 OFF" silences voice 3 when it is not filtered
-        }
+        double output = v0.Output() * VOICE_SCALE;
+        if ((filterRouting & 1) != 0) filterInput += output; else direct += output;
+        output = v1.Output() * VOICE_SCALE;
+        if ((filterRouting & 2) != 0) filterInput += output; else direct += output;
+        output = v2.Output() * VOICE_SCALE;
+        if ((filterRouting & 4) != 0) filterInput += output;
+        else if ((modeVolume & 0x80) == 0) direct += output; // "3 OFF" silences voice 3 when it is not filtered
 
         AudioOutput = (direct + Filter(filterInput) + MIXER_DC) * (modeVolume & 0x0F) / 15.0;
 

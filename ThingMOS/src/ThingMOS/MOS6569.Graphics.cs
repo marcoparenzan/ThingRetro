@@ -1,4 +1,4 @@
-namespace ThingMOS;
+﻿namespace ThingMOS;
 
 // VIC-II rendering into a frame buffer of color indexes. The VIC-II outputs 8 pixels per cycle: when the CPU
 // writes a register in the middle of a line, the pixels already "under the beam" are drawn with the old values
@@ -153,28 +153,30 @@ public partial class MOS6569
     // 8 pixels: bit 1 = foreground, bit 0 = background
     private void PutHires(int x, byte bits, byte foreground, byte background)
     {
-        for (int i = 0; i < 8; i++, x++)
+        int count = Math.Min(8, SCREEN_WIDTH - x);
+        if (count <= 0) return;
+        var colors = lineColor.AsSpan(x, count);
+        var foregrounds = lineForeground.AsSpan(x, count);
+        for (int i = 0; i < colors.Length; i++)
         {
-            if (x >= SCREEN_WIDTH) return;
             bool set = (bits & (0x80 >> i)) != 0;
-            lineColor[x] = set ? foreground : background;
-            lineForeground[x] = set;
+            colors[i] = set ? foreground : background;
+            foregrounds[i] = set;
         }
     }
 
     // 4 bit pairs, each 2 pixels wide: 00 and 01 are background, 10 and 11 foreground
     private void PutMulticolor(int x, byte bits, byte color00, byte color01, byte color10, byte color11)
     {
-        for (int pair = 0; pair < 4; pair++)
+        int count = Math.Min(8, SCREEN_WIDTH - x);
+        if (count <= 0) return;
+        var colors = lineColor.AsSpan(x, count);
+        var foregrounds = lineForeground.AsSpan(x, count);
+        for (int i = 0; i < colors.Length; i++)
         {
-            int value = (bits >> (6 - pair * 2)) & 0x03;
-            byte color = value switch { 0 => color00, 1 => color01, 2 => color10, _ => color11 };
-            for (int k = 0; k < 2; k++, x++)
-            {
-                if (x >= SCREEN_WIDTH) return;
-                lineColor[x] = color;
-                lineForeground[x] = value >= 2;
-            }
+            int value = (bits >> (6 - (i >> 1) * 2)) & 0x03;
+            colors[i] = value switch { 0 => color00, 1 => color01, 2 => color10, _ => color11 };
+            foregrounds[i] = value >= 2;
         }
     }
 

@@ -1,4 +1,4 @@
-namespace ThingMOS;
+﻿namespace ThingMOS;
 
 public partial class MOS6581
 {
@@ -184,6 +184,7 @@ public partial class MOS6581
 
         // Output of the voice, before the filter. On the 6581 the zero of the waveform is not at mid-scale ($800)
         // but lower: that is why a voice whose envelope rises or falls also produces a DC shift
-        public int Output() => (Waveform() - 0x380) * Envelope;
+        // With the envelope at zero the product is zero whatever the waveform is: it is not worked out (a silent voice is most of the time)
+        public int Output() => Envelope == 0 ? 0 : (Waveform() - 0x380) * Envelope;
     }
 }
