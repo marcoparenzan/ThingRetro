@@ -586,12 +586,14 @@ else
         if (!await JS.InvokeAsync<bool>("thing64Studio.memoryComputer")) computerStatus = "The C64 is not running yet: there is no memory to look at";
     }
 
+    // The snapshot itself stays in the browser (studio.js, memory-view.js); the page is told how big it was: 0 nothing, -1 not a snapshot
     [JSInvokable]
-    public void ComputerMemory(byte[] bytes)
+    public void ComputerMemory(int size)
     {
         showMemory = true;
-        if (bytes.Length == 0) computerStatus = "The C64 has nothing to show yet";
-        else memoryViewer?.SetMemory(bytes);
+        if (size == 0) computerStatus = "The C64 has nothing to show yet";
+        else if (size < 0) computerStatus = "The memory the C64 sent is not in the format the viewers know: publish the C64 again";
+        else memoryViewer?.SnapshotTaken();
         StateHasChanged();
     }
 

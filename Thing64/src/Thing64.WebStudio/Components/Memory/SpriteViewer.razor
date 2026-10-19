@@ -1,0 +1,91 @@
+@inherits MemoryViewBase
+
+@* Sprites, 63 bytes each (64 in their usual blocks): to find them in the memory, or to look at the ones the VIC-II is showing *@
+<div class="@(Active ? "flex" : "hidden") min-h-0 flex-1">
+    <div @ref="Host" class="min-w-0 flex-1"></div>
+    <aside class="w-64 shrink-0 space-y-3 overflow-y-auto border-l border-night-800 bg-night-950 p-3">
+        <div class="space-y-1">
+            <div class="text-[11px] font-semibold tracking-wider text-night-300 uppercase">Sprites</div>
+            <label class="flex items-center justify-between gap-2">sprites
+                <input type="number" min="1" max="256" class="field w-16 py-0.5" @bind="count" @bind:after="PushAsync" />
+            </label>
+            <label class="flex items-center justify-between gap-2">in a row
+                <input type="number" min="1" max="32" class="field w-16 py-0.5" @bind="perRow" @bind:after="PushAsync" />
+            </label>
+            <label class="flex items-center justify-between gap-2" title="64: the usual blocks; 63: one after the other">bytes each
+                <input type="number" min="63" max="256" class="field w-16 py-0.5" @bind="stride" @bind:after="PushAsync" />
+            </label>
+            <label class="flex items-center gap-2"><input type="checkbox" @bind="multicolor" @bind:after="PushAsync" /> multicolor</label>
+            <ColorChoice Label="sprite color" @bind-Value="Ink" @bind-Value:after="PushAsync" />
+            <ColorChoice Label="transparent" @bind-Value="Background" @bind-Value:after="PushAsync" />
+            <ColorChoice Label="multicolor 1" @bind-Value="Multicolor1" @bind-Value:after="PushAsync" />
+            <ColorChoice Label="multicolor 2" @bind-Value="Multicolor2" @bind-Value:after="PushAsync" />
+            <label class="flex items-center justify-between gap-2">zoom
+                <select class="field py-0.5" @bind="Zoom" @bind:after="PushAsync">
+                    @for (int z = 1; z <= 6; z++) { <option value="@z">@(z)x</option> }
+                </select>
+            </label>
+            <label class="flex items-center gap-2"><input type="checkbox" @bind="Grid" @bind:after="PushAsync" /> grid</label>
+        </div>
+        @if (vic is not null)
+        {
+            <div class="space-y-1">
+                <div class="text-[11px] font-semibold tracking-wider text-night-300 uppercase">The VIC-II's sprites</div>
+                @for (int i = 0; i < vic.Sprites.Length; i++)
+                {
+                    int number = i;
+                    var sprite = vic.Sprites[i];
+                    <button class="tool flex w-full items-center gap-2 border border-night-700 text-left" @onclick="() => ShowSprite(number)" title="Start at this sprite, with its color">
+                        <span class="h-3 w-3 rounded-sm border border-night-700" style="background: @Swatch(sprite.Color)"></span>
+                        <span>#@number $@sprite.Address.ToString("X4")@(sprite.Enabled ? "" : " (off)")@(sprite.Multicolor ? " multicolor" : "")</span>
+                    </button>
+                }
+            </div>
+        }
+        <p class="text-night-400">Click on a sprite to start there; the wheel, the arrow keys and Page Up and Down move the offset.</p>
+    </aside>
+</div>
+
+@code {
+    protected override string Kind => "sprites";
+
+    VicInfo? vic;
+    int count = 24, perRow = 8, stride = 64;
+    bool multicolor;
+    int? offset;
+
+    protected override void UseVic(VicInfo info)
+    {
+        vic = info;
+        Zoom = 2;
+        Background = info.Background;
+        Multicolor1 = info.SpriteMulticolor1;
+        Multicolor2 = info.SpriteMulticolor2;
+        var first = info.Sprites.FirstOrDefault(s => s.Enabled) ?? info.Sprites[0];
+        Ink = first.Color;
+        multicolor = first.Multicolor;
+        offset = first.Address & ~63;
+    }
+
+    async Task ShowSprite(int number)
+    {
+        if (vic is null) return;
+        var sprite = vic.Sprites[number];
+        Ink = sprite.Color;
+        multicolor = sprite.Multicolor;
+        stride = 64;
+        offset = sprite.Address;
+        await PushAsync();
+    }
+
+    protected override Dictionary<string, object?> Settings()
+    {
+        var settings = new Dictionary<string, object?>
+        {
+            ["count"] = Math.Clamp(count, 1, 256), ["perRow"] = Math.Clamp(perRow, 1, 32), ["stride"] = Math.Clamp(stride, 63, 256), ["multicolor"] = multicolor,
+            ["zoom"] = Zoom, ["grid"] = Grid, ["background"] = Background, ["multicolor1"] = Multicolor1, ["multicolor2"] = Multicolor2, ["ink"] = Ink,
+        };
+        if (offset is { } start) { settings["offset"] = start; offset = null; }
+        return settings;
+    }
+}

@@ -1,4 +1,4 @@
-// The browser side of a project page (ProjectPage.razor): Monaco with one model per open file, the keys of the
+﻿// The browser side of a project page (ProjectPage.razor): Monaco with one model per open file, the keys of the
 // studio, and the C64: in the iframe of the C64 tab, or in a window of its own.
 //   server -> page: init, open, show, close, text, reload, saved, markers, clearMarkers, reveal, run, focusComputer,
 //                   openComputerWindow, closeComputerWindow, chatInput, scrollToEnd, dispose
@@ -52,7 +52,9 @@ window.thing64Studio = (() => {
             page.invokeMethodAsync('ComputerCaptured', e.data.bytes);
         } else if (e.data?.type === 'memory') {
             clearTimeout(memoryTimer);
-            page.invokeMethodAsync('ComputerMemory', e.data.bytes);
+            // The memory stays here, in the browser: the viewers draw from it, and the server only learns that there is a new snapshot
+            const bytes = e.data.bytes;
+            page.invokeMethodAsync('ComputerMemory', bytes?.length ? (window.thing64Mem.setSnapshot(bytes) ? bytes.length : -1) : 0);
         }
     }
 

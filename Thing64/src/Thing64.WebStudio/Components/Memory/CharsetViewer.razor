@@ -1,0 +1,67 @@
+@inherits MemoryViewBase
+
+@* The characters of a charset, one after the other, 8 bytes each: to find a charset in the memory (or the character ROM) and copy it *@
+<div class="@(Active ? "flex" : "hidden") min-h-0 flex-1">
+    <div @ref="Host" class="min-w-0 flex-1"></div>
+    <aside class="w-64 shrink-0 space-y-3 overflow-y-auto border-l border-night-800 bg-night-950 p-3">
+        <div class="space-y-1">
+            <div class="text-[11px] font-semibold tracking-wider text-night-300 uppercase">Charset</div>
+            <label class="flex items-center justify-between gap-2">from
+                <select class="field py-0.5" @bind="source" @bind:after="PushAsync">
+                    <option value="ram">RAM</option>
+                    <option value="rom">character ROM</option>
+                </select>
+            </label>
+            <label class="flex items-center justify-between gap-2">characters
+                <input type="number" min="1" max="1024" class="field w-16 py-0.5" @bind="count" @bind:after="PushAsync" />
+            </label>
+            <label class="flex items-center justify-between gap-2">in a row
+                <input type="number" min="1" max="64" class="field w-16 py-0.5" @bind="perRow" @bind:after="PushAsync" />
+            </label>
+            <label class="flex items-center gap-2"><input type="checkbox" @bind="multicolor" @bind:after="PushAsync" /> multicolor</label>
+            <ColorChoice Label="ink" @bind-Value="Ink" @bind-Value:after="PushAsync" />
+            <ColorChoice Label="background" @bind-Value="Background" @bind-Value:after="PushAsync" />
+            <ColorChoice Label="multicolor 1" @bind-Value="Multicolor1" @bind-Value:after="PushAsync" />
+            <ColorChoice Label="multicolor 2" @bind-Value="Multicolor2" @bind-Value:after="PushAsync" />
+            <label class="flex items-center justify-between gap-2">zoom
+                <select class="field py-0.5" @bind="Zoom" @bind:after="PushAsync">
+                    @for (int z = 1; z <= 6; z++) { <option value="@z">@(z)x</option> }
+                </select>
+            </label>
+            <label class="flex items-center gap-2"><input type="checkbox" @bind="Grid" @bind:after="PushAsync" /> grid</label>
+            <button class="tool border border-night-700" @onclick="AsVicAsync" title="The charset, the multicolors and the background the VIC-II has now">↯ As the VIC-II has it</button>
+            <button class="tool border border-night-700" @onclick='() => CopyAsync("charset")'>⧉ Copy as charset</button>
+            <p class="text-night-400">Click on a character to start there; the wheel, the arrow keys and Page Up and Down move the offset. @Message</p>
+        </div>
+    </aside>
+</div>
+
+@code {
+    protected override string Kind => "charset";
+
+    string source = "ram";
+    int count = 256, perRow = 16;
+    bool multicolor;
+    int? offset;
+
+    protected override void UseVic(VicInfo vic)
+    {
+        multicolor = vic.Multicolor;
+        Background = vic.Background;
+        Multicolor1 = vic.Multicolor1;
+        Multicolor2 = vic.Multicolor2;
+        source = vic.CharsetIsRom ? "rom" : "ram";
+        offset = vic.CharsetIsRom ? vic.Charset & 0x0FFF : vic.Charset;
+    }
+
+    protected override Dictionary<string, object?> Settings()
+    {
+        var settings = new Dictionary<string, object?>
+        {
+            ["source"] = source, ["count"] = Math.Clamp(count, 1, 1024), ["perRow"] = Math.Clamp(perRow, 1, 64), ["multicolor"] = multicolor,
+            ["zoom"] = Zoom, ["grid"] = Grid, ["background"] = Background, ["multicolor1"] = Multicolor1, ["multicolor2"] = Multicolor2, ["ink"] = Ink,
+        };
+        if (offset is { } start) { settings["offset"] = start; offset = null; }   // sent once: after that, the view owns the offset
+        return settings;
+    }
+}

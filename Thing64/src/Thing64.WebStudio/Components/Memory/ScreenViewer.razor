@@ -1,0 +1,97 @@
+@inherits MemoryViewBase
+
+@* A screen of characters made from the bytes at the offset (screen codes), with the characters and the colors you choose: to find the screen of a program *@
+<div class="@(Active ? "flex" : "hidden") min-h-0 flex-1">
+    <div @ref="Host" class="min-w-0 flex-1"></div>
+    <aside class="w-64 shrink-0 space-y-3 overflow-y-auto border-l border-night-800 bg-night-950 p-3">
+        <div class="space-y-1">
+            <div class="text-[11px] font-semibold tracking-wider text-night-300 uppercase">Screen</div>
+            <label class="flex items-center justify-between gap-2">columns
+                <input type="number" min="1" max="80" class="field w-16 py-0.5" @bind="columns" @bind:after="PushAsync" />
+            </label>
+            <label class="flex items-center justify-between gap-2">rows
+                <input type="number" min="1" max="50" class="field w-16 py-0.5" @bind="screenRows" @bind:after="PushAsync" />
+            </label>
+            <label class="flex items-center justify-between gap-2">characters
+                <select class="field py-0.5" @bind="screenCharset" @bind:after="PushAsync">
+                    <option value="vic">as the VIC-II sees them</option>
+                    <option value="upper">ROM, upper case</option>
+                    <option value="lower">ROM, lower case</option>
+                    <option value="ram">RAM at...</option>
+                </select>
+            </label>
+            @if (screenCharset == "ram")
+            {
+                <label class="flex items-center justify-between gap-2">charset at
+                    <input class="field w-20 py-0.5 font-mono" value="@($"${charsetAddress:X4}")" @onchange="SetCharsetAddress" />
+                </label>
+            }
+            <label class="flex items-center justify-between gap-2">cells
+                <select class="field py-0.5" @bind="cellMode" @bind:after="PushAsync">
+                    <option value="hires">hires</option>
+                    <option value="bycolor">multicolor if the color is 8+</option>
+                    <option value="multicolor">all multicolor</option>
+                </select>
+            </label>
+            <label class="flex items-center justify-between gap-2">colors
+                <select class="field py-0.5" @bind="screenColors" @bind:after="PushAsync">
+                    <option value="colorram">Color RAM</option>
+                    <option value="fixed">one color</option>
+                </select>
+            </label>
+            @if (screenColors == "fixed")
+            {
+                <ColorChoice Label="color" @bind-Value="Ink" @bind-Value:after="PushAsync" />
+            }
+            <ColorChoice Label="background" @bind-Value="Background" @bind-Value:after="PushAsync" />
+            <ColorChoice Label="multicolor 1" @bind-Value="Multicolor1" @bind-Value:after="PushAsync" />
+            <ColorChoice Label="multicolor 2" @bind-Value="Multicolor2" @bind-Value:after="PushAsync" />
+            <label class="flex items-center justify-between gap-2">zoom
+                <select class="field py-0.5" @bind="Zoom" @bind:after="PushAsync">
+                    @for (int z = 1; z <= 6; z++) { <option value="@z">@(z)x</option> }
+                </select>
+            </label>
+            <label class="flex items-center gap-2"><input type="checkbox" @bind="Grid" @bind:after="PushAsync" /> grid</label>
+            <button class="tool border border-night-700" @onclick="AsVicAsync" title="The screen, the multicolors and the background the VIC-II has now">↯ As the VIC-II shows it</button>
+            <p class="text-night-400">Click on a cell to start there; the wheel, the arrow keys and Page Up and Down move the offset.</p>
+        </div>
+    </aside>
+</div>
+
+@code {
+    protected override string Kind => "screen";
+
+    int columns = 40, screenRows = 25, charsetAddress = 0x2800;
+    string screenCharset = "vic", screenColors = "colorram", cellMode = "bycolor";
+    int? offset;
+
+    void SetCharsetAddress(ChangeEventArgs e)
+    {
+        string text = e.Value?.ToString()?.Trim() ?? "";
+        bool ok = text.StartsWith('$') ? int.TryParse(text[1..], System.Globalization.NumberStyles.HexNumber, null, out int address) : int.TryParse(text, out address);
+        if (ok && address is >= 0 and < 65536) { charsetAddress = address; _ = PushAsync(); }
+    }
+
+    protected override void UseVic(VicInfo vic)
+    {
+        screenCharset = "vic";
+        cellMode = vic.Multicolor ? "bycolor" : "hires";
+        charsetAddress = vic.Charset;
+        offset = vic.Screen;
+        Background = vic.Background;
+        Multicolor1 = vic.Multicolor1;
+        Multicolor2 = vic.Multicolor2;
+    }
+
+    protected override Dictionary<string, object?> Settings()
+    {
+        var settings = new Dictionary<string, object?>
+        {
+            ["columns"] = Math.Clamp(columns, 1, 80), ["screenRows"] = Math.Clamp(screenRows, 1, 50), ["screenCharset"] = screenCharset,
+            ["charsetAddress"] = charsetAddress, ["cellMode"] = cellMode, ["screenColors"] = screenColors,
+            ["zoom"] = Zoom, ["grid"] = Grid, ["background"] = Background, ["multicolor1"] = Multicolor1, ["multicolor2"] = Multicolor2, ["ink"] = Ink,
+        };
+        if (offset is { } start) { settings["offset"] = start; offset = null; }
+        return settings;
+    }
+}

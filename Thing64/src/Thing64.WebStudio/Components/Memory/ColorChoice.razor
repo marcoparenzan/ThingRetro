@@ -1,0 +1,19 @@
+@using ThingCommodore.Graphics
+
+@* One of the 16 colors of the C64, by name, with its swatch *@
+<label class="flex items-center justify-between gap-2">@Label
+    <span class="flex items-center gap-1">
+        <span class="h-4 w-4 rounded-sm border border-night-700" style="background: #@C64Palette.Pepto.Rgb[Value].ToString("X6")"></span>
+        <select class="field py-0.5" value="@Value" @onchange="Changed">
+            @for (int c = 0; c < 16; c++) { <option value="@c">@c @C64Palette.Names[c]</option> }
+        </select>
+    </span>
+</label>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public int Value { get; set; }
+    [Parameter] public EventCallback<int> ValueChanged { get; set; }
+
+    Task Changed(ChangeEventArgs e) => ValueChanged.InvokeAsync(int.Parse(e.Value!.ToString()!));
+}

@@ -200,17 +200,21 @@ public partial class Board
 
     // For tools: the memory of the machine. The 64 KB of RAM (also what is under the BASIC and KERNAL ROMs and the I/O,
     // which the CPU does not see), the 1024 nibbles of Color RAM, the VIC-II registers $D000-$D03F, the 4 KB of the
-    // character ROM, then the VIC-II bank and the CPU port ($01)
+    // character ROM, then the VIC-II bank and the CPU port ($01), then the BASIC and KERNAL ROMs (so that a viewer can show the memory as
+    // the CPU sees it)
     public byte[] CaptureMemory()
     {
-        const int Ram = 65536, Colors = 1024, Registers = 64, Characters = 4096;
-        var data = new byte[Ram + Colors + Registers + Characters + 2];
+        const int Ram = 65536, Colors = 1024, Registers = 64, Characters = 4096, Roms = 8192;
+        var data = new byte[Ram + Colors + Registers + Characters + 2 + 2 * Roms];
         for (int i = 0; i < Ram; i++) data[i] = ram64.Address((ushort)i);
         for (int i = 0; i < Colors; i++) data[Ram + i] = colorRam.Address((ushort)i);
         CopyVicRegisters(data, Ram + Colors);
         for (int i = 0; i < Characters; i++) data[Ram + Colors + Registers + i] = Chargen((ushort)i);
-        data[^2] = (byte)vicBank;
-        data[^1] = cpu is null ? (byte)0xFF : cpu.Port.Pins;
+        int at = Ram + Colors + Registers + Characters;
+        data[at] = (byte)vicBank;
+        data[at + 1] = cpu is null ? (byte)0xFF : cpu.Port.Pins;
+        basic.CopyTo(data, at + 2);
+        kernal.CopyTo(data, at + 2 + Roms);
         return data;
     }
 

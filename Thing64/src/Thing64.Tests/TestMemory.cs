@@ -174,6 +174,23 @@ public sealed class MemoryViewTests
     }
 
     [TestMethod]
+    public void CpuRead_ShouldDecodeTheMemoryAsTheCpuSeesIt()
+    {
+        var board = NewBoard();
+        board.RunCycles(3 * 985248);
+        board.Poke(0xA000, 0x55);                               // the RAM under BASIC
+        var memory = new MemoryCapture(board.CaptureMemory());
+
+        Assert.AreEqual(board.Peek(0xA000), memory.CpuRead(0xA000), "BASIC, not the RAM under it");
+        Assert.AreEqual(board.Peek(0xE000), memory.CpuRead(0xE000), "KERNAL");
+        Assert.AreEqual(board.Peek(0x0400), memory.CpuRead(0x0400), "RAM");
+        Assert.AreEqual(board.Peek(0xD021) & 15, memory.CpuRead(0xD021) & 15, "VIC-II register");
+        Assert.AreEqual(board.Peek(0xD800) & 15, memory.CpuRead(0xD800), "Color RAM");
+        Assert.AreEqual(-1, memory.CpuRead(0xDC00), "the CIAs are not in a capture");
+        for (int address = 0xA000; address < 0xA100; address++) Assert.AreEqual(board.Peek((ushort)address), memory.CpuRead(address), $"at ${address:X4}");
+    }
+
+    [TestMethod]
     public void Memory_ShouldRefuseTheWrongSize()
     {
         Assert.ThrowsExactly<FormatException>(() => new MemoryCapture(new byte[100]));

@@ -1,0 +1,58 @@
+@inherits MemoryViewBase
+
+@* A bitmap screen, 320x200: 8000 bytes at the offset, with the colors from a screen RAM: to find a picture in the memory *@
+<div class="@(Active ? "flex" : "hidden") min-h-0 flex-1">
+    <div @ref="Host" class="min-w-0 flex-1"></div>
+    <aside class="w-64 shrink-0 space-y-3 overflow-y-auto border-l border-night-800 bg-night-950 p-3">
+        <div class="space-y-1">
+            <div class="text-[11px] font-semibold tracking-wider text-night-300 uppercase">Bitmap</div>
+            <label class="flex items-center gap-2"><input type="checkbox" @bind="multicolor" @bind:after="PushAsync" /> multicolor</label>
+            <label class="flex items-center justify-between gap-2" title="Its colors: the screen RAM (hires: ink and background; multicolor: two of the colors)">screen RAM at
+                <input class="field w-20 py-0.5 font-mono" value="@($"${bitmapScreen:X4}")" @onchange="SetBitmapScreen" />
+            </label>
+            <ColorChoice Label="background" @bind-Value="Background" @bind-Value:after="PushAsync" />
+            <label class="flex items-center justify-between gap-2">zoom
+                <select class="field py-0.5" @bind="Zoom" @bind:after="PushAsync">
+                    @for (int z = 1; z <= 6; z++) { <option value="@z">@(z)x</option> }
+                </select>
+            </label>
+            <label class="flex items-center gap-2"><input type="checkbox" @bind="Grid" @bind:after="PushAsync" /> grid</label>
+            <button class="tool border border-night-700" @onclick="AsVicAsync" title="The bitmap and the screen RAM the VIC-II has now">↯ As the VIC-II shows it</button>
+            <p class="text-night-400">Click on a cell to start there; the wheel, the arrow keys and Page Up and Down move the offset.</p>
+        </div>
+    </aside>
+</div>
+
+@code {
+    protected override string Kind => "bitmap";
+
+    int bitmapScreen = 0x0400;
+    bool multicolor;
+    int? offset;
+
+    void SetBitmapScreen(ChangeEventArgs e)
+    {
+        string text = e.Value?.ToString()?.Trim() ?? "";
+        bool ok = text.StartsWith('$') ? int.TryParse(text[1..], System.Globalization.NumberStyles.HexNumber, null, out int address) : int.TryParse(text, out address);
+        if (ok && address is >= 0 and < 65536) { bitmapScreen = address; _ = PushAsync(); }
+    }
+
+    protected override void UseVic(VicInfo vic)
+    {
+        multicolor = vic.Multicolor;
+        bitmapScreen = vic.Screen;
+        offset = vic.Bitmap;
+        Zoom = 2;
+        Background = vic.Background;
+    }
+
+    protected override Dictionary<string, object?> Settings()
+    {
+        var settings = new Dictionary<string, object?>
+        {
+            ["multicolor"] = multicolor, ["bitmapScreen"] = bitmapScreen, ["zoom"] = Zoom, ["grid"] = Grid, ["background"] = Background,
+        };
+        if (offset is { } start) { settings["offset"] = start; offset = null; }
+        return settings;
+    }
+}

@@ -1,0 +1,58 @@
+@inherits MemoryViewBase
+
+@* The bytes of the memory: RAM as it is (also under the ROMs and the I/O), or decoded as the CPU sees it *@
+<div class="@(Active ? "flex" : "hidden") min-h-0 flex-1">
+    <div @ref="Host" class="min-w-0 flex-1"></div>
+    <aside class="w-64 shrink-0 space-y-3 overflow-y-auto border-l border-night-800 bg-night-950 p-3">
+        <div class="space-y-1">
+            <div class="text-[11px] font-semibold tracking-wider text-night-300 uppercase">Memory</div>
+            <label class="flex items-center justify-between gap-2">from
+                <select class="field py-0.5" @bind="source" @bind:after="PushAsync">
+                    <option value="ram">RAM (64 KB), raw</option>
+                    <option value="cpu">as the CPU sees it</option>
+                    <option value="rom">character ROM (4 KB)</option>
+                    <option value="color">Color RAM (1 KB)</option>
+                    <option value="basic">BASIC ROM (8 KB)</option>
+                    <option value="kernal">KERNAL ROM (8 KB)</option>
+                </select>
+            </label>
+            <p class="text-night-400">
+                @if (source == "cpu")
+                {
+                    <text>The memory with BASIC, KERNAL, the character ROM and the I/O where the CPU port ($01) puts them. The SID and the CIAs are not in a snapshot: their bytes are shown as ··.</text>
+                }
+                else
+                {
+                    <text>Raw RAM is all of it, also under the ROMs and the I/O.</text>
+                }
+            </p>
+        </div>
+        <div class="space-y-1">
+            <div class="text-[11px] font-semibold tracking-wider text-night-300 uppercase">Bytes</div>
+            <label class="flex items-center justify-between gap-2">bytes in a row
+                <input type="number" min="1" max="64" class="field w-16 py-0.5" @bind="bytesPerRow" @bind:after="PushAsync" />
+            </label>
+            <label class="flex items-center justify-between gap-2">characters
+                <select class="field py-0.5" @bind="characters" @bind:after="PushAsync">
+                    <option value="ascii">ASCII</option>
+                    <option value="petscii">PETSCII</option>
+                    <option value="screen">screen codes</option>
+                </select>
+            </label>
+            <button class="tool border border-night-700" @onclick='() => CopyAsync("bytes")'>⧉ Copy as .byte</button>
+            <p class="text-night-400">The wheel, the arrow keys and Page Up and Down move the dump; a click on a row starts there. @Message</p>
+        </div>
+    </aside>
+</div>
+
+@code {
+    protected override string Kind => "dump";
+
+    string source = "ram", characters = "petscii";
+    int bytesPerRow = 16;
+
+    protected override Dictionary<string, object?> Settings() => new()
+    {
+        ["source"] = source, ["bytesPerRow"] = Math.Clamp(bytesPerRow, 1, 64), ["characters"] = characters,
+    };
+}
