@@ -2,19 +2,23 @@
 @using System.Text.Json
 @using ThingCommodore.Graphics
 @using Thing64.WebStudio.CodeBehind
+@using IO = System.IO
+@implements IRegionEditor
 @implements IDisposable
 @inject IJSRuntime JS
 
-@* An image set (.imgset.json): several pictures that become screens of characters (40x25 or less) sharing one charset. The settings
-   on top say how they are reduced (size in characters, hires or multicolor, how the picture is resampled, its tones, the colors
-   shared by all); every change converts again. "Write files" makes the files the visual editors already open: name.asm (the
-   charset region) and one file for each picture (a screen region), so the characters and the screens are edited with the charset
-   editor and the screen editor, and pictures can be added later without losing what was edited by hand *@
+@* The editor of a ;@ imageset region: several pictures that become screens of characters (40x25 or less) sharing one charset.
+   The settings are the parameters of the ;@ imageset lines, so the source shows them (and opens this editor from the link above
+   them). They say how the pictures are reduced: the size in characters, hires or multicolor, how a picture is resampled, its
+   tones, the colors shared by all; every change converts again. "Write charset and screens" writes, after the region, a ;@ charset
+   region and a ;@ screen region for each picture: the same ones the charset editor and the screen editor open, so the characters
+   and the screens are edited with them, and pictures can be added later without losing what was edited by hand. Save writes the
+   ;@ imageset lines only *@
 <div class="absolute inset-0 flex flex-col overflow-hidden @(Visible ? null : "invisible")">
     <div class="flex flex-wrap items-end gap-3 border-b border-night-800 bg-night-950 px-3 py-2 text-xs text-night-200">
         <label class="flex flex-col gap-1">Name
-            <input class="field w-32 font-mono" value="@asset.Name" placeholder="@ImageSetAsset.NameOf(Path)"
-                   @onchange="e => Update(a => a with { Name = Blank(e.Value?.ToString()) })" title="The labels, and the file name.asm" />
+            <input class="field w-32 font-mono" value="@asset.Name" placeholder="@Fallback"
+                   @onchange="e => Update(a => a with { Name = Blank(e.Value?.ToString()) })" title="The labels: name__characters, name__FIRST..." />
         </label>
         <label class="flex flex-col gap-1">Colors
             <select class="field" value="@(asset.Multicolor ? "multicolor" : "hires")" @onchange='e => Update(a => a with { Multicolor = e.Value?.ToString() == "multicolor" })'>
@@ -41,7 +45,8 @@
                 <option value="colodore">colodore</option>
             </select>
         </label>
-        <span class="ml-auto self-center">
+        <span class="ml-auto self-center font-mono text-chip-300">@File</span>
+        <span class="self-center">
             @if (converting) { <span class="animate-pulse text-chip-300">converting...</span> }
         </span>
     </div>
@@ -110,9 +115,9 @@
                         <span class="truncate font-mono text-chip-300" title="@picture.Path">@picture.Path</span>
                         @if (picture.Image is not null) { <span class="text-night-400">@picture.Image.Width x @picture.Image.Height</span> }
                         <span class="ml-auto"></span>
-                        @if (screen is not null && ScreenWritten(screen))
+                        @if (screen is not null && ScreenRegion(screen) is { } written)
                         {
-                            <button class="tool border border-night-700" @onclick="() => EditScreen(screen)" title="Open the screen in the screen editor">✎ Screen</button>
+                            <button class="tool border border-night-700" @onclick="() => EditRegion(written)" title="Open the screen in the screen editor">✎ Screen</button>
                         }
                         <button class="tool border border-night-700 disabled:opacity-30" disabled="@(index == 0)" @onclick="() => Move(index, -1)" title="Earlier: its characters come first in the charset">↑</button>
                         <button class="tool border border-night-700 disabled:opacity-30" disabled="@(index == pictures.Count - 1)" @onclick="() => Move(index, 1)">↓</button>
@@ -147,34 +152,24 @@
             <img src="@charsetUrl" alt="" class="pixelated mb-3 rounded border border-night-800" style="width: @(charsetWidth * 2)px" />
 
             <label class="mb-3 flex items-start gap-2" title="For pictures added after the charset was edited by hand">
-                <input type="checkbox" class="mt-0.5" checked="@asset.KeepCharset" disabled="@(!CharsetExists)" @onchange="e => Update(a => a with { KeepCharset = (bool)e.Value! })" />
-                <span>Keep the characters already in <span class="font-mono text-night-100">@CharsetPath</span>
-                    <span class="text-night-400">(@(CharsetExists ? "the file is there" : "not written yet")): they stay where they are, the pictures use them when they have the same bytes, and the new characters follow. Without it the charset is made again from the pictures.</span></span>
+                <input type="checkbox" class="mt-0.5" checked="@asset.KeepCharset" disabled="@(CharsetRegionLine() is null)" @onchange="e => Update(a => a with { KeepCharset = (bool)e.Value! })" />
+                <span>Keep the characters already written
+                    <span class="text-night-400">(@(CharsetRegionLine() is null ? "nothing written yet" : "the charset is in " + File)): they stay where they are, the pictures use them when they have the same bytes, and the new characters follow. Without it the charset is made again from the pictures.</span></span>
             </label>
 
-            <div class="mb-1 text-[11px] font-semibold tracking-wider text-night-300 uppercase">Files</div>
-            <table class="mb-3 w-full max-w-3xl text-left">
-                <tbody class="text-night-100">
-                    @foreach (var file in Files())
-                    {
-                        <tr class="border-t border-night-800">
-                            <td class="py-1 pr-3 font-mono text-chip-300">@file.Path</td>
-                            <td class="pr-3 text-night-300">@file.What</td>
-                            <td class="text-night-400">@(!File.Exists(Project.FullPath(file.Path)) ? "new" : Project.ReadText(file.Path) == file.Text ? "up to date" : "will be replaced")</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
             <div class="mb-3 flex flex-wrap items-center gap-2">
-                <button class="rounded border border-chip-400 bg-night-700 px-3 py-1.5 text-white hover:bg-night-600" @onclick="WriteFiles">Write files</button>
-                <button class="rounded border border-night-600 px-3 py-1.5 hover:border-chip-400 disabled:opacity-40" disabled="@(!CharsetExists)" @onclick="EditCharset"
+                <button class="rounded border border-chip-400 bg-night-700 px-3 py-1.5 text-white hover:bg-night-600" @onclick="WriteGenerated"
+                        title="@("The shared colors, the ;@ charset region and a ;@ screen region for each picture, after the ;@ imageset lines of " + File)">Write charset and screens</button>
+                <span class="text-night-400">@GeneratedState()</span>
+                <button class="rounded border border-night-600 px-3 py-1.5 hover:border-chip-400 disabled:opacity-40" disabled="@(CharsetRegionLine() is null)" @onclick="EditCharset"
                         title="Open the charset in the charset editor">✎ Edit charset</button>
+                <button class="rounded border border-night-600 px-3 py-1.5 hover:border-chip-400" @onclick="ShowSource" title="The assembly, in the code editor">&lt;/&gt; Show the code</button>
             </div>
 
-            @if (CharsetExists && !Included)
+            @if (CharsetRegionLine() is not null && !Included)
             {
                 <p class="mb-2 max-w-3xl rounded border border-amber-700 bg-amber-950/30 px-3 py-2 text-amber-200">
-                    The program does not include these files yet, and the editors read the characters and the screens from the assembled program:
+                    The program does not include @File yet, and the editors read the characters and the screens from the assembled program:
                     add <span class="font-mono">!source "@IncludePath"</span> to <span class="font-mono">@MainPath</span>
                     <button class="ml-2 rounded border border-amber-600 px-2 py-0.5 hover:bg-amber-900/40" @onclick="AddToMain">Add it at the end of @MainPath</button>
                 </p>
@@ -185,31 +180,31 @@
 
 @code {
     [Parameter, EditorRequired] public Project Project { get; set; } = default!;
-    [Parameter, EditorRequired] public string Path { get; set; } = "";
+    [Parameter, EditorRequired] public string File { get; set; } = "";
+    [Parameter, EditorRequired] public int Index { get; set; }
+    [Parameter, EditorRequired] public IRegionHost Host { get; set; } = default!;
     [Parameter] public bool Visible { get; set; }
     [Parameter] public EventCallback<bool> OnDirty { get; set; }
 
     // Opens a region of a file in its visual editor (the file and the line of the ;@ line, from 1)
     [Parameter] public EventCallback<(string File, int Line)> OnOpenRegion { get; set; }
 
-    // The files were written: the tree of the project shows them
-    [Parameter] public EventCallback OnFilesWritten { get; set; }
+    // Shows a file in the code editor
+    [Parameter] public EventCallback<(string File, int Line)> OnShowCode { get; set; }
 
-    // The page around: the files may be open in Monaco
-    [Parameter] public IRegionHost? Host { get; set; }
+    // The files of the project changed: the tree shows them
+    [Parameter] public EventCallback OnFilesWritten { get; set; }
 
     sealed class Picture
     {
-        public required string Path { get; init; }      // relative to the folder of the set
+        public required string Path { get; init; }      // relative to the folder of the source
         public RgbImage? Image { get; set; }
         public string? Error { get; set; }
         public string Stamp { get; set; } = "";
     }
 
-    sealed record FileToWrite(string Path, string Text, string What);
-
     ImageSetAsset asset = new();
-    string savedJson = "";
+    string savedHeader = "";
     readonly List<Picture> pictures = [];
     ImageSetConversion? conversion;
     readonly Dictionary<string, string> previews = [];
@@ -220,53 +215,64 @@
     int version;
     DotNetObjectReference<ImageSetEditor>? self;
 
-    public bool Dirty => asset.ToJson() != savedJson;
+    string Header => string.Join("\n", asset.HeaderLines(Fallback));
+    public bool Dirty => Header != savedHeader;
 
-    string Folder => System.IO.Path.GetDirectoryName(Path)?.Replace('\\', '/') ?? "";
-    string SetName => CapturedCharset.Identifier(asset.Name ?? ImageSetAsset.NameOf(Path));
-    string CharsetPath => Combine(Folder, SetName + ".asm");
-    string IncludePath => Combine(Folder, SetName + ".set.asm");
-    bool CharsetExists => File.Exists(Project.FullPath(CharsetPath));
+    string Folder => IO.Path.GetDirectoryName(File)?.Replace('\\', '/') ?? "";
+    string Fallback => CapturedCharset.Identifier(IO.Path.GetFileNameWithoutExtension(File));
+    string SetName => CapturedCharset.Identifier(asset.Name ?? Fallback);
+    string CharsetLabel => SetName + "__characters";
     string MainPath => ProgramImage.MainSource(Project);
+
+    // The file reaches the program through the main source (or is the main source)
+    string IncludePath
+    {
+        get
+        {
+            string main = Project.FullPath(MainPath);
+            return IO.Path.GetRelativePath(IO.Path.GetDirectoryName(main)!, Project.FullPath(File)).Replace('\\', '/');
+        }
+    }
 
     bool Included
     {
         get
         {
+            if (string.Equals(MainPath, File, StringComparison.OrdinalIgnoreCase)) return true;
             string main = Project.FullPath(MainPath);
-            return File.Exists(main) && File.ReadAllText(main).Contains(SetName + ".set.asm", StringComparison.OrdinalIgnoreCase);
+            return IO.File.Exists(main) && IO.File.ReadAllText(main).Contains(IO.Path.GetFileName(File), StringComparison.OrdinalIgnoreCase);
         }
     }
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
         self = DotNetObjectReference.Create(this);
-        await Load();
+        Load();
     }
 
     public void Dispose() => self?.Dispose();
 
-    // From the disk: the .imgset.json and its pictures
-    public async Task Load()
+    string[] Lines() => Project.ReadText(File).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+
+    AsmRegion MyRegion(string[] lines) =>
+        AsmRegion.Find(lines).ElementAtOrDefault(Index) is { Editor: "imageset" } region ? region : throw new FormatException($"The region {Index + 1} of {File} is not an image set any more");
+
+    // From the source: the ;@ imageset lines and the pictures
+    public void Load()
     {
         try
         {
-            asset = ImageSetAsset.Parse(Project.ReadText(Path));
+            asset = ImageSetAsset.FromParameters(MyRegion(Lines()).Parameters);
             error = null;
         }
-        catch (Exception e) when (e is JsonException or IOException or InvalidDataException)
+        catch (Exception e) when (e is FormatException or IOException)
         {
-            error = $"{System.IO.Path.GetFileName(Path)}: {e.Message}";
+            error = $"{File}: {e.Message}";
         }
-        savedJson = asset.ToJson();
-        LoadPictures();
-        await Convert();
-    }
-
-    void LoadPictures()
-    {
+        savedHeader = Header;
         pictures.Clear();
         foreach (string source in asset.Sources) pictures.Add(ReadPicture(source));
+        _ = Convert();
     }
 
     Picture ReadPicture(string source)
@@ -276,7 +282,7 @@
         {
             string full = Combine(Folder, source);
             picture.Image = Png.Read(Project.ReadBytes(full));
-            picture.Stamp = File.GetLastWriteTimeUtc(Project.FullPath(full)).Ticks.ToString();
+            picture.Stamp = IO.File.GetLastWriteTimeUtc(Project.FullPath(full)).Ticks.ToString();
         }
         catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException)
         {
@@ -285,12 +291,29 @@
         return picture;
     }
 
-    public Task<bool> Save()
+    // The ;@ imageset lines written again: nothing else in the source changes
+    public async Task<bool> Save()
     {
-        Project.WriteText(Path, asset.ToJson());
-        savedJson = asset.ToJson();
-        _ = OnDirty.InvokeAsync(false);
-        return Task.FromResult(true);
+        if (!await Host.CanWriteAsync(File)) return false;
+        try
+        {
+            string[] lines = Lines();
+            var region = MyRegion(lines);
+            string text = Project.ReadText(File);
+            string newline = text.Contains("\r\n") ? "\r\n" : "\n";
+            string[] changed = ImageSetSource.ReplaceHeader(lines, region.StartLine, region.EndLine, asset.HeaderLines(Fallback));
+            string result = string.Join(newline, changed);
+            Project.WriteText(File, text.EndsWith('\n') && !result.EndsWith('\n') ? result + newline : result);
+            await Host.WrittenAsync(File);
+            savedHeader = Header;
+            await OnDirty.InvokeAsync(false);
+            return true;
+        }
+        catch (Exception e) when (e is FormatException or IOException or UnauthorizedAccessException)
+        {
+            error = e.Message;
+            return false;
+        }
     }
 
     async Task Update(Func<ImageSetAsset, ImageSetAsset> change)
@@ -304,15 +327,15 @@
 
     async Task ChooseImages() => await JS.InvokeVoidAsync("thing64Studio.chooseImages", self);
 
-    // One picture from the disk, already a PNG (studio.js): copied next to the set
+    // One picture from the disk, already a PNG (studio.js): copied next to the source
     [JSInvokable]
     public void ImageChosen(string fileName, byte[] png)
     {
-        string stem = string.Concat(System.IO.Path.GetFileNameWithoutExtension(fileName).Select(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' ? c : '-')).Trim('-');
+        string stem = string.Concat(IO.Path.GetFileNameWithoutExtension(fileName).Select(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' ? c : '-')).Trim('-');
         if (stem.Length == 0) stem = "image";
         string name = stem;
-        for (int n = 2; File.Exists(Project.FullPath(Combine(Folder, name + ".png"))); n++) name = $"{stem}-{n}";
-        File.WriteAllBytes(Project.FullPath(Combine(Folder, name + ".png")), png);
+        for (int n = 2; IO.File.Exists(Project.FullPath(Combine(Folder, name + ".png"))); n++) name = $"{stem}-{n}";
+        IO.File.WriteAllBytes(Project.FullPath(Combine(Folder, name + ".png")), png);
         asset = asset with { Sources = [.. asset.Sources, name + ".png"] };
         pictures.Add(ReadPicture(name + ".png"));
     }
@@ -326,13 +349,13 @@
         StateHasChanged();
     }
 
-    // The PNGs of the project that are not in the set, relative to the set's folder
+    // The PNGs of the project that are not in the set, relative to the folder of the source
     List<string> Unused()
     {
         var used = asset.Sources.ToHashSet(StringComparer.OrdinalIgnoreCase);
         string folder = Project.FullPath(Folder);
         return Directory.EnumerateFiles(Project.Folder, "*.png", SearchOption.AllDirectories)
-            .Select(f => System.IO.Path.GetRelativePath(folder, f).Replace('\\', '/'))
+            .Select(f => IO.Path.GetRelativePath(folder, f).Replace('\\', '/'))
             .Where(p => !used.Contains(p) && !p.Split('/').Any(part => part.StartsWith('.') && part != ".."))
             .Order().ToList();
     }
@@ -379,6 +402,7 @@
             previews.Clear();
             charsetUrl = null;
             converting = false;
+            StateHasChanged();
             return;
         }
         converting = true;
@@ -405,98 +429,112 @@
         finally
         {
             if (mine == version) converting = false;
+            StateHasChanged();
         }
     }
 
-    // The characters of name.asm as they are now (edited by hand, perhaps), with their comments
+    // The ;@ charset region this set wrote, found by its label
+    AsmRegion? CharsetRegionOf(string[] lines) =>
+        AsmRegion.Find(lines).FirstOrDefault(r => r.Editor == "charset" && r.Labels.FirstOrDefault() == CharsetLabel);
+
+    // The line of the ;@ charset region (from 1), or null if it was not written yet
+    int? CharsetRegionLine() => CharsetRegionOf(Lines()) is { } region ? region.StartLine + 1 : null;
+
+    // The characters as they are now (edited by hand, perhaps), with their comments
     List<(byte[] Bytes, string Description)>? ReadCharset()
     {
-        if (!CharsetExists) return null;
-        string[] lines = Project.ReadText(CharsetPath).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
-        var region = AsmRegion.Find(lines).FirstOrDefault(r => r.Editor == "charset")
-            ?? throw new FormatException($"{CharsetPath} has no ;@ charset region");
-        return CharmapFile.Read(lines, region, region.Labels.First(), null)
+        string[] lines = Lines();
+        if (CharsetRegionOf(lines) is not { } region) return null;
+        return CharmapFile.Read(lines, region, CharsetLabel, null)
             .Select(c => (c.Bytes.Select(b => (byte)b).ToArray(), c.Description)).ToList();
     }
 
-    // ------------------------------------------------------------------------------------------------------- files
+    // ----------------------------------------------------------------------------------------------------- the source
 
-    List<FileToWrite> Files()
+    string GeneratedText() => conversion!.GeneratedText();
+
+    // The text the editor wrote last time, between its markers
+    string? WrittenText(string[] lines)
     {
-        var files = new List<FileToWrite> { new(CharsetPath, conversion!.CharsetText(), $"the charset: {conversion.Characters.Count} characters") };
-        files.AddRange(conversion.Screens.Select(s => new FileToWrite(Combine(Folder, conversion.ScreenFileName(s)), conversion.ScreenText(s), $"the screen of {s.Source}")));
-        files.Add(new(IncludePath, IncludeText(), "includes all of them: this is the one to !source"));
-        return files;
+        int start = Array.FindIndex(lines, l => l.StartsWith($"; >>> image set {SetName} ", StringComparison.Ordinal));
+        if (start < 0) return null;
+        int end = Array.FindIndex(lines, start, l => l.TrimEnd() == ImageSetSource.EndMarker(SetName));
+        return end < 0 ? null : string.Join("\n", lines[start..(end + 1)]);
     }
 
-    string IncludeText()
+    string GeneratedState()
     {
-        var lines = new List<string>
-        {
-            $"; {SetName}: the files of the image set {System.IO.Path.GetFileName(Path)}. Include this one: !source \"{System.IO.Path.GetFileName(IncludePath)}\"",
-            $"!source \"{System.IO.Path.GetFileName(CharsetPath)}\"",
-        };
-        lines.AddRange(conversion!.Screens.Select(s => $"!source \"{conversion.ScreenFileName(s)}\""));
-        return string.Join("\n", lines) + "\n";
+        if (conversion is null) return "";
+        string? written = WrittenText(Lines());
+        string text = string.Join("\n", GeneratedText().ReplaceLineEndings("\n").TrimEnd('\n').Split('\n'));
+        return written is null ? "not written yet" : written == text ? "up to date" : "differs from what is in the source";
     }
 
-    bool ScreenWritten(SetScreen screen) => File.Exists(Project.FullPath(Combine(Folder, conversion!.ScreenFileName(screen))));
-
-    async Task WriteFiles()
+    async Task WriteGenerated()
     {
         if (conversion is null) return;
         message = null;
-        var files = Files();
-        var replaced = files.Where(f => File.Exists(Project.FullPath(f.Path)) && Project.ReadText(f.Path) != f.Text).Select(f => f.Path).ToList();
-        if (replaced.Count > 0 && !await JS.InvokeAsync<bool>("confirm",
-                $"Writing replaces what changed in {string.Join(", ", replaced)}. What was edited by hand in them is lost (to keep the characters of the charset, tick \"Keep the characters already in...\"). Write them anyway?"))
-            return;
-        foreach (var file in files)
-            if (Host is not null && !await Host.CanWriteAsync(file.Path)) return;
+        if (!await Host.CanWriteAsync(File)) return;
         try
         {
-            foreach (var file in files)
-            {
-                if (!Directory.Exists(System.IO.Path.GetDirectoryName(Project.FullPath(file.Path)))) Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Project.FullPath(file.Path))!);
-                Project.WriteText(file.Path, file.Text);
-                if (Host is not null) await Host.WrittenAsync(file.Path);
-            }
-            message = $"{files.Count} files written next to {System.IO.Path.GetFileName(Path)}";
+            string text = Project.ReadText(File);
+            string newline = text.Contains("\r\n") ? "\r\n" : "\n";
+            string[] lines = Lines();
+            string? written = WrittenText(lines);
+            string now = string.Join("\n", GeneratedText().ReplaceLineEndings("\n").TrimEnd('\n').Split('\n'));
+            if (written is not null && written != now && !await JS.InvokeAsync<bool>("confirm",
+                    $"This replaces the charset and the screens written before in {File}. What was edited by hand in them is lost" +
+                    (asset.KeepCharset ? " (but the characters of the charset stay: \"Keep the characters\" is on)." : " (tick \"Keep the characters already written\" to keep the charset)") +
+                    " Write them anyway?"))
+                return;
+
+            // The ;@ imageset lines first (the settings of this conversion), then what comes after them
+            var region = MyRegion(lines);
+            lines = ImageSetSource.ReplaceHeader(lines, region.StartLine, region.EndLine, asset.HeaderLines(Fallback));
+            region = MyRegion(lines);
+            lines = ImageSetSource.ReplaceGenerated(lines, region.EndLine, SetName, GeneratedText());
+            string result = string.Join(newline, lines);
+            Project.WriteText(File, result.EndsWith('\n') ? result : result + newline);
+            await Host.WrittenAsync(File);
+            savedHeader = Header;
+            await OnDirty.InvokeAsync(false);
+            message = $"The charset ({conversion.Characters.Count} characters) and {conversion.Screens.Count} screen{(conversion.Screens.Count == 1 ? "" : "s")} are in {File}";
             await OnFilesWritten.InvokeAsync();
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e) when (e is FormatException or IOException or UnauthorizedAccessException)
         {
             error = e.Message;
         }
     }
 
-    // The ;@ line of the first region of a file, from 1
-    int RegionLine(string path)
+    // The ;@ screen region this set wrote for a picture (the line from 1), or null
+    int? ScreenRegion(SetScreen screen) =>
+        AsmRegion.Find(Lines()).FirstOrDefault(r => r.Editor == "screen" && r.Parameters.GetValueOrDefault("screen") == screen.Name + "__screen") is { } region ? region.StartLine + 1 : null;
+
+    async Task EditRegion(int line) => await OnOpenRegion.InvokeAsync((File, line));
+
+    async Task EditCharset()
     {
-        string[] lines = Project.ReadText(path).Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
-        return AsmRegion.Find(lines).FirstOrDefault()?.StartLine + 1 ?? 1;
+        if (CharsetRegionLine() is { } line) await EditRegion(line);
     }
 
-    async Task EditCharset() => await OnOpenRegion.InvokeAsync((CharsetPath, RegionLine(CharsetPath)));
-
-    async Task EditScreen(SetScreen screen)
+    async Task ShowSource()
     {
-        string file = Combine(Folder, conversion!.ScreenFileName(screen));
-        await OnOpenRegion.InvokeAsync((file, RegionLine(file)));
+        int line = MyRegion(Lines()).StartLine + 1;
+        await OnShowCode.InvokeAsync((File, line));
     }
 
-    // The line that makes the program include the set, at the end of the main source
+    // The line that makes the program include the source, at the end of the main source
     async Task AddToMain()
     {
         string main = MainPath;
-        if (Host is not null && !await Host.CanWriteAsync(main)) return;
+        if (!await Host.CanWriteAsync(main)) return;
         try
         {
-            string relative = System.IO.Path.GetRelativePath(System.IO.Path.GetDirectoryName(Project.FullPath(main))!, Project.FullPath(IncludePath)).Replace('\\', '/');
             string text = Project.ReadText(main);
             if (!text.EndsWith('\n')) text += "\n";
-            Project.WriteText(main, text + $"\n; the image set {SetName}: its charset and its screens\n!source \"{relative}\"\n");
-            if (Host is not null) await Host.WrittenAsync(main);
+            Project.WriteText(main, text + $"\n; the image set {SetName}: its charset and its screens\n!source \"{IncludePath}\"\n");
+            await Host.WrittenAsync(main);
             message = $"The line was added at the end of {main}: move it where the data should go";
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

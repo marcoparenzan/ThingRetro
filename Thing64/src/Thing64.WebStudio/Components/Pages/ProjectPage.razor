@@ -122,6 +122,12 @@ else
                     <CharmapEditor @key="tab" @ref="regionEditors[tab]" Project="project!" File="@RegionFile(tab)" Index="@RegionIndex(tab)" Host="this"
                                    Visible="@(tab == active && !showComputer)" OnDirty="changed => Changed(tab, changed)" />
                 }
+                else if (regionKinds.GetValueOrDefault(tab) == "imageset")
+                {
+                    <ImageSetEditor @key="tab" @ref="regionEditors[tab]" Project="project!" File="@RegionFile(tab)" Index="@RegionIndex(tab)" Host="this"
+                                    Visible="@(tab == active && !showComputer)" OnDirty="changed => Changed(tab, changed)"
+                                    OnOpenRegion="args => OpenRegion(args.File, args.Line)" OnShowCode="args => GoTo(args.File, args.Line)" OnFilesWritten="() => Refresh()" />
+                }
                 else if (regionKinds.GetValueOrDefault(tab) == "sprites")
                 {
                     <SpriteEditor @key="tab" @ref="regionEditors[tab]" Project="project!" File="@RegionFile(tab)" Index="@RegionIndex(tab)" Host="this"
@@ -137,11 +143,6 @@ else
             {
                 <GraphicsEditor @key="tab" @ref="graphicsEditors[tab]" Project="project!" Path="@tab" Visible="@(tab == active && !showComputer)"
                                 OnDirty="changed => Changed(tab, changed)" />
-            }
-            @foreach (var tab in tabs.Where(IsImageSet))
-            {
-                <ImageSetEditor @key="tab" @ref="imageSetEditors[tab]" Project="project!" Path="@tab" Host="this" Visible="@(tab == active && !showComputer)"
-                                OnDirty="changed => Changed(tab, changed)" OnOpenRegion="args => OpenRegion(args.File, args.Line)" OnFilesWritten="() => Refresh()" />
             }
             @if (tabs.Count == 0 && !showComputer)
             {
@@ -393,8 +394,8 @@ else
 
     // Which tabs Monaco shows: text files, except graphics assets and regions, which have their own editors;
     // anything else is binary: PNG pictures in the image viewer, the rest in the hex viewer
-    static bool IsMonaco(string? path) => path is not null && IsText(path) && !IsGraphics(path) && !IsImageSet(path) && !IsRegion(path);
-    static bool IsBinary(string path) => !IsText(path) && !IsGraphics(path) && !IsImageSet(path) && !IsRegion(path);
+    static bool IsMonaco(string? path) => path is not null && IsText(path) && !IsGraphics(path) && !IsRegion(path);
+    static bool IsBinary(string path) => !IsText(path) && !IsGraphics(path) && !IsRegion(path);
     static bool IsImage(string path) => path.EndsWith(".png", StringComparison.OrdinalIgnoreCase);
 
     readonly Dictionary<string, HexViewer> hexViewers = [];
@@ -408,7 +409,7 @@ else
     readonly Dictionary<string, Thing64.WebStudio.CodeBehind.IRegionEditor> regionEditors = [];
     readonly Dictionary<string, string> regionNames = [];
     readonly Dictionary<string, string> regionKinds = [];
-    static readonly string[] RegionEditors = ["screen", "charset", "sprites", "tilemap", "charmap"];
+    static readonly string[] RegionEditors = ["screen", "charset", "sprites", "tilemap", "charmap", "imageset"];
 
     string TabName(string tab) => IsRegion(tab) ? "▦ " + regionNames.GetValueOrDefault(tab, FileName(RegionFile(tab))) : FileName(tab);
 
@@ -429,7 +430,7 @@ else
                 return;
             }
             string tab = $"{file}#{region.Index}";
-            regionNames[tab] = region.Editor is "sprites" or "charmap" or "charset" ? $"{region.Editor} ({FileName(file)})" : region.Label ?? region.Editor;
+            regionNames[tab] = region.Editor is "sprites" or "charmap" or "charset" or "imageset" ? $"{region.Editor} ({FileName(file)})" : region.Label ?? region.Editor;
             regionKinds[tab] = region.Editor;
             await Open(tab);
         }
@@ -458,24 +459,21 @@ else
 
     readonly Dictionary<string, GraphicsEditor> graphicsEditors = [];
 
-    // Image sets (.imgset.json): several pictures as screens that share a charset, with their own editor
-    static bool IsImageSet(string? path) => path?.EndsWith(ImageSetAsset.Extension, StringComparison.OrdinalIgnoreCase) == true;
-
-    readonly Dictionary<string, ImageSetEditor> imageSetEditors = [];
-
-    // A new, empty image set in the selected folder, open to add the pictures
+    // A new source with an empty image set (a ;@ imageset region) in the selected folder, open in its editor to add the pictures
     async Task NewImageSet()
     {
         try
         {
             string folder = TargetFolder, name = "images";
-            for (int n = 2; File.Exists(project!.FullPath(Combine(folder, name + ImageSetAsset.Extension))); n++) name = $"images-{n}";
-            string path = Combine(folder, name + ImageSetAsset.Extension);
-            project.WriteText(path, new ImageSetAsset().ToJson());
+            for (int n = 2; File.Exists(project!.FullPath(Combine(folder, name + ".asm"))); n++) name = $"images-{n}";
+            string path = Combine(folder, name + ".asm");
+            string text = ImageSetSource.NewSource(new ImageSetAsset(), name);
+            project.WriteText(path, text);
             selected = path;
             ExpandTo(path);
             Refresh();
-            await Open(path);
+            int line = Array.FindIndex(text.Split((char)10), l => l.StartsWith(";@ imageset")) + 1;
+            await OpenRegion(path, line);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -551,7 +549,6 @@ else
         if (dirty.Contains(path) && !await JS.InvokeAsync<bool>("confirm", $"{FileName(path)} has changes that are not saved. Close it anyway?"))
             return;
         if (IsGraphics(path)) graphicsEditors.Remove(path);
-        else if (IsImageSet(path)) imageSetEditors.Remove(path);
         else if (IsRegion(path)) regionEditors.Remove(path);
         else if (IsBinary(path)) { hexViewers.Remove(path); imageViewers.Remove(path); }
         else await JS.InvokeVoidAsync("thing64Studio.close", path);
@@ -648,12 +645,6 @@ else
                 dirty.Remove(path);
                 return true;
             }
-            if (imageSetEditors.TryGetValue(path, out var imageSet))
-            {
-                await imageSet.Save();
-                dirty.Remove(path);
-                return true;
-            }
             if (regionEditors.TryGetValue(path, out var region))
             {
                 if (!await region.Save()) return false;
@@ -734,8 +725,6 @@ else
             }
             if (File.Exists(project!.FullPath(path)) && graphicsEditors.TryGetValue(path, out var graphics))
                 await graphics.Load();
-            else if (File.Exists(project.FullPath(path)) && imageSetEditors.TryGetValue(path, out var imageSet))
-                await imageSet.Load();
             else if (File.Exists(project.FullPath(path)))
                 await JS.InvokeVoidAsync("thing64Studio.reload", path, project.ReadText(path));
             else

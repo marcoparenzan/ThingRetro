@@ -137,10 +137,8 @@ public sealed class ImageSetTests
         StringAssert.Contains(charset, "from title screen.png");
         StringAssert.Contains(screen, ";@ screen width=8 height=2 screen=title_screen__screen colors=title_screen__colors");
         StringAssert.Contains(screen, "charset=my_story__characters first=my_story__FIRST");
-        Assert.AreEqual("title_screen.asm", conversion.ScreenFileName(conversion.Screens[0]));
-        Assert.AreEqual("my_story.asm", conversion.CharsetFileName);
         // 2 rows of 8 codes for the screen and 2 for the colors, from the first code
-        Assert.AreEqual(4, screen.Split('\n').Count(l => l.TrimStart().StartsWith(".byte")));
+        Assert.AreEqual(4, screen.Split((char)10).Count(l => l.TrimStart().StartsWith(".byte")));
         Assert.IsTrue(screen.Contains("$40") || screen.Contains("$41"), "the codes start from the first character's code");
         Assert.AreEqual(2, conversion.Screens.Select(s => s.Name).Distinct().Count());
     }
@@ -194,18 +192,76 @@ public sealed class ImageSetTests
     }
 
     [TestMethod]
-    public void Asset_ShouldReadAndWriteItsJson()
+    public void Header_ShouldWriteTheSettingsAsParametersAndReadThemBack()
     {
-        var set = new ImageSetAsset { Name = "story", Sources = ["a.png", "b.png"], First = 16, Columns = 30, Resample = Resample.Bilinear, Contrast = 20 };
+        var set = new ImageSetAsset
+        {
+            Name = "story", Sources = ["a.png", "my pic, 2.png"], First = 16, Columns = 30, Resample = Resample.Bilinear, Contrast = 20,
+            Fit = Fit.Fill, Background = 6, MaxCharacters = 100, KeepCharset = true, Multicolor = false,
+        };
 
-        var again = ImageSetAsset.Parse(set.ToJson());
+        string[] header = set.HeaderLines("other");
+        var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string line in header)
+            foreach (var pair in line[2..].Split(' ', StringSplitOptions.RemoveEmptyEntries).Skip(line.StartsWith(";@ imageset") ? 1 : 0))
+                parameters[pair[..pair.IndexOf('=')]] = pair[(pair.IndexOf('=') + 1)..];
+        var again = ImageSetAsset.FromParameters(parameters);
 
-        CollectionAssert.AreEqual(set.Sources, again.Sources);
+        Assert.IsTrue(header[0].StartsWith(";@ imageset name=story first=$10"), header[0]);
+        Assert.IsTrue(header.All(l => l.StartsWith(";@")));
+        CollectionAssert.AreEqual(set.Sources, again.Sources, "names with spaces and commas survive");
         Assert.AreEqual(16, again.First);
+        Assert.AreEqual(30, again.Columns);
         Assert.AreEqual(Resample.Bilinear, again.Resample);
         Assert.AreEqual(20, again.Contrast);
-        Assert.AreEqual(240, again.CharacterLimit);
-        Assert.AreEqual("story", ImageSetAsset.NameOf("folder/story.imgset.json"));
-        StringAssert.Contains(set.ToJson(), "\"resample\": \"bilinear\"");
+        Assert.AreEqual(Fit.Fill, again.Fit);
+        Assert.AreEqual(6, again.Background);
+        Assert.AreEqual(100, again.MaxCharacters);
+        Assert.IsTrue(again.KeepCharset);
+        Assert.IsFalse(again.Multicolor);
+        Assert.AreEqual(240, new ImageSetAsset { First = 16 }.CharacterLimit);
+    }
+
+    [TestMethod]
+    public void Header_ShouldLeaveTheDefaultsOut()
+    {
+        string[] header = new ImageSetAsset().HeaderLines("story");
+
+        Assert.AreEqual(1, header.Length);
+        Assert.AreEqual(";@ imageset name=story multicolor=1", header[0]);
+    }
+
+    [TestMethod]
+    public void Header_ShouldRefuseWhatItDoesNotKnow()
+    {
+        Assert.ThrowsExactly<FormatException>(() => ImageSetAsset.FromParameters(new Dictionary<string, string> { ["fit"] = "squash" }));
+        Assert.ThrowsExactly<FormatException>(() => ImageSetAsset.FromParameters(new Dictionary<string, string> { ["columns"] = "many" }));
+    }
+
+    [TestMethod]
+    public void Source_ShouldPutTheGeneratedTextAfterTheRegionAndReplaceItNextTime()
+    {
+        var conversion = Converter.ConvertSet(Pictures(("a.png", Chessboard())), Hires(8, 2), "story");
+        string[] lines = ImageSetSource.NewSource(new ImageSetAsset { Name = "story", Sources = ["a.png"] }, "story").Split((char)10);
+        int end = Array.FindIndex(lines, l => l == ";@ end");
+
+        string[] first = ImageSetSource.ReplaceGenerated(lines, end, "story", conversion.GeneratedText());
+        string[] second = ImageSetSource.ReplaceGenerated(first, end, "story", conversion.GeneratedText());
+
+        Assert.IsTrue(ImageSetSource.HasGenerated(first, "story"));
+        Assert.AreEqual(first.Length, second.Length, "the second time it replaces, it does not add");
+        Assert.AreEqual(1, first.Count(l => l.StartsWith(";@ charset")));
+        Assert.AreEqual(1, first.Count(l => l.StartsWith(";@ screen")));
+        Assert.IsTrue(Array.IndexOf(first, ";@ end") < Array.FindIndex(first, l => l.StartsWith("; >>> image set story")));
+    }
+
+    [TestMethod]
+    public void Source_ShouldReplaceTheHeaderKeepingWhatIsAroundIt()
+    {
+        string[] lines = ["; mine", ";@ imageset name=story", ";@          sources=a.png", ";@ end", "lda #0"];
+
+        string[] changed = ImageSetSource.ReplaceHeader(lines, 1, 3, new ImageSetAsset { Name = "story", Columns = 20 }.HeaderLines("story"));
+
+        CollectionAssert.AreEqual(new[] { "; mine", ";@ imageset name=story multicolor=1 columns=20", ";@ end", "lda #0" }, changed);
     }
 }

@@ -182,14 +182,21 @@ web computer, in WebAssembly, in a tab next to the files (or in a window of its 
   build converts the assets again and writes their data files and an include (`name.inc.asm`, with a label on each
   part and constants for the colors), so the assembly never falls behind the picture. The downsampling can be tuned
   (box, nearest or bilinear resampling; brightness, contrast and saturation).
-- **Image sets** (the 🗂 button, `.imgset.json`): several pictures become screens of characters (40x25 or fewer)
-  that share one charset. The pictures can be added at any time, from the disk or from the project; the settings are the
-  size in characters, hires or multicolor, the first screen code, the character limit, the downsampling and the shared
-  colors (chosen from all the pictures). *Write files* makes `name.asm` (the `;@ charset` region), one file for each
-  picture (a `;@ screen` region) and `name.set.asm`, which includes them all: the charset editor and the screen editor
-  open them as they are, so editing is done with the same editors as any other charset and screen. Ticking *Keep the
-  characters already in name.asm* keeps a charset edited by hand: its characters stay, the pictures reuse them and the
-  new characters follow.
+- **Image sets** (the 🗂 button): several pictures become screens of characters (40x25 or fewer) that share one charset.
+  Like the other editors it is a structured comment in an assembly source, which the studio opens with the link above it
+  (*✎ Edit imageset*) and which shows in the code:
+  ```asm
+  ;@ imageset name=story first=$00 multicolor=1 columns=40 rows=25
+  ;@          resample=nearest brightness=10 sources=title.png,castle.png
+  ;@ end
+  ```
+  The pictures can be added at any time, from the disk or from the project; the settings are the size in characters, hires or
+  multicolor, the first screen code, the character limit, the downsampling (fit, resample, dither, brightness, contrast,
+  saturation) and the shared colors (chosen from all the pictures). *Write charset and screens* writes, after the region, a
+  `;@ charset` region and a `;@ screen` region for each picture, in the same source and between two marker lines: the code shows
+  it, and the charset editor and the screen editor open it with the links above those regions. Ticking *Keep the characters
+  already written* keeps a charset edited by hand: its characters stay, the pictures reuse them and the new characters follow.
+  The program has to `!source` the file, since the editors read the assembled program (the editor offers to add the line).
 - **Editor regions** ("code behind"): data in a source can be marked for a visual editor with comment lines,
   which the assembler ignores. Above the first one Monaco shows "✎ Edit"; saving the editor rewrites only the
   `.byte` lines of the region. The screen editor edits what the C64 shows: screen codes and colors, painted with

@@ -3,13 +3,19 @@ using System.Text.Json;
 
 namespace ThingCommodore.Graphics;
 
-// An image set: several pictures that become screens of characters sharing one charset (a .imgset.json file).
-//   { "name": "story", "first": 0, "sources": ["title.png", "castle.png"], "multicolor": true,
-//     "columns": 40, "rows": 25, "fit": "fit", "resample": "box", "dither": "ordered", "brightness": 10 }
-// Converting it gives the files of a Thing64 project that the visual editors already open: story.asm (a ;@ charset region with
-// the characters of all the pictures, each kept once) and one file for each picture (a ;@ screen region with its screen codes
-// and colors, 40x25 or less). The background and the two multicolors are shared too, so that the screens can follow one another
-// without the program setting the VIC-II again. Colors left out are chosen from all the pictures together
+// An image set: several pictures that become screens of characters sharing one charset. It lives in an assembly source, as a
+// structured comment that the studio opens with its editor (like the other ";@" regions), followed by what the editor wrote:
+//   ;@ imageset name=story first=$00 multicolor=1 columns=40 rows=25
+//   ;@          fit=fit resample=box dither=ordered brightness=10
+//   ;@          sources=title.png,castle.png
+//   ;@ end
+//   ; >>> image set story (written by the editor)
+//   story__FIRST = $00 ...
+//   ;@ charset first=story__FIRST multicolor=1     the characters of all the pictures, each kept once
+//   ;@ screen width=40 height=25 ...               one for each picture: its screen codes and colors, 40x25 or less
+//   ; <<< image set story
+// The background and the two multicolors are shared too, so that the screens can follow one another without the program setting the
+// VIC-II again. Colors left out are chosen from all the pictures together
 public sealed record ImageSetAsset
 {
     public string? Name { get; init; }
@@ -45,8 +51,6 @@ public sealed record ImageSetAsset
     // them when they have the same bytes, and the new characters follow. Without it the charset is made again from the pictures
     public bool KeepCharset { get; init; }
 
-    public const string Extension = ".imgset.json";
-
     public int CharacterLimit => Math.Clamp(MaxCharacters ?? 256 - First, 1, 256 - First);
 
     // The asset the converter of single pictures understands
@@ -58,19 +62,81 @@ public sealed record ImageSetAsset
         Background = Background, Multicolor1 = Multicolor1, Multicolor2 = Multicolor2, MaxCharacters = CharacterLimit,
     };
 
-    public static ImageSetAsset Load(string path) => Parse(File.ReadAllText(path));
-
-    public static ImageSetAsset Parse(string json) =>
-        JsonSerializer.Deserialize<ImageSetAsset>(json, GraphicsAsset.Json) ?? throw new InvalidDataException("Empty image set");
-
-    public string ToJson() => JsonSerializer.Serialize(this, GraphicsAsset.Json);
-
-    // story.imgset.json -> story
-    public static string NameOf(string path)
+    // The same settings as the parameters of the ";@ imageset" lines: what is left at its default is left out
+    public string[] HeaderLines(string fallbackName)
     {
-        string file = Path.GetFileName(path);
-        return file.EndsWith(Extension, StringComparison.OrdinalIgnoreCase) ? file[..^Extension.Length] : Path.GetFileNameWithoutExtension(file);
+        var first = new List<string>();
+        void Add(List<string> list, string name, object? value) { if (value is not null) list.Add($"{name}={value}"); }
+        Add(first, "name", Name ?? fallbackName);
+        if (First != 0) Add(first, "first", $"${First:X2}");
+        Add(first, "multicolor", Multicolor ? 1 : 0);
+        Add(first, "columns", Columns);
+        Add(first, "rows", Rows);
+        var look = new List<string>();
+        if (Fit != Fit.Fit) Add(look, "fit", Kebab(Fit));
+        if (Resample is { } resample and not Graphics.Resample.Box) Add(look, "resample", Kebab(resample));
+        if (Dither != Dither.Ordered) Add(look, "dither", Kebab(Dither));
+        if (Palette != "pepto") Add(look, "palette", Palette);
+        if (Brightness is { } and not 0) Add(look, "brightness", Brightness);
+        if (Contrast is { } and not 0) Add(look, "contrast", Contrast);
+        if (Saturation is { } and not 0) Add(look, "saturation", Saturation);
+        var colors = new List<string>();
+        Add(colors, "background", Background);
+        Add(colors, "multicolor1", Multicolor1);
+        Add(colors, "multicolor2", Multicolor2);
+        Add(colors, "max", MaxCharacters);
+        if (KeepCharset) Add(colors, "keep", 1);
+
+        var lines = new List<string> { ";@ imageset " + string.Join(" ", first) };
+        foreach (var group in new[] { look, colors })
+            if (group.Count > 0) lines.Add(";@          " + string.Join(" ", group));
+        if (Sources.Count > 0) lines.Add(";@          sources=" + string.Join(",", Sources.Select(Escape)));
+        return [.. lines];
     }
+
+    // The settings from the parameters of the region
+    public static ImageSetAsset FromParameters(IReadOnlyDictionary<string, string> parameters)
+    {
+        string? Text(string name) => parameters.TryGetValue(name, out var value) ? value : null;
+        int? Number(string name) => Text(name) is { } text ? ParseNumber(name, text) : null;
+        T? Choice<T>(string name) where T : struct, Enum => Text(name) is { } text
+            ? Enum.GetValues<T>().Select(v => (T?)v).FirstOrDefault(v => Kebab(v!.Value) == text.ToLowerInvariant())
+              ?? throw new FormatException($";@ imageset: {name}={text} is not one of {string.Join(", ", Enum.GetValues<T>().Select(v => Kebab(v)))}")
+            : null;
+        return new ImageSetAsset
+        {
+            Name = Text("name"),
+            Sources = Text("sources")?.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(Unescape).ToList() ?? [],
+            First = Number("first") ?? 0,
+            Multicolor = (Number("multicolor") ?? 1) != 0,
+            Columns = Number("columns"),
+            Rows = Number("rows"),
+            Fit = Choice<Fit>("fit") ?? Fit.Fit,
+            Dither = Choice<Dither>("dither") ?? Dither.Ordered,
+            Palette = Text("palette") ?? "pepto",
+            Resample = Choice<Resample>("resample"),
+            Brightness = Number("brightness"),
+            Contrast = Number("contrast"),
+            Saturation = Number("saturation"),
+            Background = Number("background"),
+            Multicolor1 = Number("multicolor1"),
+            Multicolor2 = Number("multicolor2"),
+            MaxCharacters = Number("max"),
+            KeepCharset = (Number("keep") ?? 0) != 0,
+        };
+    }
+
+    static int ParseNumber(string name, string text)
+    {
+        bool ok = text.StartsWith('$') ? int.TryParse(text[1..], System.Globalization.NumberStyles.HexNumber, null, out int value) : int.TryParse(text, out value);
+        return ok ? value : throw new FormatException($";@ imageset: {name}={text} is not a number");
+    }
+
+    static string Kebab<T>(T value) where T : struct, Enum => JsonNamingPolicy.KebabCaseLower.ConvertName(value.ToString());
+
+    // The names of the pictures are separated by commas and the parameters by spaces: those two are written as %2C and %20
+    static string Escape(string name) => name.Replace("%", "%25").Replace(",", "%2C").Replace(" ", "%20");
+    static string Unescape(string name) => name.Replace("%20", " ").Replace("%2C", ",").Replace("%25", "%");
 }
 
 // A picture converted: its screen (codes of the shared charset, colors for the color RAM) and how it will look
@@ -95,8 +161,22 @@ public sealed class ImageSetConversion
     public int Frozen { get; init; }
 
     public string Label => Name + "__characters";
-    public string CharsetFileName => Name + ".asm";
-    public string ScreenFileName(SetScreen screen) => screen.Name + ".asm";
+
+    // What the editor writes after the ;@ imageset lines: the shared colors, the ;@ charset region and a ;@ screen region for each picture,
+    // between two marker lines so that it can be replaced the next time
+    public string GeneratedText()
+    {
+        var text = new StringBuilder();
+        text.AppendLine(ImageSetSource.StartMarker(Name));
+        text.Append(CharsetText());
+        foreach (var screen in Screens)
+        {
+            text.AppendLine();
+            text.Append(ScreenText(screen));
+        }
+        text.AppendLine(ImageSetSource.EndMarker(Name));
+        return text.ToString();
+    }
 
     // The characters as a picture, 16 per row: hires bits in the ink color 15, multicolor codes in the shared colors
     public RgbImage CharsetImage()
@@ -119,7 +199,7 @@ public sealed class ImageSetConversion
         return image;
     }
 
-    // name.asm: the shared colors and the ;@ charset region, one character per line with the picture it came from
+    // The shared colors and the ;@ charset region, one character per line with the picture it came from
     public string CharsetText()
     {
         var text = new StringBuilder();
@@ -146,7 +226,7 @@ public sealed class ImageSetConversion
         return text.ToString();
     }
 
-    // picture.asm: the ;@ screen region, with the codes of the charset
+    // The ;@ screen region of a picture, with the codes of the charset
     public string ScreenText(SetScreen screen)
     {
         var text = new StringBuilder();
@@ -168,4 +248,40 @@ public sealed class ImageSetConversion
         for (int row = 0; row < Rows; row++)
             text.AppendLine("            .byte " + string.Join(",", Enumerable.Range(0, Columns).Select(c => $"${values[row * Columns + c]:X2}")) + $" ; row {row}");
     }
+}
+
+// The image set in the lines of an assembly source: the ;@ imageset lines (the settings) and what the editor wrote after them
+public static class ImageSetSource
+{
+    public static string StartMarker(string name) => $"; >>> image set {name} (written by the editor from the ;@ imageset lines above: the charset and the screens can be edited)";
+    public static string EndMarker(string name) => $"; <<< image set {name}";
+
+    static bool IsStart(string line, string name) => line.StartsWith($"; >>> image set {name} ", StringComparison.Ordinal);
+    static bool IsEnd(string line, string name) => line.TrimEnd() == EndMarker(name);
+
+    public static bool HasGenerated(IReadOnlyList<string> lines, string name) => lines.Any(l => IsStart(l, name));
+
+    // The ;@ lines of a region (from its first line up to the ;@ end) replaced by new ones
+    public static string[] ReplaceHeader(string[] lines, int startLine, int endLine, string[] header) =>
+        [.. lines[..startLine], .. header, .. lines[endLine..]];
+
+    // What the editor wrote, replaced (or, the first time, put after the ;@ end of the region)
+    public static string[] ReplaceGenerated(string[] lines, int regionEndLine, string name, string generated)
+    {
+        string[] block = generated.TrimEnd((char)13, (char)10).Split((char)10).Select(l => l.TrimEnd((char)13)).ToArray();
+        int start = Array.FindIndex(lines, l => IsStart(l, name));
+        if (start >= 0)
+        {
+            int end = Array.FindIndex(lines, start, l => IsEnd(l, name));
+            if (end < 0) throw new FormatException($"The line \"{EndMarker(name)}\" is missing: the image set {name} cannot be replaced");
+            return [.. lines[..start], .. block, .. lines[(end + 1)..]];
+        }
+        return [.. lines[..(regionEndLine + 1)], "", .. block, .. lines[(regionEndLine + 1)..]];
+    }
+
+    // A new source with an image set and nothing else yet
+    public static string NewSource(ImageSetAsset set, string name) =>
+        $"; Image set {name}: pictures that become screens of characters sharing one charset.\n" +
+        "; Edit it with the link above the ;@ imageset lines, which also say how the pictures are reduced.\n\n" +
+        string.Join("\n", set.HeaderLines(name)) + "\n;@ end\n";
 }
