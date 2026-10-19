@@ -182,6 +182,9 @@ web computer, in WebAssembly, in a tab next to the files (or in a window of its 
   build converts the assets again and writes their data files and an include (`name.inc.asm`, with a label on each
   part and constants for the colors), so the assembly never falls behind the picture. The downsampling can be tuned
   (box, nearest or bilinear resampling; brightness, contrast and saturation).
+  *▦ Make C64 graphics* in the editor writes the data and the include now (a build does it too) and the tree shows them; a
+  picture without its `.gfx.json` (deleted, or never made) gets one with the same button of the picture's viewer.
+  *Save as text* (`"text": true`) puts the data in the include as `.byte` lines, with no `.bin` files to read with `!binary`.
 - **Image sets** (the 🗂 button): several pictures become screens of characters (40x25 or fewer) that share one charset.
   Like the other editors it is a structured comment in an assembly source, which the studio opens with the link above it
   (*✎ Edit imageset*) and which shows in the code:

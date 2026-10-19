@@ -2,7 +2,8 @@ using System.Text;
 
 namespace ThingCommodore.Graphics;
 
-// The files of a graphics asset, written next to its .gfx.json: one name.part.bin per part, and name.inc.asm, which
+// The files of a graphics asset, written next to its .gfx.json: one name.part.bin per part (none with "text": true: the data is
+// then in name.inc.asm as .byte lines), and name.inc.asm, which
 // defines the constants and a label on each part:
 //   TITLE_BACKGROUND = 0
 //   * = $2000                                 (only when the asset gives the part an address)
@@ -22,12 +23,14 @@ public static class GraphicsBuilder
 
         string name = asset.Name ?? GraphicsAsset.NameOf(assetPath);
         var files = new List<string>();
-        foreach (var part in conversion.Parts)
-        {
-            string file = $"{name}.{part.Name}.bin";
-            File.WriteAllBytes(Path.Combine(folder, file), part.Data);
-            files.Add(file);
-        }
+        // As text the data is in the include and there are no .bin files
+        if (asset.Text != true)
+            foreach (var part in conversion.Parts)
+            {
+                string file = $"{name}.{part.Name}.bin";
+                File.WriteAllBytes(Path.Combine(folder, file), part.Data);
+                files.Add(file);
+            }
         string include = asset.Include ?? name + ".inc.asm";
         File.WriteAllText(Path.Combine(folder, include), IncludeSource(name, Path.GetFileName(assetPath), asset, conversion));
         files.Add(include);
@@ -49,10 +52,37 @@ public static class GraphicsBuilder
         {
             if (asset.Addresses.TryGetValue(part.Name, out var address)) text.AppendLine($"* = {address}");
             text.AppendLine($"; {part.Description}");
-            text.AppendLine($"{label}_{part.Name}:".PadRight(24) + $"!binary \"{name}.{part.Name}.bin\"");
-            text.AppendLine($"{label}_{part.Name}_end:");
+            if (asset.Text == true)
+            {
+                text.AppendLine($"{label}_{part.Name}:");
+                ByteLines(text, part, conversion);
+                text.AppendLine($"{label}_{part.Name}_end:");
+            }
+            else
+            {
+                text.AppendLine($"{label}_{part.Name}:".PadRight(24) + $"!binary \"{name}.{part.Name}.bin\"");
+                text.AppendLine($"{label}_{part.Name}_end:");
+            }
         }
         return text.ToString();
+    }
+
+    // The bytes of a part as .byte lines: a row of the screen on each line of the screen and the colors, a character (or a cell of a
+    // bitmap) on each line of the charset and the bitmap, 16 bytes on the others
+    static void ByteLines(StringBuilder text, GraphicsPart part, Conversion conversion)
+    {
+        int size = part.Name switch
+        {
+            "screen" or "colors" => Math.Max(1, conversion.Columns),
+            "charset" or "bitmap" => 8,
+            _ => 16,
+        };
+        for (int at = 0; at < part.Data.Length; at += size)
+        {
+            var row = part.Data.Skip(at).Take(size).Select(b => $"${b:X2}");
+            string comment = part.Name == "charset" ? $" ; ${at / 8:X2}" : "";
+            text.AppendLine($"            .byte {string.Join(",", row)}{comment}");
+        }
     }
 
     // A name as an assembly symbol: letters, digits and underscores, not starting with a digit

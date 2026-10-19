@@ -59,6 +59,9 @@ public sealed record GraphicsAsset
     public int MaxCharacters { get; init; } = 256;
     public TileSize? Tile { get; init; }
 
+    // The data of the parts as text (.byte lines, in the include itself) instead of binary files that the include reads with !binary
+    public bool? Text { get; init; }
+
     // Names: labels and files (by default the name of the .gfx.json), the include file, the address of each part
     public string? Name { get; init; }
     public string? Include { get; init; }

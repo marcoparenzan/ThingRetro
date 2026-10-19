@@ -183,5 +183,52 @@ public sealed class GraphicsTests
         }
     }
 
+    [TestMethod]
+    public void Asset_ShouldWriteTheDataAsTextWhenAsked()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "thing64-gfx-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(folder, "logo.png"), Png.Write(Paint(160, 100, (x, y) => (x + y) % 16)));
+            File.WriteAllText(Path.Combine(folder, "logo.gfx.json"), new GraphicsAsset
+            {
+                Source = "logo.png", Mode = GraphicsMode.MulticolorCharset, Background = 0, Columns = 20, Rows = 10, Text = true,
+                Addresses = new() { ["charset"] = "$2000" },
+            }.ToJson());
+
+            var result = GraphicsBuilder.Build(Path.Combine(folder, "logo.gfx.json"));
+
+            CollectionAssert.AreEqual(new[] { "logo.inc.asm" }, result.Files.ToArray(), "no .bin files");
+            Assert.IsFalse(Directory.EnumerateFiles(folder, "*.bin").Any());
+            string include = File.ReadAllText(Path.Combine(folder, "logo.inc.asm"));
+            StringAssert.Contains(include, ".byte $");
+            Assert.IsFalse(include.Contains("!binary"));
+            // The same labels as with binary files, and the same bytes
+            var program = Assembler.Assemble("""
+                * = $1000
+                        RTS
+                !source "logo.inc.asm"
+                """, "main.asm", folder);
+            Assert.AreEqual(0x2000, program.Symbols["logo_charset"]);
+            int length = Part(result.Conversion, "charset").Length;
+            Assert.AreEqual(0x2000 + length, program.Symbols["logo_charset_end"]);
+            CollectionAssert.AreEqual(Part(result.Conversion, "charset"), program.Bytes[(0x2000 - program.Origin)..(0x2000 - program.Origin + length)]);
+            // A row on each line of the screen and of the colors: 10 rows of 20 values each
+            Assert.AreEqual(20, include.Split((char)10).Count(l => l.Split(',').Length == 20));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public void Asset_ShouldKeepTextOutOfItsJsonUntilItIsSet()
+    {
+        StringAssert.DoesNotMatch(new GraphicsAsset { Source = "a.png" }.ToJson(), new System.Text.RegularExpressions.Regex("\"text\""));
+        StringAssert.Contains(new GraphicsAsset { Source = "a.png", Text = true }.ToJson(), "\"text\": true");
+    }
+
     static byte[] Part(Conversion conversion, string name) => conversion.Parts.Single(p => p.Name == name).Data;
 }

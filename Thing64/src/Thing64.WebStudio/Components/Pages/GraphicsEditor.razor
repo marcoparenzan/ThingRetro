@@ -1,5 +1,6 @@
 ﻿@using System.Text.Json
 @using ThingCommodore.Graphics
+@using Thing64.WebStudio.CodeBehind
 
 @* A graphics asset (.gfx.json): the picture on the left, how the C64 will show it on the right, and the settings of
    the conversion between them. Every change converts again (on the server, in a fraction of a second); Ctrl+S saves
@@ -57,6 +58,12 @@
             <input class="field w-32 font-mono" value="@asset.Name" placeholder="@GraphicsAsset.NameOf(Path)"
                    @onchange="e => Update(a => a with { Name = Blank(e.Value?.ToString()) })" />
         </label>
+        <label class="flex items-center gap-2 self-end pb-1.5" title="The data goes into the include as .byte lines, with no .bin files to read with !binary">
+            <input type="checkbox" checked="@(asset.Text == true)" @onchange="e => Update(a => a with { Text = (bool)e.Value! ? true : null })" />
+            Save as text (no .bin files)
+        </label>
+        <button class="self-end rounded border border-chip-400 bg-night-700 px-3 py-1.5 text-white hover:bg-night-600" @onclick="Make"
+                title="Writes the data and the include next to this file now (a build does it too): the tree shows them">▦ Make C64 graphics</button>
         <span class="ml-auto self-center">
             @if (converting) { <span class="animate-pulse text-chip-300">converting...</span> }
         </span>
@@ -78,6 +85,7 @@
 
     <div class="min-h-0 flex-1 overflow-auto p-3">
         @if (error is not null) { <p class="mb-3 rounded border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-300">@error</p> }
+        @if (message is not null) { <p class="mb-3 rounded border border-night-700 px-3 py-2 text-sm text-night-200">@message</p> }
         <div class="grid gap-4 lg:grid-cols-2">
             <figure>
                 <figcaption class="mb-1 text-xs text-night-300">Picture: <span class="font-mono">@asset.Source</span> @(source is null ? "" : $"({source.Width}x{source.Height})")</figcaption>
@@ -146,6 +154,10 @@
     [Parameter] public bool Visible { get; set; }
     [Parameter] public EventCallback<bool> OnDirty { get; set; }
 
+    // The files Make writes may be open in Monaco; the tree of the project shows them
+    [Parameter] public IRegionHost? Host { get; set; }
+    [Parameter] public EventCallback OnFilesWritten { get; set; }
+
     GraphicsAsset asset = new();
     string savedJson = "";
     RgbImage? source;
@@ -154,7 +166,7 @@
     string? previewUrl;
     string? charsetUrl;
     int charsetWidth;
-    string? error;
+    string? error, message;
     bool converting;
     int version;
 
@@ -165,7 +177,8 @@
     bool UsesMulticolors => asset.Mode is GraphicsMode.MulticolorCharset or GraphicsMode.MulticolorSprites;
     string LabelPrefix => new string((asset.Name ?? GraphicsAsset.NameOf(Path)).Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_').ToArray()).Trim('_').ToLowerInvariant();
     string SourceUrl => $"project-files/{Uri.EscapeDataString(Project.Name)}/{SourcePath}?v={sourceStamp}";
-    string SourcePath => CombinePath(System.IO.Path.GetDirectoryName(Path)?.Replace('\\', '/') ?? "", asset.Source);
+    string SourceFolder => System.IO.Path.GetDirectoryName(Path)?.Replace('\\', '/') ?? "";
+    string SourcePath => CombinePath(SourceFolder, asset.Source);
 
     public bool Dirty => asset.ToJson() != savedJson;
 
@@ -218,6 +231,38 @@
         if (asset.Source != oldSource) LoadSource();
         await OnDirty.InvokeAsync(Dirty);
         await Convert();
+    }
+
+    // Writes the files of the asset now: what a build does for it (the .gfx.json is saved first, so they follow what is on screen)
+    async Task Make()
+    {
+        message = null;
+        if (source is null) { error = "There is no picture to convert"; return; }
+        try
+        {
+            await Save();
+            string folder = SourceFolder;
+            string name = asset.Name ?? GraphicsAsset.NameOf(Path);
+            string include = asset.Include ?? name + ".inc.asm";
+            var targets = new List<string> { CombinePath(folder, include) };
+            if (asset.Text != true) targets.AddRange(conversion?.Parts.Select(p => CombinePath(folder, $"{name}.{p.Name}.bin")) ?? []);
+            if (Host is not null)
+                foreach (string target in targets)
+                    if (!await Host.CanWriteAsync(target)) return;
+
+            var result = await Task.Run(() => GraphicsBuilder.Build(Project.FullPath(Path)));
+            var written = result.Files.Select(f => CombinePath(folder, f)).ToList();
+            if (Host is not null)
+                foreach (string file in written) await Host.WrittenAsync(file);
+            var stale = asset.Text == true ? Directory.EnumerateFiles(Project.FullPath(folder), name + ".*.bin").Select(System.IO.Path.GetFileName).ToList() : [];
+            message = $"Written: {string.Join(", ", result.Files)}" + (stale.Count > 0 ? $". The binary files from before are still there ({string.Join(", ", stale)}): nothing uses them any more" : "");
+            error = null;
+            await OnFilesWritten.InvokeAsync();
+        }
+        catch (Exception e) when (e is InvalidDataException or IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            error = e.Message;
+        }
     }
 
     async Task SetAddress(string part, string? address)

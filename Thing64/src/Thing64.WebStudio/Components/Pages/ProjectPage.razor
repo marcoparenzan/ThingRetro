@@ -141,8 +141,8 @@ else
             }
             @foreach (var tab in tabs.Where(IsGraphics))
             {
-                <GraphicsEditor @key="tab" @ref="graphicsEditors[tab]" Project="project!" Path="@tab" Visible="@(tab == active && !showComputer)"
-                                OnDirty="changed => Changed(tab, changed)" />
+                <GraphicsEditor @key="tab" @ref="graphicsEditors[tab]" Project="project!" Path="@tab" Host="this" Visible="@(tab == active && !showComputer)"
+                                OnDirty="changed => Changed(tab, changed)" OnFilesWritten="() => Refresh()" />
             }
             @if (tabs.Count == 0 && !showComputer)
             {
