@@ -38,4 +38,8 @@
     <Project Path="src/ThingNES.Tests/ThingNES.Tests/ThingNES.Tests.csproj" />
     <Project Path="src/ThingNES.Desktop/ThingNES.Desktop/ThingNES.Desktop.csproj" />
   </Folder>
+  <Folder Name="/ThingOS64/">
+    <Project Path="ThingOS64/src/ThingOS64/ThingOS64.csproj" />
+    <Project Path="ThingOS64/src/ThingOS64.Tests/ThingOS64.Tests.csproj" />
+  </Folder>
 </Solution>

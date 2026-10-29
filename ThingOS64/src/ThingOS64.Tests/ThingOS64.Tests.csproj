@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MSTest" Version="3.8.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+    <Using Include="Thing64.C64" />
+    <Using Include="ThingRetroEmu.Ports" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ThingOS64\ThingOS64.csproj" />
+    <ProjectReference Include="..\..\..\Thing64\src\Thing64.C64\Thing64.C64.csproj" />
+    <ProjectReference Include="..\..\..\ThingRetroEmu\src\ThingRetroEmu\ThingRetroEmu.csproj" />
+    <ProjectReference Include="..\..\..\ThingCommodore\src\ThingCommodore.Tools\ThingCommodore.Tools.csproj" />
+  </ItemGroup>
+
+</Project>

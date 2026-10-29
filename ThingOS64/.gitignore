@@ -1,0 +1,7 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+TestResults/
+
+# The ROMs built from rom/ (ThingOS64 writes them here)
+build/

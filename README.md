@@ -11,6 +11,7 @@ read: the code mirrors the hardware, with the chips in their sockets, the traces
 | [Thing64](Thing64) | The Commodore 64: the board, the desktop app, the command line, the web computer and the web studio |
 | [Thing65](Thing65) | The Commodore 65: the board, the desktop app, the command line, the web computer and the web studio |
 | [ThingNES](src/ThingNES) | NES NTSC foundation (NROM/UxROM/CNROM): headless CPU runner, functional background/sprite renderer, PPM frame export, controllers, OAM DMA and functional pulse/triangle/noise/DMC audio with WAV export; Windows desktop frontend with keyboard controller and pause/frame-step; opt-in live Windows audio with bounded buffering |
+| [ThingOS64](ThingOS64) | ThingOS, a windowing operating system for the C64 in place of its KERNAL, BASIC and character ROMs: desktop in character mode, 1351 mouse or joystick, disk only (no BASIC, no tape) |
 
 The projects reference each other by relative paths (`..\..\..\ThingMOS\src\...`), which is why they live side by side. `ThingMOS` depends on `ThingRetroEmu`; the
 machines and `ThingCommodore` depend on both.
@@ -25,6 +26,7 @@ dotnet test ThingRetroEmu/tests/ThingRetroEmu.Tests
 dotnet test ThingCommodore/tests/ThingCommodore.Tests
 dotnet test Thing64/src/Thing64.Tests
 dotnet test Thing65/src/Thing65.Tests
+dotnet test ThingOS64/src/ThingOS64.Tests
 ```
 
 Development ports: 5064 Studio 64, 5164 Web 64, 5065 Studio 65, 5165 Web 65.

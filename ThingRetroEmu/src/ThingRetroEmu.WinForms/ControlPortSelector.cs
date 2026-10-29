@@ -10,6 +10,7 @@ public enum ControlPortSource
     ArrowsJoystick,    // joystick from arrows + Ctrl
     UsbJoystick,       // USB joystick or gamepad
     MousePaddles,      // paddles from the PC mouse
+    Mouse1351,         // 1351 mouse (proportional mode) from the PC mouse
 }
 
 // What is connected to a port; for the USB joystick also which device
@@ -108,6 +109,13 @@ public sealed class ControlPortSelector : IDisposable
                     Socket(port).Plug(paddles);
                     break;
                 }
+            case ControlPortSource.Mouse1351:
+                {
+                    var mouse = new Mouse1351();
+                    connection.Simulator = new Mouse1351Simulator(input, mouse);
+                    Socket(port).Plug(mouse);
+                    break;
+                }
         }
     }
 
@@ -140,6 +148,7 @@ public sealed class ControlPortSelector : IDisposable
         foreach (var device in usb)
             Add($"USB joystick: {device.Name}", new(ControlPortSource.UsbJoystick, device.Id));
         Add("Paddles: mouse (click to capture it, right click to release it)", new(ControlPortSource.MousePaddles));
+        Add("Mouse 1351: mouse (click to capture it, middle click or Ctrl + right click to release it)", new(ControlPortSource.Mouse1351));
     }
 
     public void Dispose()
