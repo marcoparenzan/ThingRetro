@@ -33,10 +33,10 @@
     <Project Path="ThingRetroEmu/tests/ThingRetroEmu.Tests/ThingRetroEmu.Tests.csproj" />
   </Folder>
   <Folder Name="/ThingNES/">
-    <Project Path="src/ThingNES/ThingNES/ThingNES.csproj" />
-    <Project Path="src/ThingNES.Cli/ThingNES.Cli/ThingNES.Cli.csproj" />
-    <Project Path="src/ThingNES.Tests/ThingNES.Tests/ThingNES.Tests.csproj" />
-    <Project Path="src/ThingNES.Desktop/ThingNES.Desktop/ThingNES.Desktop.csproj" />
+    <Project Path="ThingNES/src/ThingNES/ThingNES/ThingNES.csproj" />
+    <Project Path="ThingNES/src/ThingNES.Cli/ThingNES.Cli/ThingNES.Cli.csproj" />
+    <Project Path="ThingNES/src/ThingNES.Tests/ThingNES.Tests/ThingNES.Tests.csproj" />
+    <Project Path="ThingNES/src/ThingNES.Desktop/ThingNES.Desktop/ThingNES.Desktop.csproj" />
   </Folder>
   <Folder Name="/ThingOS64/">
     <Project Path="ThingOS64/src/ThingOS64/ThingOS64.csproj" />

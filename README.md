@@ -10,7 +10,7 @@ read: the code mirrors the hardware, with the chips in their sockets, the traces
 | [ThingCommodore](ThingCommodore) | The Commodore peripherals (1541, 1581, C2N, MPS-803), the cartridges, the loaders, the BASIC tokenizer, the graphics and build tools; and the log of the family in `docs/log` |
 | [Thing64](Thing64) | The Commodore 64: the board, the desktop app, the command line, the web computer and the web studio |
 | [Thing65](Thing65) | The Commodore 65: the board, the desktop app, the command line, the web computer and the web studio |
-| [ThingNES](src/ThingNES) | NES NTSC foundation (NROM/UxROM/CNROM): headless CPU runner, functional background/sprite renderer, PPM frame export, controllers, OAM DMA and functional pulse/triangle/noise/DMC audio with WAV export; Windows desktop frontend with keyboard controller and pause/frame-step; opt-in live Windows audio with bounded buffering |
+| [ThingNES](ThingNES) | NES NTSC foundation (NROM/UxROM/CNROM): headless CPU runner, functional background/sprite renderer, PPM frame export, controllers, OAM DMA and functional pulse/triangle/noise/DMC audio with WAV export; Windows desktop frontend with keyboard controller and pause/frame-step; opt-in live Windows audio with bounded buffering |
 | [ThingOS64](ThingOS64) | ThingOS, a windowing operating system for the C64 in place of its KERNAL, BASIC and character ROMs: desktop in character mode, 1351 mouse or joystick, disk only (no BASIC, no tape) |
 
 The projects reference each other by relative paths (`..\..\..\ThingMOS\src\...`), which is why they live side by side. `ThingMOS` depends on `ThingRetroEmu`; the

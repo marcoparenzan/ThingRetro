@@ -3,11 +3,11 @@
 Requires the .NET 10 SDK. Run from the repository root:
 
 ```powershell
-dotnet build src/ThingNES.slnx
-dotnet test src/ThingNES.slnx
-dotnet run --project src/ThingNES.Cli/ThingNES.Cli -- --help
-dotnet run --project src/ThingNES.Cli/ThingNES.Cli -- path/to/test.nes 100000 frame.ppm
-dotnet run --project src/ThingNES.Cli/ThingNES.Cli -- path/to/test.nes 1789773 - audio.wav
+dotnet build ThingNES/src/ThingNES.slnx
+dotnet test ThingNES/src/ThingNES.slnx
+dotnet run --project ThingNES/src/ThingNES.Cli/ThingNES.Cli -- --help
+dotnet run --project ThingNES/src/ThingNES.Cli/ThingNES.Cli -- path/to/test.nes 100000 frame.ppm
+dotnet run --project ThingNES/src/ThingNES.Cli/ThingNES.Cli -- path/to/test.nes 1789773 - audio.wav
 ```
 
 The optional count is a positive number of CPU cycles (default 29781). The runner prints PRG size, elapsed cycles and PPU position, then exits. An optional third argument writes the live 256x240 framebuffer as a P6 PPM image (open with a PPM-capable viewer). If execution stops mid-frame, the buffer contains a mixture of the current and previous frame. The first power-on frame starts without a primed background pipeline; allow at least one pre-render line before judging the image (for example run 100000 cycles). An optional fourth argument streams mono PCM16 audio to WAV at 44.1 kHz; use `-` instead of the image path to export audio only. It has no interactive frontend or real-time playback. Use the separate diagnostic mode below for ROMs implementing the Blargg RAM protocol. Unsupported mappers and NES 2.0 files fail explicitly. Use legally obtained NTSC iNES mapper-0/2/3 images; no ROM downloads are needed for the synthetic unit tests.
@@ -19,8 +19,8 @@ Library users construct `NesMachine(Cartridge.Load(bytes))`, set `Controller1.Pr
 Requires Windows and the .NET 10 Windows Desktop runtime/SDK:
 
 ```powershell
-dotnet run --project src/ThingNES.Desktop/ThingNES.Desktop
-dotnet run --project src/ThingNES.Desktop/ThingNES.Desktop -- path/to/test.nes
+dotnet run --project ThingNES/src/ThingNES.Desktop/ThingNES.Desktop
+dotnet run --project ThingNES/src/ThingNES.Desktop/ThingNES.Desktop -- path/to/test.nes
 ```
 
 Open ROM loads a local iNES mapper-0/2/3 image and primes the video pipelines. Unsupported cartridges show an error without replacing the current machine. Video preserves aspect ratio with integer nearest-neighbor scaling when space permits.
@@ -34,8 +34,8 @@ Automated tests cover core frame stepping, palette conversion, audio serializati
 ## Diagnostic ROMs
 
 ```powershell
-dotnet run --project src/ThingNES.Cli/ThingNES.Cli -- --diagnostic path/to/01-basics.nes 30000000
-dotnet run --project src/ThingNES.Cli/ThingNES.Cli -- --diagnostic https://raw.githubusercontent.com/christopherpow/nes-test-roms/master/instr_test-v5/rom_singles/01-basics.nes
+dotnet run --project ThingNES/src/ThingNES.Cli/ThingNES.Cli -- --diagnostic path/to/01-basics.nes 30000000
+dotnet run --project ThingNES/src/ThingNES.Cli/ThingNES.Cli -- --diagnostic https://raw.githubusercontent.com/christopherpow/nes-test-roms/master/instr_test-v5/rom_singles/01-basics.nes
 ```
 
 Budget defaults to 30 million CPU cycles. HTTPS URLs are fetched only when explicitly supplied, kept in memory, limited to 1 MiB, and printed with a SHA256 fingerprint. Ordinary runs and unit tests require no network. Ctrl+C cancels. Only legally usable iNES mapper-0/2/3 test images are supported; mapper rejection is not a diagnostic failure.
@@ -95,7 +95,7 @@ Horizontal/vertical mirroring is header-defined. Four-screen, NES 2.0 and other 
 Bus conflicts are enabled by default in CLI and desktop. For boards known not to have conflicts, use the CLI override:
 
 ```powershell
-dotnet run --project src/ThingNES.Cli/ThingNES.Cli -- path/to/uxrom.nes 100000 frame.ppm --no-bus-conflicts
+dotnet run --project ThingNES/src/ThingNES.Cli/ThingNES.Cli -- path/to/uxrom.nes 100000 frame.ppm --no-bus-conflicts
 ```
 
 The override also works in diagnostic mode. Library users can pass `Cartridge.Load(bytes, busConflicts: false)`. The desktop currently always uses the default conflict model. Bank selection resets on a new cartridge/power-cycle.
