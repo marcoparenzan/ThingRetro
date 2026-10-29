@@ -55,7 +55,7 @@ public partial class MOS6502
 
     private byte ADC(byte val)
     {
-        if ((Status & FLAG_D) != 0) return ADCDecimal(val);
+        if (SupportsDecimalArithmetic && (Status & FLAG_D) != 0) return ADCDecimal(val);
 
         int result = A + val + ((Status & FLAG_C) != 0 ? 1 : 0);
         Status = (byte)((Status & ~(FLAG_C | FLAG_V)) |
@@ -68,7 +68,7 @@ public partial class MOS6502
 
     private byte SBC(byte val)
     {
-        if ((Status & FLAG_D) != 0) return SBCDecimal(val);
+        if (SupportsDecimalArithmetic && (Status & FLAG_D) != 0) return SBCDecimal(val);
 
         return ADC((byte)(~val));
     }

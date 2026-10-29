@@ -1,0 +1,8 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms><EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../ThingNES/ThingNES/ThingNES.csproj" /><PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" /><PackageReference Include="NAudio" Version="2.2.1" /></ItemGroup>
+</Project>

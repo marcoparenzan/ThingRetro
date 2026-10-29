@@ -4,6 +4,11 @@ namespace ThingMOS;
 // I/O port at $0000/$0001 (see MOS6510)
 public partial class MOS6502 : I6502Pinout
 {
+    // Ricoh derivatives retain D but omit the decimal arithmetic circuitry.
+    protected virtual bool SupportsDecimalArithmetic => true;
+    // Unstable immediate LXA: configurable silicon model, not a universal hardware constant.
+    protected virtual byte LxaMagic => 0xEE;
+
     // Pins wired by the board
     public IBus? Bus { get; set; }
     public Func<bool> IrqInput { get; set; } = () => false;

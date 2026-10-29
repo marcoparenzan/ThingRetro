@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="ThingNES/ThingNES/ThingNES.csproj" />
+  <Project Path="ThingNES.Cli/ThingNES.Cli/ThingNES.Cli.csproj" />
+  <Project Path="ThingNES.Tests/ThingNES.Tests/ThingNES.Tests.csproj" />
+  <Project Path="ThingNES.Desktop/ThingNES.Desktop/ThingNES.Desktop.csproj" />
+</Solution>

@@ -32,4 +32,10 @@
     <Project Path="ThingRetroEmu/src/ThingRetroEmu/ThingRetroEmu.csproj" />
     <Project Path="ThingRetroEmu/tests/ThingRetroEmu.Tests/ThingRetroEmu.Tests.csproj" />
   </Folder>
+  <Folder Name="/ThingNES/">
+    <Project Path="src/ThingNES/ThingNES/ThingNES.csproj" />
+    <Project Path="src/ThingNES.Cli/ThingNES.Cli/ThingNES.Cli.csproj" />
+    <Project Path="src/ThingNES.Tests/ThingNES.Tests/ThingNES.Tests.csproj" />
+    <Project Path="src/ThingNES.Desktop/ThingNES.Desktop/ThingNES.Desktop.csproj" />
+  </Folder>
 </Solution>

@@ -63,7 +63,7 @@ public partial class MOS6502
                 A = LSR(A);
                 break;
             case Op.ARR:
-                if ((Status & FLAG_D) != 0) ArrDecimal(value);
+                if (SupportsDecimalArithmetic && (Status & FLAG_D) != 0) ArrDecimal(value);
                 else
                 {
                     // AND then ROR, with C = bit 6 and V = bit 6 xor bit 5 of the result
@@ -83,7 +83,7 @@ public partial class MOS6502
                     break;
                 }
             case Op.XAA: A = (byte)((A | 0xEE) & X & value); SetZN(A); break; // unstable: constant $EE
-            case Op.LXA: A = X = (byte)((A | 0xEE) & value); SetZN(A); break;  // unstable: constant $EE
+            case Op.LXA: A = X = (byte)((A | LxaMagic) & value); SetZN(A); break; // unstable, chip-dependent
             default: throw new InvalidOperationException($"{op} is not a read instruction");
         }
     }
