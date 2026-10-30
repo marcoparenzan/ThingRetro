@@ -10,7 +10,21 @@ public sealed class AudioPort
     const double HIGH_PASS_HZ = 16;
     const double GAIN = 0.3;            // three voices at full amplitude stay within the 16-bit range
 
-    readonly long clockHz;
+    long clockHz;
+    public long ClockHz => clockHz;
+    /// <summary>Change the source oscillator and discard pending resampling state.</summary>
+    public void SetClockRate(long value)
+    {
+        if (value <= 0) throw new ArgumentOutOfRangeException(nameof(value));
+        lock (plugLock)
+        {
+            if (state is not null && state.Speaker.SampleRate > value)
+                throw new ArgumentOutOfRangeException(nameof(value));
+            if (value == clockHz) return;
+            clockHz = value;
+            if (state is not null) state = new State(state.Speaker, value);
+        }
+    }
     readonly object plugLock = new();
     volatile State? state;
 

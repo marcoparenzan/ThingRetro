@@ -1,4 +1,51 @@
-# ThingNES usage
+# ThingRetro usage
+
+## Atari 7800: WebComputer / WebStudio
+
+- WebComputer: `dotnet run --project ThingVCS7800/src/ThingVCS7800.WebComputer/ThingVCS7800.WebComputer --no-launch-profile --urls http://localhost:7800`
+- WebStudio: `dotnet run --project ThingVCS7800/src/ThingVCS7800.WebStudio/ThingVCS7800.WebStudio --no-launch-profile --urls http://localhost:7801`
+
+Usare due terminali; aprire i rispettivi URL. Nel Computer aprire Peripherals per caricare la cartuccia o inserire la demo. Il checkbox conferma solo la correzione RAM per impronte note Summer/Winter Games, non altri fallback legacy. Click sul monitor per frecce/Ctrl/Shift. Run avanza a 10 frame/s nominali, non velocità NES/Atari reale; Frame e Reset sono espliciti.
+
+Nello Studio modificare il template 6502, poi Build & load. Download source salva `main.asm`; Download last build .a78 esporta l'ultima build riuscita (può differire dal sorgente modificato successivamente). Sono ammesse solo ROM lineari 16 KiB a $C000; niente file include/import o loop assembler. I progetti sono in memoria del circuito, non nel filesystem server: salvare il sorgente prima di chiudere. Audio browser, debugger avanzato ed editor grafici non implementati. Usare solo in locale.
+
+## Atari 7800: BIOS opzionale
+
+Nel Computer usa **Peripherals → BIOS / boot → Install BIOS (4/16 KiB)…** con un firmware locale di cui disponi legittimamente. L'installazione riavvia la scheda; il vettore reset viene letto dal BIOS. **Remove BIOS / direct cartridge boot** torna all'avvio diretto precedente. Nessun BIOS Atari è incluso o scaricato. Inserisci una cartuccia per avanzare l'esecuzione nel Computer; un BIOS installato senza cartuccia non rende attivo il pacing della finestra.
+
+Il latch di controllo e l'overlay hanno copertura sintetica: non è ancora verificato il boot di un BIOS Atari reale o il controllo delle firme. La modalità 2600 ha solo una base core/API per cartucce lineari 2/4 KiB (`DevelopmentComputer.Insert2600`): non apre automaticamente giochi 2600 nella form e non produce ancora video TIA.
+
+## Atari 7800: joystick a due pulsanti
+
+Il selettore controller comune usa ora entrambi i pulsanti nel Computer 7800:
+
+- Frecce: **Ctrl = fire 1**, **Shift = fire 2**.
+- Tastierino: **0/5 = fire 1**, **Decimal = fire 2**.
+- USB: pulsanti 1 e 2.
+
+La ROM sceglie la modalità tramite RIOT: PB2 per porta 1, PB4 per porta 2, configurati come uscite basse per due pulsanti. Il reset lascia inizialmente la compatibilità a un pulsante; in quella modalità entrambi i fire confluiscono nell'ingresso fire tradizionale. Non occorre uno switch nella form. La prova tastiera/USB e la compatibilità con giochi reali restano da verificare manualmente. Gli altri Computer mantengono i default dei simulatori comuni.
+
+## Atari 7800: registrazione WAV dal Computer
+
+Avvia `dotnet run --project ThingVCS7800/src/ThingVCS7800.Computer`, inserisci una cartuccia e scegli **Peripherals → Audio recording → Start WAV recording…** (anche nel menu contestuale). Il titolo mostra REC WAV. **Stop and finalize WAV** chiude il file PCM16 mono a 44,1 kHz.
+
+Puoi ascoltare e registrare contemporaneamente; mute disabilita solo l'ascolto. La registrazione funziona anche senza dispositivo audio Windows. Pausa non registra silenzio aggiuntivo. Reset, cambio cartuccia riuscito, espulsione, cambio standard video e chiusura finalizzano automaticamente. Il caricamento rifiutato non interrompe la registrazione. Il registratore cattura l'audio dopo i filtri comuni, non il DAC grezzo; confini iniziali/finali approssimati ai blocchi da 10 ms.
+
+Per una prova senza giochi: **Cartridge → Insert TIA tone/noise test ROM**. Per esportare la diagnostica headless: `dotnet run --project src/CartridgeInspector/CartridgeInspector -- --tia-audio-diagnostic ops/references/tia-audio-diagnostic`. L'interfaccia Windows e l'ascolto restano da verificare manualmente.
+
+## Atari 7800: diagnostica DLI post-render
+
+Dalla radice, con .NET 10:
+
+```powershell
+dotnet run --project src/CartridgeInspector/CartridgeInspector -- --dli-diagnostic ops/references/dli-diagnostic
+```
+
+Esegue una **diagnostica sintetica NTSC**, restituisce exit code 0 solo se le verifiche passano e salva ROM raw generata e risultato JSON nella cartella indicata. Attesi su due frame: 482 eventi DLI, contatore handler 226 (482 modulo 256), 8194 master clock di overhead e zero clamp/troncamenti.
+
+La ROM è `ops/references/dli-diagnostic/post-render-dli-ntsc.bin`, apribile nel Computer con standard Auto/NTSC. Non è una ROM diagnostica esterna: esclude il DLI iniziale per isolare le transizioni post-render. La durata dell'impulso NMI e il timing iniziale restano provvisori. Il test separato con startup DLI attivo documenta una coalescenza nel modello corrente (242 segnali, 241 handler per frame), non un comportamento hardware certificato.
+
+## ThingNES usage
 
 Requires the .NET 10 SDK. Run from the repository root:
 
@@ -19,15 +66,15 @@ Library users construct `NesMachine(Cartridge.Load(bytes))`, set `Controller1.Pr
 Requires Windows and the .NET 10 Windows Desktop runtime/SDK:
 
 ```powershell
-dotnet run --project ThingNES/src/ThingNES.Desktop/ThingNES.Desktop
-dotnet run --project ThingNES/src/ThingNES.Desktop/ThingNES.Desktop -- path/to/test.nes
+dotnet run --project ThingNES/src/ThingNES.Computer/ThingNES.Computer
+dotnet run --project ThingNES/src/ThingNES.Computer/ThingNES.Computer -- path/to/test.nes
 ```
 
-Open ROM loads a local iNES mapper-0/2/3 image and primes the video pipelines. Unsupported cartridges show an error without replacing the current machine. Video preserves aspect ratio with integer nearest-neighbor scaling when space permits.
+**Peripherals → Cartridge → Insert cartridge…** loads a local iNES mapper-0/2/3 image and primes the pipelines; startup arguments and drag/drop remain supported. Unsupported cartridges preserve the current machine. ThingNES.Computer replaces the former Desktop project: the window now uses the same common MonitorControl and VideoMenu as Thing64/7800, with top Peripherals/Video menus and screen context menu, no toolbar/help/status strips.
 
 Controller 1: **Z = A**, **X = B**, **Shift = Select**, **Enter = Start**, **arrow keys = D-pad**. Input is cleared when the window loses focus. **Ctrl+O** opens a ROM, **F5** toggles pause, **F10** pauses and advances one frame, **F2** power-cycles the machine. Power-cycle recreates the cartridge and clears volatile PRG RAM; this is not a hardware reset or battery-save implementation.
 
-Record WAV starts/stops streaming PCM16 recording using emulated time. Pausing stops sample generation; frame-stepping still records. ROM replacement, power-cycle or closing the window finalizes recording. Click **Enable audio** for opt-in speaker playback on the default Windows audio device; **Mute audio** releases it. Pausing clears queued live audio, and paused frame-stepping is silent while still recording WAV. A playback-only DC/low-pass filter at half gain is applied; WAV export remains unfiltered. Device initialization errors are shown without preventing emulation. The UI uses elapsed-time NTSC pacing and at most three catch-up frames per timer poll, dropping excess backlog under load; it is not audio-clock synchronized. Controller 2 is currently library-only.
+**Peripherals → Audio recording** starts/stops a common WaveRecorder, with AudioSplitter allowing simultaneous PC speakers and WAV. Toggle **Audio** in the screen context menu; speaker mute does not mute recording. The core exposes AudioPort at the existing 44.1 kHz APU PCM source rate. Computer recordings now include the common AudioPort filter/gain; CLI WaveWriter raw exports remain unchanged. Pause stops sample generation; frame stepping generates audio if enabled and still records. ROM replacement, reset/power-cycle, eject or close finalizes WAV. Speaker queue draining at pause is not explicitly flushed in this migration. Device initialization errors do not prevent emulation/recording. NTSC FramePacer remains elapsed-time and bounded; no audio-clock synchronization. Controller 2 remains library-only; no DE-9 pin mapping is invented for NES controllers.
 
 Automated tests cover core frame stepping, palette conversion, audio serialization, scheduler credit/catch-up and playback filter behavior, not actual window/key or audio-device interactions. Desktop visual/input behavior and speaker playback require manual verification. Audio uses a bounded queue; starvation produces silence and overflow drops samples instead of growing memory. No game compatibility certification is claimed.
 

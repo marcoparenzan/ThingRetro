@@ -13,8 +13,10 @@ public sealed class VideoMenu : IDisposable
     MonitorCable cable;
     string mode = "RGB";
 
-    public VideoMenu(VideoPort port, IMonitor monitor)
+    readonly bool allowSystemSelection;
+    public VideoMenu(VideoPort port, IMonitor monitor, bool allowSystemSelection = false)
     {
+        this.allowSystemSelection = allowSystemSelection;
         this.port = port;
         this.monitor = monitor;
         cable = new MonitorCable(port, monitor);
@@ -29,6 +31,10 @@ public sealed class VideoMenu : IDisposable
         cable.Dispose();
         switch (newMode)
         {
+            case "AUTO":
+                port.Standard = null;
+                cable = new MonitorCable(port, new CompositeTuner(monitor));
+                break;
             case "PAL":
                 port.Standard = VideoStandard.Pal;
                 cable = new MonitorCable(port, new CompositeTuner(monitor));
@@ -49,15 +55,33 @@ public sealed class VideoMenu : IDisposable
     public ToolStripMenuItem CreateItem()
     {
         var menu = new ToolStripMenuItem("Video");
-        foreach (var (label, value) in new[] { ("RGB", "RGB"), ("Composite PAL", "PAL"), ("Composite NTSC", "NTSC") })
+        foreach (var (label, value) in new[] { ("RGB", "RGB"), ("Composite Auto", "AUTO"), ("Composite PAL", "PAL"), ("Composite NTSC", "NTSC") })
         {
             var item = new ToolStripMenuItem(label, null, (_, _) => Select(value)) { Tag = value };
             menu.DropDownItems.Add(item);
         }
         menu.DropDownOpening += (_, _) =>
         {
-            foreach (ToolStripMenuItem item in menu.DropDownItems) item.Checked = (string?)item.Tag == mode;
+            foreach (var item in menu.DropDownItems.OfType<ToolStripMenuItem>())
+                if (item.Tag is string value) item.Checked = value == mode;
         };
+        if (allowSystemSelection)
+        {
+            menu.DropDownItems.Add(new ToolStripSeparator());
+            var systems = new ToolStripMenuItem("Console standard (change resets machine)");
+            foreach (var system in Enum.GetValues<VideoSystem>())
+            {
+                var item = new ToolStripMenuItem(system.ToString().ToUpperInvariant(), null,
+                    (_, _) => port.SystemSelection = system) { Tag = system };
+                systems.DropDownItems.Add(item);
+            }
+            systems.DropDownOpening += (_, _) =>
+            {
+                foreach (ToolStripMenuItem item in systems.DropDownItems)
+                    item.Checked = (VideoSystem)item.Tag! == port.SystemSelection;
+            };
+            menu.DropDownItems.Add(systems);
+        }
         return menu;
     }
 

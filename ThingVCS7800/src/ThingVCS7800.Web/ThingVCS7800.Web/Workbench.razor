@@ -1,0 +1,94 @@
+@implements IAsyncDisposable
+@inject WebSession Session
+@inject StudioCompiler Compiler
+@inject IJSRuntime JS
+<div class="min-h-screen bg-slate-950 text-slate-100">
+    <header class="flex flex-wrap items-center gap-5 border-b border-slate-700 bg-slate-900 px-5 py-3">
+        <strong>ThingVCS7800 @(Studio ? "WebStudio" : "WebComputer")</strong>
+        <details class="relative"><summary class="cursor-pointer">Peripherals</summary><div class="absolute z-20 w-80 space-y-3 rounded bg-slate-800 p-4 shadow-xl">
+            <label class="block">Cartridge (.a78/.bin)<InputFile OnChange="Upload" accept=".a78,.bin,.rom" /></label>
+            <label class="flex gap-2"><input type="checkbox" @bind="correction" /> Confirm known SHA1 RAM correction</label>
+            <button class="rounded bg-slate-700 px-3 py-1" @onclick="Demo">Insert graphics demo</button>
+        </div></details>
+        <details><summary class="cursor-pointer">Video</summary><p class="p-2 text-sm">RGB • common MonitorCable • @Session.Computer.Board.Timing.System</p></details>
+        <button @onclick="ToggleRun" class="rounded bg-indigo-600 px-3 py-1">@(running ? "Pause" : "Run (10 frames/s)")</button>
+        <button @onclick="Step" class="rounded bg-slate-700 px-3 py-1">Frame</button>
+        <button @onclick="Reset" class="rounded bg-slate-700 px-3 py-1">Reset</button>
+    </header>
+    <div class="p-4 text-sm text-slate-300">@Session.Title • frecce / Ctrl / Shift sul monitor • server session, no browser audio</div>
+    @if (!string.IsNullOrEmpty(error)) { <p role="alert" class="mx-4 rounded bg-red-950 p-3 text-red-200">@error</p> }
+    <main class="grid gap-5 p-4 @(Studio ? "lg:grid-cols-2" : "")">
+        @if (Studio)
+        {
+            <section class="space-y-3">
+                <label class="block">Project title <input class="ml-2 rounded bg-slate-800 p-2" @bind="title" maxlength="32" /></label>
+                <textarea aria-label="6502 source" class="h-[55vh] w-full rounded border border-slate-700 bg-slate-900 p-4 font-mono text-sm" spellcheck="false" @bind="source"></textarea>
+                <div class="flex gap-3"><button class="rounded bg-indigo-600 px-4 py-2" @onclick="Build">Build &amp; load</button>
+                <button class="rounded bg-slate-700 px-4 py-2" @onclick="DownloadSource">Download source</button>
+                <button class="rounded bg-slate-700 px-4 py-2" disabled="@(built is null)" @onclick="DownloadRom">Download last build .a78</button></div>
+                <p class="text-sm text-slate-400">Single-file 6502 • linear 16 KiB at $C000 • no includes/macros loops. Projects live in this circuit: download source before closing.</p>
+            </section>
+        }
+        <section class="flex flex-col items-center justify-center rounded border border-slate-700 bg-black p-3">
+            <canvas @ref="canvas" tabindex="0" aria-label="Retro monitor, focus for joystick" width="320" height="242" class="w-full max-w-3xl outline-none focus:ring-2 focus:ring-indigo-500" style="image-rendering:pixelated"></canvas>
+            <p class="mt-3 text-xs text-slate-500">Core development build: compatibility not certified. No ROM/BIOS bundled.</p>
+        </section>
+    </main>
+</div>
+@code {
+    [Parameter] public bool Studio { get; set; }
+    ElementReference canvas;
+    IJSObjectReference? module, display;
+    DotNetObjectReference<Workbench>? reference;
+    CancellationTokenSource stop = new(); Task? pump;
+    bool running, correction;
+    string error="", title="New game", source=StudioCompiler.Template;
+    byte[]? built;
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if(!first)return;
+        module=await JS.InvokeAsync<IJSObjectReference>("import","./_content/ThingVCS7800.Web/monitor.js");
+        reference=DotNetObjectReference.Create(this);
+        display=await module.InvokeAsync<IJSObjectReference>("create",canvas,reference);
+        await Paint();
+    }
+    async Task Paint() { if(display is not null && Session.Width>0) await display.InvokeVoidAsync("draw",Session.Frame,Session.Width,Session.Height); }
+    async Task Upload(InputFileChangeEventArgs e)
+    {
+        running=false;
+        try { using var stream=e.File.OpenReadStream(16*1024*1024+128); using var memory=new MemoryStream(); await stream.CopyToAsync(memory); Session.Load(memory.ToArray(),e.File.Name,correction); error=""; await Paint(); }
+        catch(Exception ex) { error=ex.Message; }
+    }
+    async Task Demo() { running=false; Session.Demo(); error=""; await Step(); }
+    async Task Step() { try { Session.Step(); error=""; await Paint(); } catch(Exception ex) { running=false; error=ex.Message; } }
+    async Task Reset() { running=false; Session.Computer.Reset(); Session.Release(); Session.Present(); await Paint(); }
+    void ToggleRun()
+    {
+        running=!running;
+        if(pump is null) pump=Pump();
+    }
+    async Task Pump()
+    {
+        using var timer=new PeriodicTimer(TimeSpan.FromMilliseconds(100));
+        try { while(await timer.WaitForNextTickAsync(stop.Token)) if(running) await InvokeAsync(async()=>{ await Step(); StateHasChanged(); }); }
+        catch(OperationCanceledException) { }
+        catch(JSDisconnectedException) { running=false; }
+    }
+    async Task Build()
+    {
+        running=false;
+        try { var image=Compiler.Build(source,title); Session.Load(image,title,false); built=image; error=""; await Step(); }
+        catch(Exception ex) { error=ex.Message; }
+    }
+    async Task DownloadSource() { if(display is not null) await display.InvokeVoidAsync("download","main.asm",System.Text.Encoding.UTF8.GetBytes(source),"text/plain"); }
+    async Task DownloadRom() { if(display is not null && built is not null) await display.InvokeVoidAsync("download","game.a78",built,"application/octet-stream"); }
+    [JSInvokable] public void Key(string code,bool down)=>Session.Key(code,down);
+    [JSInvokable] public void Release()=>Session.Release();
+    public async ValueTask DisposeAsync()
+    {
+        running=false; stop.Cancel(); if(pump is not null) await pump; stop.Dispose(); Session.Release();
+        try { if(display is not null) { await display.InvokeVoidAsync("dispose"); await display.DisposeAsync(); } if(module is not null) await module.DisposeAsync(); }
+        catch(JSDisconnectedException) { }
+        reference?.Dispose();
+    }
+}

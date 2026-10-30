@@ -1,43 +1,40 @@
-# ThingRetro
+# ThingRetro: Atari foundation
 
-The Thing emulators in one repository: chips, sockets and buses as components, the machines built with them, the peripherals, and (to come) the studio. Written to be
-read: the code mirrors the hardware, with the chips in their sockets, the traces that connect them and the cables to the monitor, the speakers and the keyboard.
+ThingVCS contains Atari-family cartridge contracts. ThingVCS7800.A7800 is a development board scaffold following Thing64's chip/board separation. It uses the existing ThingRetroEmu `Socket<T>`, `VideoPort`, `MonitorCable`, `AudioPort` and `AudioCable`; no Atari-specific monitor or cable is introduced.
 
-| Folder | What |
-| --- | --- |
-| [ThingMOS](ThingMOS) | The MOS Technology and CSG chips (6502, 6510, 4510, 6526, 8520, 6522, 6581, 6569, VIC-III, DMAgic, F011) and the assembler |
-| [ThingRetroEmu](ThingRetroEmu) | Everything generic: sockets, buses (IEC), media (`.d64` `.d81` `.tap` `.prg` `.crt`), video (RGB and composite) and audio outputs, control ports, the WD1770, and the WinForms controls |
-| [ThingCommodore](ThingCommodore) | The Commodore peripherals (1541, 1581, C2N, MPS-803), the cartridges, the loaders, the BASIC tokenizer, the graphics and build tools; and the log of the family in `docs/log` |
-| [Thing64](Thing64) | The Commodore 64: the board, the desktop app, the command line, the web computer and the web studio |
-| [Thing65](Thing65) | The Commodore 65: the board, the desktop app, the command line, the web computer and the web studio |
-| [ThingNES](ThingNES) | NES NTSC foundation (NROM/UxROM/CNROM): headless CPU runner, functional background/sprite renderer, PPM frame export, controllers, OAM DMA and functional pulse/triangle/noise/DMC audio with WAV export; Windows desktop frontend with keyboard controller and pause/frame-step; opt-in live Windows audio with bounded buffering |
-| [ThingOS64](ThingOS64) | ThingOS, a windowing operating system for the C64 in place of its KERNAL, BASIC and character ROMs: desktop in character mode, 1351 mouse or joystick, disk only (no BASIC, no tape) |
+## WebComputer and WebStudio (first working foundation)
 
-The projects reference each other by relative paths (`..\..\..\ThingMOS\src\...`), which is why they live side by side. `ThingMOS` depends on `ThingRetroEmu`; the
-machines and `ThingCommodore` depend on both.
+Two .NET 10 Blazor Server apps share `ThingVCS7800/src/ThingVCS7800.Web/ThingVCS7800.Web`. They reuse the Atari board, sockets and common RGB MonitorCable with BufferedMonitor. This is not WebAssembly: emulation runs on the local server, one scoped board per circuit.
 
-## Build, test, run
+In two terminals from repository root:
 
 ```powershell
-./tools/Install-Roms.ps1                    # the ROMs from C64 Forever Free Express Edition (not versioned: copyrighted)
-dotnet build ThingRetro.slnx
-dotnet test ThingMOS/tests/ThingMOS.Tests
-dotnet test ThingRetroEmu/tests/ThingRetroEmu.Tests
-dotnet test ThingCommodore/tests/ThingCommodore.Tests
-dotnet test Thing64/src/Thing64.Tests
-dotnet test Thing65/src/Thing65.Tests
-dotnet test ThingOS64/src/ThingOS64.Tests
+dotnet run --project ThingVCS7800/src/ThingVCS7800.WebComputer/ThingVCS7800.WebComputer --no-launch-profile --urls http://localhost:7800
+dotnet run --project ThingVCS7800/src/ThingVCS7800.WebStudio/ThingVCS7800.WebStudio --no-launch-profile --urls http://localhost:7801
 ```
 
-Development ports: 5064 Studio 64, 5164 Web 64, 5065 Studio 65, 5165 Web 65.
+Open http://localhost:7800 (Computer) or http://localhost:7801 (Studio). Computer uploads ROMs, offers a graphics demo, frame step, reset and bounded 10-frames/s execution; focus the canvas for arrows/Ctrl/Shift. Studio edits a single 6502 file, assembles linear 16 KiB cartridges at $C000, downloads source/A78 and runs the last build in the same monitor. Reset entry is the `reset` symbol (fallback $C000). Header version 3, NTSC, no mapper; not all cartridge types can be built yet.
 
-## Where to read next
+No browser audio, USB, BIOS menu, composite decode, project persistence, debugger/source maps or graphics editors yet. Download source before closing/reloading: edits live only in the circuit. Tailwind browser CDN needs internet access. Do not expose these development apps publicly: no authentication, quotas or production isolation. Assembly imports/loops are rejected and uploads bounded, but this is not a multi-tenant compiler sandbox. Browser performance and interaction need manual validation. Desktop is unchanged.
 
-- Each folder has its own README, ARCHITECTURE and ROADMAP or OPEN-POINTS.
-- [ThingCommodore/docs/log](ThingCommodore/docs/log/README.md): status of every project, what is shared, the map of the configuration folders and the decisions.
+## Verify
 
-## Conventions
+```powershell
+dotnet build ThingVCS7800/src/ThingVCS7800.Tests/ThingVCS7800.Tests/ThingVCS7800.Tests.csproj
+dotnet test ThingVCS7800/src/ThingVCS7800.Tests/ThingVCS7800.Tests/ThingVCS7800.Tests.csproj
+dotnet test ThingNES/src/ThingNES.Tests/ThingNES.Tests/ThingNES.Tests.csproj
+```
 
-- Code, comments, UI and docs are in English.
-- The ROMs are never versioned. `D:\Configurations\...` (the studios' projects, which may hold secrets) is outside the repository.
-- No `Co-Authored-By` trailers in commits.
+## Windows Computer
+
+```powershell
+dotnet run --project ThingVCS7800/src/ThingVCS7800.Computer -- [development.bin]
+```
+
+The Computer window uses the exact shared MonitorControl and VideoMenu classes used by Thing64: centered window, fill-docked monitor, Peripherals/Video menu and right-click actions. Insert/Eject are under Cartridge; Ctrl+O opens a raw ROM, F5 pauses and F2 resets through the monitor menu. Single-file .a78/.bin/.rom drag/drop is supported. A78 legacy versions 1–3 are accepted only for linear 16/32/48 KiB NTSC ROMs with zero mapper/expansion flags, joystick-or-disconnected controller metadata and no save peripheral. Header signature and big-endian payload size are validated; malformed or unsupported images leave the existing cartridge installed. A78 v4, PAL, bank switching and expansions are rejected, not guessed. It can also be hosted as an MDI child.
+
+This is a **development Computer shell**, not a playable Atari emulator. MARIA now produces a provisional 320×242 NTSC backdrop raster from the BACKGRND register, through the shared VideoPort/cable. Choose **Peripherals → Cartridge → Insert backdrop test ROM** to run a real short 6502 program that writes the background color. A first functional display-list renderer now supports normal-header direct 160A objects, DLL zone offsets, palette indices, transparent pixels and bounded object traversal. **Insert direct-object test ROM** in the same Cartridge menu executes a CPU program with DLL, display list and graphics in the cartridge. Line graphics are captured at line start; this is not cycle-exact DMA. Extended headers and indirect 160A character graphics now use CHARBASE and CWIDTH (one or two data bytes per map entry). The Cartridge menu includes **Insert indirect-character test ROM**. 160B write mode is now supported: two line-RAM cells per graphics byte with MARIA bit-pair composition, high palette-bit selection and transparency. Extended headers latch write mode; subsequent normal headers retain it. **Insert 160B test ROM** is available in the Cartridge menu. Holey DMA now suppresses graphics reads using DLL-selected $8800/$9000 address masks, including indirect CHARBASE fetches. Suppressed data does not advance line RAM; indirect map reads still occur and CWIDTH pairs are gated together. SuppressedGraphicsFetches is exposed for diagnostics. DLI now pulses the logical MARIA NMI output when a DLL zone with bit 7 is loaded; the board connects it to the CPU NMI pin and reset clears it. The provisional pulse lasts eight master clocks. DisplayListInterrupts counts generated pulses. MARIA CTRL read modes 2 and 3 now decode each half-cell separately, providing functional 320A/B/C/D when combined with normal or 160B writes. **Insert 320C test ROM** is available in the same Cartridge menu. Read mode and palette are sampled at pixel output time. This still does not model DMA timing or CPU arbitration. Low RAM aliases $0040–$00FF ↔ $2040–$20FF and stack aliases $0140–$01FF ↔ $2140–$21FF now share canonical main RAM storage. Push/pull, JSR/RTS and repeated DLI/RTI are tested directly on the board. **Insert DLI test ROM** is available in the Cartridge menu; its NMI handler increments RAM while normal graphics continue. Full low I/O mirroring, deep-stack behavior below $0140 and hardware timing validation remain pending. Mapping reference: https://github.com/libretro/prosystem-libretro/blob/master/core/Memory.c. Diagnostics are exposed as UnsupportedLines/TruncatedLines counters in the core. Format reference: https://github.com/mamedev/mame/blob/master/src/mame/atari/maria.cpp. Palette conversion and active-dot timing are provisional. WSYNC is connected to CPU RDY; SALLY CPU slots now advance four master clocks normally or six on CPU accesses to the currently decoded TIA ($0000–$001F) and RIOT ($0280–$029F) windows. MasterClocks and SlowCpuAccesses expose timing; debugger/direct board accesses and MARIA reads do not charge CPU slow slots. Computer pacing consumes actual elapsed master clocks. These are functional access slots, not electrical phase-accurate clock generation; mirror windows and interleaved DMA remain pending. Computer now installs a Sally CPU adapter with a HALT pin; MARIA DmaBusy/WSYNC halt execution while the CPU core keeps sampling NMI. An estimated startup/header/graphics budget creates the occupied window, rounded to four master clocks and bounded to one scanline. Fetches still occur together at line preparation: this is functional cycle stealing, not interleaved or electrically accurate arbitration. LastDmaClocks exposes the estimated window. DMA traversal now stops at a 426-master-clock functional budget before extra header/map/graphics operations; overloaded lists keep HALT/WSYNC asserted to the next scanline and increment TruncatedLines. CWIDTH pairs are budgeted together. This bounds bus work but does not make fetch timing cycle-exact. TIA audio remains disabled. The monitor context menu now uses Thing64's shared ControlPortSelector for keyboard/USB joysticks and port swapping. Port 1 defaults to arrows. Directions are wired to RIOT SWCHA. Single-button fire is now wired to partial TIA inputs INPT4/5 ($000C/$000D), with VBLANK ($0001) D6 latching. Arrows + Ctrl and numeric keypad fire use the same simulator as Thing64. Native two-button 7800 controls, analog inputs, TIA audio/video and full decode remain unimplemented. Mouse/paddles options are hidden because they are not supported by this board. The Computer now installs a functional RIOT 6532 with port direction/latches, internal RAM and interval timer in its own socket; board registers $0280-$029F route to it and IRQ reaches the CPU. RIOT PA7 edge detection is now implemented with selectable polarity, independent flag/IRQ and clock sampling of the effective pin level (including output direction). Flag reads acknowledge the edge flag; timer reads acknowledge the timer flag. Full mirroring and native two-button cabling remain pending. Sub-cycle edge timing is not modeled. Timer behavior currently has synthetic test coverage only, not external diagnostic validation. No C64 keyboard, IEC drives or Commodore-specific peripherals are copied into Atari. A compatible development ROM can execute on the CPU scaffold; commercial-game compatibility is not claimed. UI and audio-device behavior still need manual Windows verification.
+
+The board is a library, not a playable emulator. Insert a MOS6502-compatible development CPU and LinearCartridge in the exposed sockets, Reset, then Tick. Main RAM at $1800-$27FF and raw linear ROM are implemented; unmapped reads retain the transaction-level open bus. This is not yet a complete Atari 7800 memory map or a SALLY implementation.
+
+NES now exposes Video and VideoSource and presents frames through the shared video port. A MonitorCable can connect the same RGB or composite monitor used by Thing64. The existing NES desktop still uses its previous direct framebuffer path; audio migration is pending.

@@ -15,6 +15,35 @@ public sealed class VideoPort
     VideoStandard? encodedStandard;
     CompositeFrame? field;
 
+    VideoSystem selection;
+    VideoSystem? detected;
+    public event Action? SystemChanged;
+    public VideoSystem SystemSelection
+    {
+        get => selection;
+        set
+        {
+            if (!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value));
+            if (selection == value) return;
+            selection = value; SystemChanged?.Invoke();
+        }
+    }
+    public VideoSystem? DetectedSystem
+    {
+        get => detected;
+        set
+        {
+            if (value is VideoSystem.Auto || (value.HasValue && !Enum.IsDefined(value.Value)))
+                throw new ArgumentOutOfRangeException(nameof(value));
+            if (detected == value) return;
+            detected = value; SystemChanged?.Invoke();
+        }
+    }
+    public VideoSystem? EffectiveSystem => selection == VideoSystem.Auto ? detected : selection;
+    public VideoStandard ResolveStandard(double framesPerSecond) => Standard ??
+        (EffectiveSystem is VideoSystem.Pal ? VideoStandard.Pal :
+         EffectiveSystem is VideoSystem.Ntsc ? VideoStandard.Ntsc : VideoStandard.For(framesPerSecond));
+
     public bool IsConnected => monitor is not null || composite is not null;
 
     /// <summary>The standard of the composite signal; null (the default) follows the frame rate of the source: NTSC from 55 a second up, PAL below.</summary>
@@ -69,7 +98,7 @@ public sealed class VideoPort
     void PresentComposite(IVideoSource source, ICompositeMonitor tv)
     {
         var native = source as ICompositeSource;
-        var standard = native?.Standard ?? Standard ?? VideoStandard.For(source.Mode.FramesPerSecond);
+        var standard = native?.Standard ?? ResolveStandard(source.Mode.FramesPerSecond);
         if (field is null || !ReferenceEquals(field.Standard, standard)) field = new CompositeFrame(standard);
         if (native is not null) native.RenderComposite(field);
         else

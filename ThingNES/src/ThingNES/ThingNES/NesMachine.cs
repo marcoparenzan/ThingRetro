@@ -12,6 +12,10 @@ public sealed class NesMachine : IBus
     int dmcStall;
     public bool DmcDmaActive => dmcStall > 0;
     public long DmcDmaCycles { get; private set; }
+    public ThingRetroEmu.Video.VideoPort Video { get; } = new();
+    public NesVideoSource VideoSource { get; }
+    // APU already produces PCM at 44.1 kHz; adapt it to the common audio socket without changing the APU.
+    public ThingRetroEmu.Audio.AudioPort Audio { get; } = new(global::ThingNES.Apu.SampleRate);
     public Cartridge Cartridge { get; }
     public Ricoh2A03 Cpu { get; } = new();
     public Ppu Ppu { get; }
@@ -25,6 +29,9 @@ public sealed class NesMachine : IBus
     {
         Cartridge = cartridge;
         Ppu = new(cartridge);
+        VideoSource = new(Ppu);
+        Video.DetectedSystem = ThingRetroEmu.Video.VideoSystem.Ntsc;
+        Apu.SampleProduced += sample => Audio.Sample(sample / 32768.0);
         Cpu.Bus = this;
         Cpu.NmiInput = () => Ppu.Nmi;
         Cpu.IrqInput = () => Apu.Irq;
@@ -77,7 +84,9 @@ public sealed class NesMachine : IBus
             if (++dmaIndex == 256) dmaPage = -1;
         }
         Apu.Tick(); // APU keeps running while OAM DMA stalls the CPU.
+        long previousFrame = Ppu.Frames;
         for (int i = 0; i < 3; i++) Ppu.Tick();
+        if (Ppu.Frames != previousFrame) Video.Present(VideoSource);
         CpuCycles++;
     }
     // Advance to the next PPU frame boundary; may start mid-frame and overshoot by at most two dots.

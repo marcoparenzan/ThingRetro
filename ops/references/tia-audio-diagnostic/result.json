@@ -1,0 +1,20 @@
+[
+  {
+    "Kind": "Synthetic CPU TIA tone/noise -\u003E common AudioPort -\u003E PCM16 WAV",
+    "System": "Ntsc",
+    "MasterClocks": 7159092,
+    "AudioClocks": 31399,
+    "Samples": 44100,
+    "RegistersProgrammed": true,
+    "Passed": true
+  },
+  {
+    "Kind": "Synthetic CPU TIA tone/noise -\u003E common AudioPort -\u003E PCM16 WAV",
+    "System": "Pal",
+    "MasterClocks": 7093788,
+    "AudioClocks": 31113,
+    "Samples": 44100,
+    "RegistersProgrammed": true,
+    "Passed": true
+  }
+]

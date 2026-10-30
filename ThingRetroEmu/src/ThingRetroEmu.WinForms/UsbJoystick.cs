@@ -16,14 +16,16 @@ public sealed class UsbJoystick : IDisposable
 
     readonly int id;
     readonly Joystick joystick;
+    readonly bool twoButtons;
     readonly System.Windows.Forms.Timer timer = new() { Interval = PollMilliseconds };
     readonly AxisRange xRange, yRange;
 
-    public UsbJoystick(UsbJoystickInfo device, Joystick joystick)
+    public UsbJoystick(UsbJoystickInfo device, Joystick joystick, bool twoButtons = false)
     {
         id = device.Id;
         Name = device.Name;
         this.joystick = joystick;
+        this.twoButtons = twoButtons;
         (xRange, yRange) = ReadRanges(id);
         timer.Tick += (_, _) => Poll();
         timer.Start();
@@ -63,7 +65,8 @@ public sealed class UsbJoystick : IDisposable
             return;
         }
         var state = Map(info.dwXpos, info.dwYpos, xRange, yRange, info.dwPOV, info.dwButtons);
-        joystick.SetState(state.Up, state.Down, state.Left, state.Right, state.Fire);
+        joystick.SetState(state.Up, state.Down, state.Left, state.Right, twoButtons ? (info.dwButtons & 1) != 0 : state.Fire);
+        joystick.Fire2 = twoButtons && (info.dwButtons & 2) != 0;
     }
 
     internal readonly record struct AxisRange(int Min, int Max);

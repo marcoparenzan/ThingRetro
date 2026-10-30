@@ -1,0 +1,104 @@
+[
+  {
+    "File": "mame-a7800-driver.cpp",
+    "Url": "https://raw.githubusercontent.com/mamedev/mame/master/src/mame/atari/a7800.cpp",
+    "DownloadedUtc": "2026-10-30T16:15:28.2792458Z",
+    "SHA256": "9785D63802B60A0C622DD2432ED5256A6396C75A0BB667BA4758F702404EFA57"
+  },
+  {
+    "File": "mame-a7800-software.xml",
+    "Url": "https://raw.githubusercontent.com/mamedev/mame/master/hash/a7800.xml",
+    "DownloadedUtc": "2026-10-30T16:15:28.6760055Z",
+    "SHA256": "5343714EEDD715F7F1F080F1E283D5ED56E6F6509EA3EFF2F8F7C8C53EE066B9"
+  },
+  {
+    "File": "mame-a7800-rom.cpp",
+    "Url": "https://raw.githubusercontent.com/mamedev/mame/master/src/devices/bus/a7800/rom.cpp",
+    "DownloadedUtc": "2026-10-30T16:15:28.891679Z",
+    "SHA256": "B6C070116ED9280604B7E96BD9F7DDECFF6BFBA5853EA75A7619B281D36EBFCC"
+  },
+  {
+    "File": "mame-a7800-slot.cpp",
+    "Url": "https://raw.githubusercontent.com/mamedev/mame/master/src/devices/bus/a7800/a78_slot.cpp",
+    "DownloadedUtc": "2026-10-30T16:15:29.165616Z",
+    "SHA256": "EDF0F2116E7042B64C1DD4AA6C914B01FA379D3CB38FF1FC888D2ADD2B5267E0"
+  },
+  {
+    "File": "a7800-fork-slot.cpp",
+    "Url": "https://raw.githubusercontent.com/7800-devtools/a7800/master/src/devices/bus/a7800/a78_slot.cpp",
+    "DownloadedUtc": "2026-10-30T16:15:29.6069261Z",
+    "SHA256": "4460A08F2827A22FCC3440BB98674ABFA55CABE7F383AB232A6FE75AEEBCF525"
+  },
+  {
+    "File": "mame-maria.cpp",
+    "Url": "https://raw.githubusercontent.com/mamedev/mame/master/src/mame/atari/maria.cpp",
+    "DownloadedUtc": "2026-10-30T16:15:30.077639Z",
+    "SHA256": "F364AF95D8C6D22BB1B46462BFF956FC1A636B06D68CD9E34DE362AA09ECDDFF"
+  },
+  {
+    "File": "mame-license.txt",
+    "Url": "https://raw.githubusercontent.com/mamedev/mame/master/COPYING",
+    "DownloadedUtc": "2026-10-30T16:15:30.335579Z",
+    "SHA256": "9814CCB157FDB0A8F0FA049F858B6AC761320E90EB28F54E2972468D6D6AC0CA"
+  },
+  {
+    "File": "prosystem-maria.c",
+    "Url": "https://raw.githubusercontent.com/libretro/prosystem-libretro/master/core/Maria.c",
+    "DownloadedUtc": "2026-10-30T16:15:30.8453362Z",
+    "SHA256": "EF603123290A80844A9B39D6A9F83CCD087F2CC939F20559F9FFFB9312B72BD8"
+  },
+  {
+    "File": "prosystem-sally.c",
+    "Url": "https://raw.githubusercontent.com/libretro/prosystem-libretro/master/core/Sally.c",
+    "DownloadedUtc": "2026-10-30T16:15:31.1896073Z",
+    "SHA256": "2038DB14688C9600FD608F144DF6219268D96A8C8D473362EEF1291A082F6849"
+  },
+  {
+    "File": "prosystem-license.txt",
+    "Url": "https://raw.githubusercontent.com/libretro/prosystem-libretro/master/License.txt",
+    "DownloadedUtc": "2026-10-30T16:15:31.454567Z",
+    "SHA256": "9FAE8C2AE211EA4B3515621484BB0A558A0CA62D05C9534265C7E223BDF981B0"
+  },
+  {
+    "File": "prosystem-memory.c",
+    "Url": "https://raw.githubusercontent.com/libretro/prosystem-libretro/master/core/Memory.c",
+    "DownloadedUtc": "2026-10-30T16:15:31.8809117Z",
+    "SHA256": "CE9FC747DDA4F072FE44CC75448C47528636B472117A0840FAD9D5FD08A2198B"
+  },
+  {
+    "File": "prosystem-tia.c",
+    "Url": "https://raw.githubusercontent.com/libretro/prosystem-libretro/master/core/Tia.c",
+    "DownloadedUtc": "2026-10-30T16:15:32.2928446Z",
+    "SHA256": "39683DEA353BF9BD8C10C75C0FF902064D49EEA7928C15FADB98B4EB8FCC9F52"
+  },
+  {
+    "File": "mame-pokey.cpp",
+    "Url": "https://raw.githubusercontent.com/mamedev/mame/master/src/devices/sound/pokey.cpp",
+    "DownloadedUtc": "2026-10-30T16:15:32.5563604Z",
+    "SHA256": "CE2721E0D9B87872C3B3B5C6AF2A320A99C4119F078A3419E328E728278F6D9A"
+  },
+  {
+    "File": "mame-pokey.h",
+    "Url": "https://raw.githubusercontent.com/mamedev/mame/master/src/devices/sound/pokey.h",
+    "DownloadedUtc": "2026-10-30T16:15:32.7668106Z",
+    "SHA256": "613E7BD87A6C0C730CCFA68289C7B75C2759975AC1EA696514C67DE4697A68FA"
+  },
+  {
+    "File": "prosystem-pokey.c",
+    "Url": "https://raw.githubusercontent.com/libretro/prosystem-libretro/master/core/Pokey.c",
+    "DownloadedUtc": "2026-10-30T16:15:33.2133044Z",
+    "SHA256": "A18EBE2E40E348B67C82F506F620C1BB279F5CAF3BC407744E7EF97714A4D821"
+  },
+  {
+    "File": "stella-audio-channel.cxx",
+    "Url": "https://raw.githubusercontent.com/stella-emu/stella/master/src/emucore/tia/AudioChannel.cxx",
+    "DownloadedUtc": "2026-10-30T16:15:33.4425851Z",
+    "SHA256": "C0FD1E92325D5B9ACB708B545048ADF6AA304DEF5C86F752E2F533E476909F4D"
+  },
+  {
+    "File": "stella-license.txt",
+    "Url": "https://raw.githubusercontent.com/stella-emu/stella/master/License.txt",
+    "DownloadedUtc": "2026-10-30T16:15:33.6572272Z",
+    "SHA256": "58530D09B6FCB91AE27071BE0081AF90E6C2D7FDF991D34A29E234A2A5E75455"
+  }
+]

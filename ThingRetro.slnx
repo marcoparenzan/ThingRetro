@@ -36,10 +36,22 @@
     <Project Path="ThingNES/src/ThingNES/ThingNES/ThingNES.csproj" />
     <Project Path="ThingNES/src/ThingNES.Cli/ThingNES.Cli/ThingNES.Cli.csproj" />
     <Project Path="ThingNES/src/ThingNES.Tests/ThingNES.Tests/ThingNES.Tests.csproj" />
-    <Project Path="ThingNES/src/ThingNES.Desktop/ThingNES.Desktop/ThingNES.Desktop.csproj" />
+    <Project Path="ThingNES/src/ThingNES.Computer/ThingNES.Computer/ThingNES.Computer.csproj" />
   </Folder>
   <Folder Name="/ThingOS64/">
     <Project Path="ThingOS64/src/ThingOS64/ThingOS64.csproj" />
     <Project Path="ThingOS64/src/ThingOS64.Tests/ThingOS64.Tests.csproj" />
+  </Folder>
+  <Folder Name="/ThingVCS/">
+    <Project Path="ThingVCS/src/ThingVCS/ThingVCS/ThingVCS.csproj" />
+  </Folder>
+  <Folder Name="/ThingVCS7800/">
+    <Project Path="ThingVCS7800/src/ThingVCS7800.A7800/ThingVCS7800.A7800/ThingVCS7800.A7800.csproj" />
+    <Project Path="ThingVCS7800/src/ThingVCS7800.Computer/ThingVCS7800.Computer.csproj" />
+    <Project Path="ThingVCS7800/src/ThingVCS7800.Tests/ThingVCS7800.Tests/ThingVCS7800.Tests.csproj" />
+    <Project Path="ThingVCS7800/src/ThingVCS7800.WebComputer/ThingVCS7800.WebComputer/ThingVCS7800.WebComputer.csproj" />
+    <Project Path="ThingVCS7800/src/ThingVCS7800.WebStudio/ThingVCS7800.WebStudio/ThingVCS7800.WebStudio.csproj" />
+    <Project Path="ThingVCS7800/src/ThingVCS7800.Web/ThingVCS7800.Web/ThingVCS7800.Web.csproj" />
+    <Project Path="ThingVCS7800/src/ThingVCS7800.Web.Tests/ThingVCS7800.Web.Tests/ThingVCS7800.Web.Tests.csproj" />
   </Folder>
 </Solution>

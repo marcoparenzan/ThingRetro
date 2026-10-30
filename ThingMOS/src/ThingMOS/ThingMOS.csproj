@@ -24,6 +24,7 @@
     <Using Include="ThingRetroEmu.Video" />
     <InternalsVisibleTo Include="ThingMOS.Tests" />
     <InternalsVisibleTo Include="Thing64.Tests" />
+    <InternalsVisibleTo Include="ThingVCS7800.Tests" />
     <InternalsVisibleTo Include="Thing65.Tests" />
     <InternalsVisibleTo Include="ThingCommodore.Tests" />
     <ProjectReference Include="..\..\..\ThingRetroEmu\src\ThingRetroEmu\ThingRetroEmu.csproj" />

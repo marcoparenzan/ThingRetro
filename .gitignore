@@ -1,3 +1,17 @@
 .vs/
 
 .ralfai/
+
+# Build output and temporary local tooling
+**/bin/
+**/obj/
+*.user
+*.suo
+src/GitOps/
+src/ProjectRelocator/
+
+# User-supplied cartridges and game-derived local captures
+*.a78
+*.nes
+ops/references/*-repro.ppm
+ops/references/*-repro.ppm.dma.txt

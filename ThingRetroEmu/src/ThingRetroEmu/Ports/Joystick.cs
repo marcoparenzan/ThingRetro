@@ -2,7 +2,13 @@ namespace ThingRetroEmu.Ports;
 
 // Digital joystick: five switches that close the up, down, left, right and fire pins to ground.
 // The state can be changed from any thread (for example from the simulator that reads the PC keyboard)
-public sealed class Joystick : IControlPortDevice
+public interface ITwoButtonJoystick
+{
+    bool Fire { get; }
+    bool Fire2 { get; }
+}
+
+public sealed class Joystick : IControlPortDevice, ITwoButtonJoystick
 {
     const int UpBit = 0x01, DownBit = 0x02, LeftBit = 0x04, RightBit = 0x08, FireBit = 0x10;
 
@@ -13,6 +19,7 @@ public sealed class Joystick : IControlPortDevice
     public bool Left { get => Get(LeftBit); set => Set(LeftBit, value); }
     public bool Right { get => Get(RightBit); set => Set(RightBit, value); }
     public bool Fire { get => Get(FireBit); set => Set(FireBit, value); }
+    public bool Fire2 { get => Get(0x20); set => Set(0x20, value); }
 
     // All the switches at once (useful when the state comes all together, as from a gamepad)
     public void SetState(bool up, bool down, bool left, bool right, bool fire) =>
@@ -20,7 +27,7 @@ public sealed class Joystick : IControlPortDevice
 
     public void ReleaseAll() => Volatile.Write(ref closed, 0);
 
-    public byte DigitalLines => (byte)~Volatile.Read(ref closed);
+    public byte DigitalLines => (byte)~(Volatile.Read(ref closed) & 0x1f); // Fire2 has no universal pin mapping.
     public byte PotX => 0xFF;
     public byte PotY => 0xFF;
 

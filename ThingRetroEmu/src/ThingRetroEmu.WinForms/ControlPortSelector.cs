@@ -27,6 +27,8 @@ public sealed class ControlPortSelector : IDisposable
 {
     readonly ControlPort port1, port2;
     readonly Control input;
+    readonly bool allowAnalogDevices;
+    readonly bool twoButtons;
     readonly Connection[] ports = [new(), new()];
 
     sealed class Connection
@@ -36,11 +38,13 @@ public sealed class ControlPortSelector : IDisposable
     }
 
     // input: the control that receives keyboard and mouse (usually the MonitorControl)
-    public ControlPortSelector(ControlPort port1, ControlPort port2, Control input)
+    public ControlPortSelector(ControlPort port1, ControlPort port2, Control input, bool allowAnalogDevices = true, bool twoButtons = false)
     {
         this.port1 = port1;
         this.port2 = port2;
         this.input = input;
+        this.allowAnalogDevices = allowAnalogDevices;
+        this.twoButtons = twoButtons;
     }
 
     public event Action? Changed;
@@ -53,6 +57,8 @@ public sealed class ControlPortSelector : IDisposable
 
     public void Select(int port, ControlPortChoice choice)
     {
+        if (!allowAnalogDevices && choice.Source is ControlPortSource.MousePaddles or ControlPortSource.Mouse1351)
+            throw new NotSupportedException("This machine only supports digital joystick sources.");
         int other = port == 1 ? 2 : 1;
         if (choice.Source != ControlPortSource.None && Port(other).Choice == choice)
             Connect(other, ControlPortChoice.None);
@@ -89,7 +95,7 @@ public sealed class ControlPortSelector : IDisposable
                 {
                     var joystick = new Joystick();
                     var keySet = choice.Source == ControlPortSource.KeypadJoystick ? JoystickKeySet.NumericKeypad : JoystickKeySet.ArrowsAndCtrl;
-                    connection.Simulator = new KeyboardJoystick(input, joystick, keySet);
+                    connection.Simulator = new KeyboardJoystick(input, joystick, keySet, twoButtons);
                     Socket(port).Plug(joystick);
                     break;
                 }
@@ -98,7 +104,7 @@ public sealed class ControlPortSelector : IDisposable
                     var device = UsbJoystick.Connected().FirstOrDefault(d => d.Id == choice.UsbJoystickId);
                     if (device is null) { connection.Choice = ControlPortChoice.None; break; } // no longer connected
                     var joystick = new Joystick();
-                    connection.Simulator = new UsbJoystick(device, joystick);
+                    connection.Simulator = new UsbJoystick(device, joystick, twoButtons);
                     Socket(port).Plug(joystick);
                     break;
                 }
@@ -147,6 +153,7 @@ public sealed class ControlPortSelector : IDisposable
             menu.DropDownItems.Add(new ToolStripMenuItem("USB joystick: none connected") { Enabled = false });
         foreach (var device in usb)
             Add($"USB joystick: {device.Name}", new(ControlPortSource.UsbJoystick, device.Id));
+        if (!allowAnalogDevices) return;
         Add("Paddles: mouse (click to capture it, right click to release it)", new(ControlPortSource.MousePaddles));
         Add("Mouse 1351: mouse (click to capture it, middle click or Ctrl + right click to release it)", new(ControlPortSource.Mouse1351));
     }

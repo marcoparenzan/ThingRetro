@@ -1,0 +1,13 @@
+{
+  "Kind": "Synthetic post-render DLI / INC $1800 / RTI",
+  "System": "Ntsc",
+  "Frames": 2,
+  "ExpectedEdges": 482,
+  "ObservedEdges": 482,
+  "ExpectedHandlerCounter": 226,
+  "ObservedHandlerCounter": 226,
+  "OverheadClocks": 8194,
+  "ClampedLines": 0,
+  "TruncatedLines": 0,
+  "Passed": true
+}

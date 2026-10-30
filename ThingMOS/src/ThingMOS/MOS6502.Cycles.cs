@@ -27,8 +27,7 @@ public partial class MOS6502
     // with RDY low the CPU stops at the first read cycle, while writes go on
     public void Tick()
     {
-        SampleNmi();
-        SampleSo();
+        SampleInputPins();
         if (jammed) return;
         if (!AecInput()) return;
         if (!RdyInput() && !IsWriteCycle()) return;

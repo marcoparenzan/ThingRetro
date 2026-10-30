@@ -47,12 +47,13 @@ public sealed class KeyboardJoystick : IDisposable
     readonly Dictionary<Keys, Direction> keys;
     readonly HashSet<Keys> pressed = [];
 
-    public KeyboardJoystick(Control source, Joystick joystick, JoystickKeySet keySet)
+    public KeyboardJoystick(Control source, Joystick joystick, JoystickKeySet keySet, bool twoButtons = false)
     {
         this.source = source;
         this.joystick = joystick;
         KeySet = keySet;
-        keys = keySet == JoystickKeySet.NumericKeypad ? NumericKeypad : ArrowsAndCtrl;
+        keys = new(keySet == JoystickKeySet.NumericKeypad ? NumericKeypad : ArrowsAndCtrl);
+        if (twoButtons) keys[keySet == JoystickKeySet.NumericKeypad ? Keys.Decimal : Keys.ShiftKey] = (Direction)32;
         source.KeyDown += OnKeyDown;
         source.KeyUp += OnKeyUp;
         source.LostFocus += OnLostFocus;
@@ -94,6 +95,7 @@ public sealed class KeyboardJoystick : IDisposable
             left: direction.HasFlag(Direction.Left),
             right: direction.HasFlag(Direction.Right),
             fire: direction.HasFlag(Direction.Fire));
+        joystick.Fire2 = ((int)direction & 32) != 0;
     }
 
     public void Dispose()
